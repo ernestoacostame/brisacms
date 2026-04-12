@@ -1,0 +1,175 @@
+# =============================================================================
+#  BrisaCMS — Ejemplo de configuración Nginx
+#  Renombra este archivo y ajusta los valores marcados con <CAMBIAR>
+#
+#  Uso:
+#    cp nginx.conf.example /etc/nginx/sites-available/tudominio.conf
+#    ln -sf /etc/nginx/sites-available/tudominio.conf /etc/nginx/sites-enabled/
+#    nginx -t && systemctl reload nginx
+# =============================================================================
+
+# ── Redirigir HTTP → HTTPS ────────────────────────────────────────────────
+server {
+    listen 80;
+    listen [::]:80;
+    server_name tudominio.com www.tudominio.com;  # <CAMBIAR>
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+        allow all;
+    }
+    location / {
+        return 301 https://www.tudominio.com$request_uri;  # <CAMBIAR>
+    }
+}
+
+# ── Redirigir non-www → www ───────────────────────────────────────────────
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name tudominio.com;  # <CAMBIAR>
+
+    ssl_certificate     /etc/letsencrypt/live/tudominio.com/fullchain.pem;  # <CAMBIAR>
+    ssl_certificate_key /etc/letsencrypt/live/tudominio.com/privkey.pem;    # <CAMBIAR>
+    ssl_session_cache   builtin:1000 shared:SSL:10m;
+    ssl_session_timeout 5m;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+
+    return 301 https://www.tudominio.com$request_uri;  # <CAMBIAR>
+}
+
+# ── Bloque principal: www.tudominio.com ───────────────────────────────────
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name www.tudominio.com;  # <CAMBIAR>
+
+    ssl_certificate     /etc/letsencrypt/live/tudominio.com/fullchain.pem;  # <CAMBIAR>
+    ssl_certificate_key /etc/letsencrypt/live/tudominio.com/privkey.pem;    # <CAMBIAR>
+    ssl_session_cache   builtin:1000 shared:SSL:10m;
+    ssl_session_timeout 5m;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+
+    root  /var/www/html/misitio;    # <CAMBIAR> ruta donde están los archivos de BrisaCMS
+    index index.php index.html;
+
+    access_log /var/log/nginx/tudominio.access.log;  # <CAMBIAR>
+    error_log  /var/log/nginx/tudominio.error.log;   # <CAMBIAR>
+
+    gzip on;
+    gzip_comp_level 6;
+    gzip_proxied    any;
+    gzip_types      text/plain text/css application/json application/javascript
+                    application/xml text/javascript application/rss+xml;
+    gzip_vary       on;
+
+    client_max_body_size 2048M;   # Aumentado para subidas de vídeo
+
+    # ── Límites para subidas grandes (vídeo) ─────────────────────────────
+    # Asegúrate también de ajustar en php.ini:
+    #   upload_max_filesize = 2G
+    #   post_max_size = 2G
+    #   max_execution_time = 300
+
+    # ── Bloquear acceso a directorios sensibles ───────────────────────────
+    location ~* ^/(core|cache|content)(/|$) {
+        deny all; return 404;
+    }
+    location ~ /\. {
+        deny all; access_log off; log_not_found off;
+    }
+
+    # ── Media: imágenes, audio y vídeo — sin PHP ────────────────────────
+    location ^~ /media/ {
+        access_log off;
+        location ~* \.php$ { deny all; return 404; }
+        try_files $uri =404;
+
+        # Imágenes: caché larga
+        location ~* \.(jpg|jpeg|png|gif|webp|svg|avif|ico)$ {
+            expires 365d;
+            add_header Cache-Control "public, max-age=31536000, immutable";
+        }
+        # Audio: sin caché agresiva, soporte de Range (seeking)
+        location ~* \.(mp3|ogg|oga|wav|m4a|flac|aac|weba)$ {
+            expires 7d;
+            add_header Cache-Control "public, max-age=604800";
+            add_header Accept-Ranges bytes;
+        }
+        # Vídeo: soporte de Range para seeking sin buffering completo
+        location ~* \.(mp4|m4v|webm|ogv|mov)$ {
+            expires 7d;
+            add_header Cache-Control "public, max-age=604800";
+            add_header Accept-Ranges bytes;
+        }
+    }
+
+    location ^~ /uploads/ {
+        location ~* \.php$ { deny all; return 404; }
+        try_files $uri =404;
+    }
+
+    # ── Panel de administración ───────────────────────────────────────────
+    location ^~ /admin/ {
+        try_files $uri $uri/ /admin/index.php?$query_string;
+        location ~ \.php$ {
+            fastcgi_split_path_info ^(.+\.php)(/.+)$;
+            try_files $uri =404;
+            fastcgi_pass   unix:/run/php/php8.3-fpm.sock;  # <CAMBIAR> versión de PHP
+            include        fastcgi_params;
+            fastcgi_param  SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            fastcgi_param  HTTPS on;
+            fastcgi_read_timeout 120;
+        }
+    }
+
+    # ── Instalador ───────────────────────────────────────────────────────
+    location ^~ /install/ {
+        try_files $uri $uri/ /install/index.php?$query_string;
+        location ~ \.php$ {
+            fastcgi_split_path_info ^(.+\.php)(/.+)$;
+            try_files $uri =404;
+            fastcgi_pass   unix:/run/php/php8.3-fpm.sock;  # <CAMBIAR>
+            include        fastcgi_params;
+            fastcgi_param  SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            fastcgi_param  HTTPS on;
+        }
+    }
+
+    # ── Assets estáticos: caché larga ────────────────────────────────────
+    location ~* \.(ico|css|js|gif|jpeg|jpg|png|woff|woff2|ttf|otf|svg|eot|webp|avif)$ {
+        expires 365d;
+        access_log off;
+        add_header Cache-Control "public, max-age=31536000";
+        try_files $uri =404;
+    }
+
+    location = /favicon.ico { log_not_found off; access_log off; }
+    location = /robots.txt  { allow all; log_not_found off; access_log off; }
+
+    # ── Let's Encrypt ─────────────────────────────────────────────────────
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/html;
+        allow all;
+    }
+
+    # ── Router de BrisaCMS ────────────────────────────────────────────────
+    # RSS, sitemap, api y todo lo demás se gestiona desde index.php / .htaccess
+    location / {
+        try_files $uri $uri/ /index.php?$uri&$args;
+    }
+
+    location ~ \.php$ {
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        try_files $uri =404;
+        fastcgi_pass   unix:/run/php/php8.3-fpm.sock;  # <CAMBIAR>
+        include        fastcgi_params;
+        fastcgi_param  SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param  HTTPS on;
+        fastcgi_read_timeout 120;
+        fastcgi_buffers 16 16k;
+        fastcgi_buffer_size 32k;
+    }
+}

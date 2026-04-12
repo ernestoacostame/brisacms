@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /core/
+Disallow: /cache/
+Disallow: /content/
+Disallow: /install/
+Disallow: /api/
+
+Sitemap: SITEURL/sitemap.xml
