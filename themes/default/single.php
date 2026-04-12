@@ -260,4 +260,40 @@ $article_mastodon_url = $post['mastodon_url'] ?? '';
 .mc-reply-link { margin-top: 0.4rem; }
 .mc-reply-link a { font-size: 0.75rem; color: var(--muted); text-decoration: none; }
 .mc-reply-link a:hover { color: var(--accent); }
+
+/* ── Audio player ── */
+.media-audio {
+  margin: 1.5rem 0;
+  background: var(--surface, #f5f5f5);
+  border: 1px solid var(--border, #e0e0e0);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.media-audio::before {
+  content: "🎵";
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+.media-audio audio {
+  width: 100%;
+  height: 36px;
+}
+
+/* ── Video player ── */
+.media-video {
+  margin: 1.5rem 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+  line-height: 0;
+}
+.media-video video {
+  width: 100%;
+  max-height: 540px;
+  display: block;
+}
 </style>

@@ -65,7 +65,13 @@ server {
                     application/xml text/javascript application/rss+xml;
     gzip_vary       on;
 
-    client_max_body_size 32M;
+    client_max_body_size 2048M;   # Aumentado para subidas de vídeo
+
+    # ── Límites para subidas grandes (vídeo) ─────────────────────────────
+    # Asegúrate también de ajustar en php.ini:
+    #   upload_max_filesize = 2G
+    #   post_max_size = 2G
+    #   max_execution_time = 300
 
     # ── Bloquear acceso a directorios sensibles ───────────────────────────
     location ~* ^/(core|cache|content)(/|$) {
@@ -75,13 +81,29 @@ server {
         deny all; access_log off; log_not_found off;
     }
 
-    # ── Imágenes y media: estáticos, sin PHP ─────────────────────────────
+    # ── Media: imágenes, audio y vídeo — sin PHP ────────────────────────
     location ^~ /media/ {
-        expires 30d;
-        add_header Cache-Control "public, max-age=2592000";
         access_log off;
         location ~* \.php$ { deny all; return 404; }
         try_files $uri =404;
+
+        # Imágenes: caché larga
+        location ~* \.(jpg|jpeg|png|gif|webp|svg|avif|ico)$ {
+            expires 365d;
+            add_header Cache-Control "public, max-age=31536000, immutable";
+        }
+        # Audio: sin caché agresiva, soporte de Range (seeking)
+        location ~* \.(mp3|ogg|oga|wav|m4a|flac|aac|weba)$ {
+            expires 7d;
+            add_header Cache-Control "public, max-age=604800";
+            add_header Accept-Ranges bytes;
+        }
+        # Vídeo: soporte de Range para seeking sin buffering completo
+        location ~* \.(mp4|m4v|webm|ogv|mov)$ {
+            expires 7d;
+            add_header Cache-Control "public, max-age=604800";
+            add_header Accept-Ranges bytes;
+        }
     }
 
     location ^~ /uploads/ {

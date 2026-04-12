@@ -114,9 +114,11 @@ admin_header(($is_new ? 'New ' : 'Edit ') . $label, $type);
               </div>
               <div class="toolbar-sep"></div>
               <div class="toolbar-group">
-                <button type="button" class="tb" id="link-btn" title="Insert link">🔗</button>
-                <button type="button" class="tb" id="img-btn" title="Insert image">🖼</button>
-                <button type="button" class="tb" data-cmd="insertHorizontalRule" title="Divider">—</button>
+                <button type="button" class="tb" id="link-btn" title="Insertar enlace">🔗</button>
+                <button type="button" class="tb" id="img-btn" title="Insertar imagen">🖼</button>
+                <button type="button" class="tb" id="audio-btn" title="Insertar audio">🎵</button>
+                <button type="button" class="tb" id="video-btn" title="Insertar vídeo">🎬</button>
+                <button type="button" class="tb" data-cmd="insertHorizontalRule" title="Divisor">—</button>
               </div>
               <div class="toolbar-sep"></div>
               <div class="toolbar-group">
@@ -593,11 +595,80 @@ document.getElementById('link-btn').addEventListener('mousedown', e => {
   if (url) document.execCommand('createLink', false, url);
   editor.focus();
 });
+// ── Media upload helper ──────────────────────────────────────────────────
+function uploadMediaFile(accept, onSuccess) {
+  const picker   = document.createElement('input');
+  picker.type    = 'file';
+  picker.accept  = accept;
+  picker.onchange = async () => {
+    const file = picker.files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('upload', file);
+    fd.append('csrf', <?= json_encode(generate_csrf()) ?>);
+    try {
+      const res  = await fetch(<?= json_encode(base_url() . '/admin/upload_media.php') ?>, { method:'POST', body:fd });
+      const data = await res.json();
+      if (data.url) onSuccess(data.url, data.type);
+      else alert('Error: ' + (data.error || 'desconocido'));
+    } catch(e) { alert('Error de red al subir'); }
+  };
+  picker.click();
+}
+
+function insertAudioHtml(url) {
+  return `<figure class="media-audio"><audio controls preload="metadata"><source src="${url}">Tu navegador no soporta audio HTML5.</audio></figure>`;
+}
+function insertVideoHtml(url) {
+  return `<figure class="media-video"><video controls preload="metadata" style="max-width:100%"><source src="${url}">Tu navegador no soporta vídeo HTML5.</video></figure>`;
+}
+
+// Image
 document.getElementById('img-btn').addEventListener('mousedown', e => {
   e.preventDefault();
-  const url = prompt('Image URL:');
-  if (url) document.execCommand('insertHTML', false, `<img src="${url}" alt="">`);
-  editor.focus();
+  const choice = confirm('¿Subir imagen desde tu ordenador?\n\nOK = subir archivo  ·  Cancelar = pegar URL');
+  if (choice) {
+    uploadMediaFile('image/*', (url) => {
+      document.execCommand('insertHTML', false, `<img src="${url}" alt="">`);
+      editor.focus();
+    });
+  } else {
+    const url = prompt('URL de la imagen:');
+    if (url) document.execCommand('insertHTML', false, `<img src="${url}" alt="">`);
+    editor.focus();
+  }
+});
+
+// Audio
+document.getElementById('audio-btn')?.addEventListener('mousedown', e => {
+  e.preventDefault();
+  const choice = confirm('¿Subir audio desde tu ordenador?\nFormatos: MP3, OGG, WAV, M4A, FLAC\n\nOK = subir archivo  ·  Cancelar = pegar URL');
+  if (choice) {
+    uploadMediaFile('audio/*,.mp3,.ogg,.wav,.m4a,.flac', (url) => {
+      document.execCommand('insertHTML', false, insertAudioHtml(url));
+      editor.focus();
+    });
+  } else {
+    const url = prompt('URL del audio (mp3, ogg, wav…):');
+    if (url) document.execCommand('insertHTML', false, insertAudioHtml(url));
+    editor.focus();
+  }
+});
+
+// Video
+document.getElementById('video-btn')?.addEventListener('mousedown', e => {
+  e.preventDefault();
+  const choice = confirm('¿Subir vídeo desde tu ordenador?\nFormatos: MP4, WebM, OGV\n\nOK = subir archivo  ·  Cancelar = pegar URL');
+  if (choice) {
+    uploadMediaFile('video/*,.mp4,.webm,.ogv,.mov', (url) => {
+      document.execCommand('insertHTML', false, insertVideoHtml(url));
+      editor.focus();
+    });
+  } else {
+    const url = prompt('URL del vídeo (mp4, webm…):');
+    if (url) document.execCommand('insertHTML', false, insertVideoHtml(url));
+    editor.focus();
+  }
 });
 
 // Raw HTML toggle
@@ -946,9 +1017,7 @@ if (featUpload) {
     fd.append('csrf', <?= json_encode(generate_csrf()) ?>);
 
     try {
-      const res  = await fetch(<?= json_encode(base_url() . '/admin/upload_image.php') ?>, {
-        method: 'POST', body: fd
-      });
+      const res  = await fetch(<?= json_encode(base_url() . '/admin/upload_media.php') ?>, { method: 'POST', body: fd });
       const data = await res.json();
       if (data.url) {
         featInput.value = data.url;

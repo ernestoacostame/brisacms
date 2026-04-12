@@ -2,15 +2,6 @@
 
 **BrisaCMS** es un gestor de contenidos ligero, rápido y sin base de datos, escrito en PHP puro. Almacena todo el contenido en archivos JSON, no requiere MySQL ni PostgreSQL, y es fácil de instalar en cualquier servidor con PHP 8.0+.
 
-<img width="2440" height="1208" alt="brisa_dashboard" src="https://github.com/user-attachments/assets/40a75b05-450d-47ff-aeed-628c528a2543" />
-
-<img width="2419" height="1207" alt="brisa_editor" src="https://github.com/user-attachments/assets/da5405ec-fc92-4842-9ac2-b3df1417ad1f" />
-
-<img width="2426" height="1208" alt="brisa_default" src="https://github.com/user-attachments/assets/f49b4a42-4acd-4250-831e-ebe3242849cf" />
-
-<img width="2426" height="1210" alt="brisa_systeminside" src="https://github.com/user-attachments/assets/d2b72f74-6c2f-4026-9bc3-eb7b7a8399b4" />
-
-
 ---
 
 ## Índice
@@ -72,7 +63,7 @@ chmod 664 /var/www/html/misitio/config.json
 
 ### 3. Configurar Nginx
 
-El archivo `nginx.conf.example` incluido es una plantilla lista para usar. Cópialo y ajusta los valores marcados con `<CAMBIAR>`:
+El archivo `nginx.conf.example` incluido en el ZIP es una plantilla lista para usar. Cópialo y ajusta los valores marcados con `<CAMBIAR>`:
 
 ```nginx
 server_name tudominio.com www.tudominio.com;
