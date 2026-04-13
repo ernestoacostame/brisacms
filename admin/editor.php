@@ -629,6 +629,209 @@ document.getElementById('editor-form').addEventListener('submit', () => {
   fmtInput.value = mode;
 });
 
+
+// ── Autosave: localStorage (instant) + server sync (every 60s) ───────────
+const AUTOSAVE_KEY  = 'brisa_autosave_' + <?= json_encode($type) ?> + '_' + <?= json_encode($slug ?: 'new') ?>;
+const AUTOSAVE_URL  = <?= json_encode(base_url() . '/admin/autosave.php') ?>;
+const AUTOSAVE_CSRF = <?= json_encode(generate_csrf()) ?>;
+
+let autosaveSlug    = <?= json_encode($slug) ?>;       // may update if new article gets saved
+let lastSavedHash   = null;       // hash of last content saved to server
+let localDirty      = false;      // has content changed since last localStorage save
+let serverSyncTimer = null;
+
+// ── Indicator element ────────────────────────────────────────────────────
+const autosaveBar = document.createElement('div');
+autosaveBar.id = 'autosave-bar';
+autosaveBar.style.cssText = [
+  'position:fixed','bottom:1rem','left:50%','transform:translateX(-50%)',
+  'background:var(--surface2)','border:1px solid var(--border2)',
+  'color:var(--muted)','font-size:0.72rem','padding:0.3rem 0.85rem',
+  'border-radius:20px','z-index:8000','opacity:0','transition:opacity 0.3s',
+  'pointer-events:none','font-family:inherit',
+].join(';');
+document.body.appendChild(autosaveBar);
+
+function showAutosaveMsg(msg, color) {
+  autosaveBar.textContent = msg;
+  autosaveBar.style.color = color || 'var(--muted)';
+  autosaveBar.style.opacity = '1';
+  clearTimeout(autosaveBar._t);
+  autosaveBar._t = setTimeout(() => autosaveBar.style.opacity = '0', 3000);
+}
+
+// ── Get current content from whichever editor is active ──────────────────
+function getCurrentContent() {
+  if (mode === 'markdown') return mdEditor.value;
+  if (rawHtml)             return htmlEditor.value;
+  return editor.innerHTML;
+}
+
+function getFormData() {
+  return {
+    title:          document.getElementById('post-title').value,
+    content:        getCurrentContent(),
+    content_format: mode,
+    excerpt:        document.querySelector('[name="excerpt"]')?.value || '',
+    categories:     document.getElementById('cat-hidden')?.value || '',
+    tags:           document.getElementById('tag-hidden')?.value || '',
+    featured_image: document.getElementById('featured_image_input')?.value || '',
+    mastodon_url:   document.querySelector('[name="mastodon_url"]')?.value || '',
+  };
+}
+
+function simpleHash(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = Math.imul(31, h) + str.charCodeAt(i) | 0;
+  return h;
+}
+
+// ── 1. localStorage save — on every input, debounced 2s ──────────────────
+let localSaveTimer;
+function scheduleLocalSave() {
+  localDirty = true;
+  clearTimeout(localSaveTimer);
+  localSaveTimer = setTimeout(() => {
+    try {
+      const data = getFormData();
+      if (!data.title && !data.content) return;
+      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({
+        ...data,
+        slug: autosaveSlug,
+        savedAt: Date.now(),
+      }));
+      localDirty = false;
+    } catch(e) {}
+  }, 2000);
+}
+
+// ── 2. Server sync — every 60s if content changed ────────────────────────
+async function syncToServer() {
+  const data = getFormData();
+  if (!data.title) return; // don't save without a title
+
+  const hash = simpleHash(data.title + data.content);
+  if (hash === lastSavedHash) return; // nothing changed
+
+  try {
+    const fd = new FormData();
+    fd.append('csrf',           AUTOSAVE_CSRF);
+    fd.append('type',           <?= json_encode($type) ?>);
+    fd.append('slug',           autosaveSlug);
+    fd.append('title',          data.title);
+    fd.append('content',        data.content);
+    fd.append('content_format', data.content_format);
+    fd.append('excerpt',        data.excerpt);
+    fd.append('categories',     data.categories);
+    fd.append('tags',           data.tags);
+    fd.append('featured_image', data.featured_image);
+    fd.append('mastodon_url',   data.mastodon_url);
+
+    const res  = await fetch(AUTOSAVE_URL, { method: 'POST', body: fd });
+    const json = await res.json();
+
+    if (json.ok) {
+      lastSavedHash = hash;
+      // If this was a new article and now has a slug, update our key
+      if (json.new && json.slug && !autosaveSlug) {
+        autosaveSlug = json.slug;
+        // Update URL without reloading so manual save works correctly
+        const url = new URL(location.href);
+        url.searchParams.set('slug', json.slug);
+        history.replaceState({}, '', url);
+      }
+      showAutosaveMsg('✓ Borrador guardado automáticamente', 'var(--green)');
+      // Clear localStorage copy — server has it now
+      try { localStorage.removeItem(AUTOSAVE_KEY); } catch(e) {}
+    }
+  } catch(e) {
+    // Network error — silent, we have localStorage as backup
+  }
+}
+
+// Start the 60s server sync loop
+serverSyncTimer = setInterval(syncToServer, 60000);
+
+// ── Listen to all editor inputs ───────────────────────────────────────────
+[editor, htmlEditor, mdEditor].forEach(el => {
+  el?.addEventListener('input', scheduleLocalSave);
+});
+document.getElementById('post-title')?.addEventListener('input', scheduleLocalSave);
+
+// ── On manual save: clear autosave data ──────────────────────────────────
+document.getElementById('editor-form').addEventListener('submit', () => {
+  try { localStorage.removeItem(AUTOSAVE_KEY); } catch(e) {}
+  clearInterval(serverSyncTimer);
+  lastSavedHash = null; // reset so next cycle re-checks
+}, true);
+
+// ── On page load: check for unsaved localStorage draft ───────────────────
+(function checkLocalDraft() {
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem(AUTOSAVE_KEY) || 'null'); } catch(e) {}
+  if (!saved || !saved.title) return;
+
+  // Only offer restore if it's more recent than 7 days
+  if (Date.now() - saved.savedAt > 7 * 24 * 60 * 60 * 1000) {
+    try { localStorage.removeItem(AUTOSAVE_KEY); } catch(e) {}
+    return;
+  }
+
+  // Don't offer restore if the server version is already saved (has a slug and content)
+  const currentContent = getCurrentContent().trim();
+  if (autosaveSlug && currentContent && currentContent !== '<p><br></p>') {
+    // Silently discard — server copy is canonical
+    try { localStorage.removeItem(AUTOSAVE_KEY); } catch(e) {}
+    return;
+  }
+
+  const ago = Math.round((Date.now() - saved.savedAt) / 60000);
+  const label = ago < 2 ? 'hace un momento' : `hace ${ago} minutos`;
+
+  // Show restore banner
+  const banner = document.createElement('div');
+  banner.style.cssText = [
+    'position:fixed','top:64px','left:50%','transform:translateX(-50%)',
+    'background:var(--surface)','border:1px solid var(--accent)',
+    'border-radius:10px','padding:0.85rem 1.25rem','z-index:8500',
+    'font-size:0.82rem','color:var(--text)','box-shadow:0 4px 20px rgba(0,0,0,0.3)',
+    'display:flex','align-items:center','gap:1rem','max-width:480px',
+    'font-family:inherit',
+  ].join(';');
+  banner.innerHTML = `
+    <span>📝 Hay un borrador local guardado <strong>${label}</strong>: <em>${saved.title.slice(0,40)}</em></span>
+    <div style="display:flex;gap:0.5rem;flex-shrink:0">
+      <button id="autosave-restore" style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:0.3rem 0.7rem;cursor:pointer;font-size:0.78rem;font-family:inherit">Restaurar</button>
+      <button id="autosave-discard" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border2);border-radius:6px;padding:0.3rem 0.7rem;cursor:pointer;font-size:0.78rem;font-family:inherit">Descartar</button>
+    </div>`;
+  document.body.appendChild(banner);
+
+  document.getElementById('autosave-restore').addEventListener('click', () => {
+    // Restore title
+    const titleEl = document.getElementById('post-title');
+    if (titleEl) titleEl.value = saved.title;
+    // Restore content
+    if (saved.content_format === 'markdown') {
+      switchMode('markdown');
+      mdEditor.value = saved.content;
+    } else {
+      switchMode('html');
+      editor.innerHTML = saved.content;
+    }
+    // Restore sidebar fields
+    const excerptEl = document.querySelector('[name="excerpt"]');
+    if (excerptEl) excerptEl.value = saved.excerpt || '';
+    banner.remove();
+    showAutosaveMsg('✓ Borrador local restaurado', 'var(--green)');
+    try { localStorage.removeItem(AUTOSAVE_KEY); } catch(e) {}
+  });
+
+  document.getElementById('autosave-discard').addEventListener('click', () => {
+    try { localStorage.removeItem(AUTOSAVE_KEY); } catch(e) {}
+    banner.remove();
+  });
+})();
+
 // ── Mode switch HTML ↔ MD ─────────────────────────────────────────────────
 document.getElementById('switch-html').addEventListener('click', () => switchMode('html'));
 document.getElementById('switch-md').addEventListener('click',   () => switchMode('markdown'));
