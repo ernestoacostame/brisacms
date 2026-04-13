@@ -99,7 +99,7 @@ $by_type    = array_count_values(array_column($files, 'type'));
 $filter = $_GET['type'] ?? 'all';
 $visible = $filter === 'all' ? $files : array_values(array_filter($files, fn($f) => $f['type'] === $filter));
 
-admin_header('Media', 'media');
+admin_header(__("media_title"), 'media');
 ?>
       <label class="btn btn-primary" style="cursor:pointer">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -120,7 +120,7 @@ admin_header('Media', 'media');
 
     <!-- Filter tabs -->
     <div style="display:flex;gap:0.5rem;margin-bottom:1.25rem;flex-wrap:wrap;align-items:center">
-      <?php foreach (['all'=>'Todo','image'=>'🖼 Imágenes','audio'=>'🎵 Audio','video'=>'🎬 Vídeo'] as $key=>$label): ?>
+      <?php foreach (['all'=>__("media_filter_all"),'image'=>__("media_filter_image"),'audio'=>__("media_filter_audio"),'video'=>__("media_filter_video")] as $key=>$label): ?>
       <a href="?type=<?= $key ?>" class="btn btn-sm <?= $filter === $key ? 'btn-primary' : 'btn-secondary' ?>">
         <?= $label ?>
         <span style="opacity:0.7;font-size:0.75rem">(<?= $key === 'all' ? count($files) : ($by_type[$key] ?? 0) ?>)</span>
@@ -159,19 +159,19 @@ admin_header('Media', 'media');
           <?php endif; ?>
 
           <div class="media-overlay">
-            <button class="media-copy" onclick="copyUrl(<?= htmlspecialchars(json_encode($f['url'])) ?>)" title="Copiar URL">
+            <button class="media-copy" onclick="copyUrl(<?= htmlspecialchars(json_encode($f['url'])) ?>)" title="<?= __raw('media_copy_url') ?>">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             </button>
             <?php if ($f['type'] === 'audio'): ?>
-            <button class="media-preview-btn" onclick="previewAudio(<?= htmlspecialchars(json_encode($f['url'])) ?>)" title="Reproducir">
+            <button class="media-preview-btn" onclick="previewAudio(<?= htmlspecialchars(json_encode($f['url'])) ?>)" title="<?= __raw('media_preview') ?>">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             </button>
             <?php endif; ?>
-            <form method="POST" style="display:inline" onsubmit="return confirm('¿Eliminar este archivo?')">
+            <form method="POST" style="display:inline" onsubmit="return confirm(<?= json_encode(__raw('media_confirm_del')) ?>)">
               <input type="hidden" name="csrf" value="<?= $csrf ?>">
               <input type="hidden" name="action" value="delete">
               <input type="hidden" name="file" value="<?= htmlspecialchars($f['rel']) ?>">
-              <button type="submit" class="media-del" title="Eliminar">
+              <button type="submit" class="media-del" title="<?= __raw('media_delete') ?>">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
               </button>
             </form>

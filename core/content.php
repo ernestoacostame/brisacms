@@ -20,10 +20,12 @@ function save_content(string $type, array $data): string {
     $slug = $data['slug'] ?? slug_from_title($data['title'] ?? 'untitled');
     $slug = sanitize_filename($slug);
     
-    // Ensure unique slug
+    // Ensure unique slug — skip if the file already belongs to this article
     $original = $slug;
     $i = 1;
-    while (file_exists("$dir/$slug.json") && ($data['original_slug'] ?? '') !== $slug) {
+    while (file_exists("$dir/$slug.json")
+        && ($data['original_slug'] ?? '') !== $slug
+        && ($data['slug'] ?? '')          !== $slug) {
         $slug = $original . '-' . $i++;
     }
     

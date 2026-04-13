@@ -521,13 +521,15 @@ body.focus-mode .focus-exit-hint { display: block; }
   .title-area input { font-size: 1.2rem; }
 
   .toolbar {
-    overflow-x: auto; flex-wrap: nowrap;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+    flex-wrap: wrap;       /* grupos se reorganizan en varias filas */
     flex-shrink: 0;
+    gap: 2px;
+    row-gap: 4px;          /* pequeño espacio entre filas */
   }
-  .toolbar::-webkit-scrollbar { display: none; }
-  .toolbar-right { flex-shrink: 0; }
+  /* En móvil el toolbar-right no se empuja al final — fluye naturalmente */
+  .toolbar-right { margin-left: 0; }
+  /* Los separadores verticales se ocultan al hacer wrap para que no queden solos */
+  .toolbar-sep { display: none; }
 
   .editor-sidebar .panel { padding: 0.75rem; }
   .topbar-actions .btn span { display: none; }

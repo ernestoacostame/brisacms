@@ -11,7 +11,7 @@ $pages = list_content('pages', false, 1, 9999);
 $published_articles = array_filter($articles['items'], fn($p) => $p['status'] === 'published');
 $recent = array_slice($articles['items'], 0, 8);
 
-admin_header('Panel', 'dashboard');
+admin_header(__("dash_title"), 'dashboard');
 ?>
     </div>
   </div>
@@ -42,7 +42,7 @@ admin_header('Panel', 'dashboard');
       </div>
       <?php if (empty($recent)): ?>
         <div class="card-body" style="text-align:center; color:var(--muted); padding: 2.5rem;">
-          Sin artículos todavía. <a href="<?= base_url() ?>/admin/editor.php?type=articles" style="color:var(--accent)">Crea tu primer artículo →</a>
+          <?= __("dash_no_articles") ?> <a href="<?= base_url() ?>/admin/editor.php?type=articles" style="color:var(--accent)"><?= __("dash_create_first") ?></a>
         </div>
       <?php else: ?>
       <table class="table">

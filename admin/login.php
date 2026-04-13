@@ -9,7 +9,7 @@ $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (is_rate_limited()) {
-        $error = 'Too many failed attempts. Please wait 15 minutes.';
+        $error = __("login_rate_limited");
     } else {
         $username = trim($_POST['username'] ?? '');
         $password = $_POST['password'] ?? '';
@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: ./');
             exit;
         } else {
-            $error = 'Invalid username or password.';
+            $error = __("login_error");
             // Small delay to slow brute force
             sleep(1);
         }
@@ -67,7 +67,7 @@ $csrf = generate_csrf();
 <div class="wrap">
   <div class="logo">
     <h1>Flux<span>CMS</span></h1>
-    <p>Admin Panel</p>
+    <p><?= __("login_title") ?></p>
   </div>
   <div class="card">
     <?php if ($error): ?><div class="error">⚠ <?= htmlspecialchars($error) ?></div><?php endif; ?>
@@ -81,10 +81,10 @@ $csrf = generate_csrf();
         <label>Password</label>
         <input type="password" name="password" required autocomplete="current-password">
       </div>
-      <button type="submit" class="btn">Sign In</button>
+      <button type="submit" class="btn"><?= __("login_btn") ?></button>
     </form>
   </div>
-  <div class="back"><a href="<?= base_url() ?>/">← Back to site</a></div>
+  <div class="back"><a href="<?= base_url() ?>/"><?= __("login_back") ?></a></div>
 </div>
 </body>
 </html>

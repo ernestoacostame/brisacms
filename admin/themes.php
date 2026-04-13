@@ -7,7 +7,7 @@ require_login();
 
 $themes = available_themes();
 $current = active_theme();
-admin_header('Themes', 'themes');
+admin_header(__("themes_title"), 'themes');
 ?>
     </div>
   </div>
@@ -45,14 +45,14 @@ admin_header('Themes', 'themes');
             <?php endif; ?>
           </div>
           <?php if ($key === $current): ?>
-          <span class="badge badge-green">Active</span>
+          <span class="badge badge-green"><?= __("themes_active") ?></span>
           <?php else: ?>
           <form method="POST" action="<?= base_url() ?>/admin/settings.php">
             <input type="hidden" name="csrf" value="<?= generate_csrf() ?>">
             <input type="hidden" name="action" value="appearance">
             <input type="hidden" name="theme" value="<?= htmlspecialchars($key) ?>">
             <input type="hidden" name="theme_color" value="<?= htmlspecialchars(theme_color()) ?>">
-            <button type="submit" class="btn btn-secondary btn-sm">Activate</button>
+            <button type="submit" class="btn btn-secondary btn-sm"><?= __("themes_activate") ?></button>
           </form>
           <?php endif; ?>
         </div>

@@ -67,7 +67,7 @@ if (is_dir(ROOT_PATH . '/media')) {
     }
 }
 
-admin_header('Exportar contenido', 'export');
+admin_header(__("export_title"), 'export');
 ?>
     </div>
   </div>

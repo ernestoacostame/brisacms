@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $config['posts_per_page'] = max(1, (int)($_POST['posts_per_page'] ?? 8));
             $config['footer_text'] = trim($_POST['footer_text'] ?? '');
             cms_save_config($config);
-            $msg = 'Settings saved!';
+            $msg = __("saved_general");
         }
 
         if ($action === 'appearance') {
@@ -46,9 +46,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $current = $_POST['current_password'] ?? '';
             
             if (!verify_password($current, $config['admin_pass'])) {
-                $error = 'Current password is incorrect.';
+                $error = __("err_wrong_pass");
             } elseif ($new_pass !== $confirm) {
-                $error = 'New passwords do not match.';
+                $error = __("err_pass_mismatch");
             } elseif (strlen($new_pass) < 8) {
                 $error = 'Password must be at least 8 characters.';
             } else {
@@ -65,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $themes = available_themes();
-admin_header('Settings', 'settings');
+admin_header(__("settings_title"), 'settings');
 ?>
       <!-- no topbar actions -->
     </div>
@@ -74,49 +74,49 @@ admin_header('Settings', 'settings');
     <?php if ($msg): ?><div class="alert alert-success">✓ <?= htmlspecialchars($msg) ?></div><?php endif; ?>
     <?php if ($error): ?><div class="alert alert-error">⚠ <?= htmlspecialchars($error) ?></div><?php endif; ?>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;align-items:start">
+    <div class="settings-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;align-items:start">
 
       <!-- General Settings -->
       <div class="card">
-        <div class="card-header"><span class="card-title">General</span></div>
+        <div class="card-header"><span class="card-title"><?= __("settings_general") ?></span></div>
         <div class="card-body">
           <form method="POST">
             <input type="hidden" name="csrf" value="<?= $csrf ?>">
             <input type="hidden" name="action" value="general">
             <div class="form-group">
-              <label class="form-label">Site Title</label>
+              <label class="form-label"><?= __("field_site_title") ?></label>
               <input type="text" name="site_title" value="<?= htmlspecialchars($config['site_title'] ?? '') ?>" required>
             </div>
             <div class="form-group">
-              <label class="form-label">Tagline</label>
+              <label class="form-label"><?= __("field_tagline") ?></label>
               <input type="text" name="tagline" value="<?= htmlspecialchars($config['tagline'] ?? '') ?>" placeholder="A short description">
             </div>
             <div class="form-group">
-              <label class="form-label">Base URL</label>
+              <label class="form-label"><?= __("field_base_url") ?></label>
               <input type="url" name="base_url" value="<?= htmlspecialchars($config['base_url'] ?? '') ?>" required>
             </div>
             <div class="form-group">
-              <label class="form-label">Articles Per Page</label>
+              <label class="form-label"><?= __("field_posts_per_page") ?></label>
               <input type="number" name="posts_per_page" value="<?= (int)($config['posts_per_page'] ?? 8) ?>" min="1" max="50">
             </div>
             <div class="form-group">
-              <label class="form-label">Footer Text</label>
+              <label class="form-label"><?= __("field_footer_text") ?></label>
               <input type="text" name="footer_text" value="<?= htmlspecialchars($config['footer_text'] ?? '') ?>" placeholder="© 2025 My Blog">
             </div>
-            <button type="submit" class="btn btn-primary">Save Settings</button>
+            <button type="submit" class="btn btn-primary"><?= __("btn_save_settings") ?></button>
           </form>
         </div>
       </div>
 
       <!-- Appearance -->
       <div class="card">
-        <div class="card-header"><span class="card-title">Appearance</span></div>
+        <div class="card-header"><span class="card-title"><?= __("settings_appearance") ?></span></div>
         <div class="card-body">
           <form method="POST">
             <input type="hidden" name="csrf" value="<?= $csrf ?>">
             <input type="hidden" name="action" value="appearance">
             <div class="form-group">
-              <label class="form-label">Theme</label>
+              <label class="form-label"><?= __("field_theme") ?></label>
               <select name="theme">
                 <?php foreach ($themes as $key => $theme): ?>
                 <option value="<?= htmlspecialchars($key) ?>" <?= ($config['theme'] ?? 'default') === $key ? 'selected' : '' ?>>
@@ -130,7 +130,7 @@ admin_header('Settings', 'settings');
               </div>
             </div>
             <div class="form-group">
-              <label class="form-label">Accent Color</label>
+              <label class="form-label"><?= __("field_accent") ?></label>
               <div style="display:flex;align-items:center;gap:0.75rem">
                 <input type="color" name="theme_color" id="color-pick" value="<?= htmlspecialchars($config['theme_color'] ?? '#6366f1') ?>"
                   style="width:46px;height:38px;padding:2px;border-radius:7px;cursor:pointer;border:1px solid var(--border)">
@@ -152,7 +152,7 @@ admin_header('Settings', 'settings');
 
       <!-- Mastodon -->
       <div class="card">
-        <div class="card-header"><span class="card-title">Mastodon / ActivityPub</span></div>
+        <div class="card-header"><span class="card-title"><?= __("settings_mastodon") ?></span></div>
         <div class="card-body">
           <form method="POST">
             <input type="hidden" name="csrf" value="<?= $csrf ?>">
@@ -172,32 +172,32 @@ admin_header('Settings', 'settings');
               <strong>Verificación:</strong> Añade este enlace a cualquier página de tu sitio con el atributo <code>rel="me"</code>:<br>
               <code style="color:var(--accent)">&lt;a rel="me" href="<?= htmlspecialchars($config['mastodon_url'] ?? 'https://mastodon.social/@usuario') ?>"&gt;Mastodon&lt;/a&gt;</code>
             </div>
-            <button type="submit" class="btn btn-primary">Guardar Mastodon</button>
+            <button type="submit" class="btn btn-primary"><?= __("btn_save_mastodon") ?></button>
           </form>
         </div>
       </div>
 
       <!-- Security -->
       <div class="card">
-        <div class="card-header"><span class="card-title">Security & Account</span></div>
+        <div class="card-header"><span class="card-title"><?= __("settings_security") ?></span></div>
         <div class="card-body">
           <form method="POST">
             <input type="hidden" name="csrf" value="<?= $csrf ?>">
             <input type="hidden" name="action" value="security">
             <div class="form-group">
-              <label class="form-label">Admin Username</label>
+              <label class="form-label"><?= __("field_admin_user") ?></label>
               <input type="text" name="admin_user" value="<?= htmlspecialchars($config['admin_user'] ?? '') ?>" required>
             </div>
             <div class="form-group">
-              <label class="form-label">Current Password</label>
+              <label class="form-label"><?= __("field_current_pass") ?></label>
               <input type="password" name="current_password" required autocomplete="current-password">
             </div>
             <div class="form-group">
-              <label class="form-label">New Password (leave blank to keep)</label>
+              <label class="form-label"><?= __("field_new_pass") ?></label>
               <input type="password" name="new_password" autocomplete="new-password">
             </div>
             <div class="form-group">
-              <label class="form-label">Confirm New Password</label>
+              <label class="form-label"><?= __("field_confirm_pass") ?></label>
               <input type="password" name="confirm_password" autocomplete="new-password">
             </div>
             <button type="submit" class="btn btn-primary">Update Security</button>
