@@ -48,10 +48,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'original_slug' => $slug,
             'created_at'    => $post['created_at'] ?? '',
         ];
-        if (!$data['title']) { $error = 'Title is required.'; }
+        if (!$data['title']) { $error = __("editor_error_title"); }
         else {
             $new_slug = save_content($type, $data);
-            $msg = 'Saved successfully!';
+            $msg = __("editor_saved");
             $slug = $new_slug;
             $post = get_content($type, $new_slug);
             $is_new = false;
@@ -59,16 +59,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$label = $type === 'articles' ? 'Article' : 'Page';
+$label = $type === 'articles' ? __raw('nav_articles') : __raw('nav_pages');
 $content_format = $post['content_format'] ?? 'html';
-admin_header(($is_new ? 'New ' : 'Edit ') . $label, $type);
+admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article')), $type);
 ?>
       <?php if ($post && $post['status'] === 'published'): ?>
       <a href="<?= base_url() ?>/<?= $type === 'articles' ? 'article' : 'page' ?>/<?= htmlspecialchars($post['slug']) ?>" target="_blank" class="btn btn-secondary btn-sm">View Live ↗</a>
       <?php endif; ?>
       <button form="editor-form" name="status" value="draft" class="btn btn-secondary">Guardar borrador</button>
       <button form="editor-form" name="status" value="published" class="btn btn-primary" id="publish-btn">
-        <?= $post && $post['status'] === 'published' ? '✓ Actualizar' : '🚀 Publicar' ?>
+        <?= $post && $post['status'] === 'published' ? __("editor_update") : __("editor_publish") ?>
       </button>
     </div>
   </div>
@@ -85,7 +85,7 @@ admin_header(($is_new ? 'New ' : 'Edit ') . $label, $type);
         <!-- Main editor area -->
         <div class="editor-main">
           <div class="title-area">
-            <input type="text" name="title" id="post-title" placeholder="Post title…"
+            <input type="text" name="title" id="post-title" placeholder="<?= __raw("editor_title_ph") ?>"
               value="<?= htmlspecialchars($post['title'] ?? '') ?>" required autocomplete="off">
           </div>
 
@@ -94,31 +94,31 @@ admin_header(($is_new ? 'New ' : 'Edit ') . $label, $type);
             <!-- HTML toolbar -->
             <div id="html-toolbar" style="display:flex;align-items:center;gap:2px;flex-wrap:wrap;flex:1">
               <div class="toolbar-group">
-                <button type="button" class="tb" data-cmd="formatBlock" data-val="h2" title="Heading 2">H2</button>
-                <button type="button" class="tb" data-cmd="formatBlock" data-val="h3" title="Heading 3">H3</button>
-                <button type="button" class="tb" data-cmd="formatBlock" data-val="p" title="Paragraph">¶</button>
+                <button type="button" class="tb" data-cmd="formatBlock" data-val="h2" title="<?= __raw("tb_h2") ?>">H2</button>
+                <button type="button" class="tb" data-cmd="formatBlock" data-val="h3" title="<?= __raw("tb_h3") ?>">H3</button>
+                <button type="button" class="tb" data-cmd="formatBlock" data-val="p" title="<?= __raw("tb_p") ?>">¶</button>
               </div>
               <div class="toolbar-sep"></div>
               <div class="toolbar-group">
-                <button type="button" class="tb" data-cmd="bold" title="Bold"><b>B</b></button>
-                <button type="button" class="tb" data-cmd="italic" title="Italic"><i>I</i></button>
-                <button type="button" class="tb" data-cmd="underline" title="Underline"><u>U</u></button>
-                <button type="button" class="tb" data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+                <button type="button" class="tb" data-cmd="bold" title="<?= __raw("tb_bold") ?>"><b>B</b></button>
+                <button type="button" class="tb" data-cmd="italic" title="<?= __raw("tb_italic") ?>"><i>I</i></button>
+                <button type="button" class="tb" data-cmd="underline" title="<?= __raw("tb_underline") ?>"><u>U</u></button>
+                <button type="button" class="tb" data-cmd="strikeThrough" title="<?= __raw("tb_strike") ?>"><s>S</s></button>
               </div>
               <div class="toolbar-sep"></div>
               <div class="toolbar-group">
-                <button type="button" class="tb" data-cmd="insertUnorderedList" title="Bullet list">≡</button>
-                <button type="button" class="tb" data-cmd="insertOrderedList" title="Ordered list">1.</button>
-                <button type="button" class="tb" data-cmd="formatBlock" data-val="blockquote" title="Blockquote">"</button>
-                <button type="button" class="tb" data-cmd="formatBlock" data-val="pre" title="Code block">&lt;/&gt;</button>
+                <button type="button" class="tb" data-cmd="insertUnorderedList" title="<?= __raw("tb_ul") ?>">≡</button>
+                <button type="button" class="tb" data-cmd="insertOrderedList" title="<?= __raw("tb_ol") ?>">1.</button>
+                <button type="button" class="tb" data-cmd="formatBlock" data-val="blockquote" title="<?= __raw("tb_quote") ?>">"</button>
+                <button type="button" class="tb" data-cmd="formatBlock" data-val="pre" title="<?= __raw("tb_code") ?>">&lt;/&gt;</button>
               </div>
               <div class="toolbar-sep"></div>
               <div class="toolbar-group">
-                <button type="button" class="tb" id="link-btn" title="Insertar enlace">🔗</button>
-                <button type="button" class="tb" id="img-btn" title="Insertar imagen">🖼</button>
-                <button type="button" class="tb" id="audio-btn" title="Insertar audio">🎵</button>
-                <button type="button" class="tb" id="video-btn" title="Insertar vídeo">🎬</button>
-                <button type="button" class="tb" data-cmd="insertHorizontalRule" title="Divisor">—</button>
+                <button type="button" class="tb" id="link-btn" title="<?= __raw("tb_link") ?>">🔗</button>
+                <button type="button" class="tb" id="img-btn" title="<?= __raw("tb_image") ?>">🖼</button>
+                <button type="button" class="tb" id="audio-btn" title="<?= __raw("tb_audio") ?>">🎵</button>
+                <button type="button" class="tb" id="video-btn" title="<?= __raw("tb_video") ?>">🎬</button>
+                <button type="button" class="tb" data-cmd="insertHorizontalRule" title="<?= __raw("tb_hr") ?>">—</button>
               </div>
               <div class="toolbar-sep"></div>
               <div class="toolbar-group">
@@ -126,43 +126,66 @@ admin_header(($is_new ? 'New ' : 'Edit ') . $label, $type);
                 <button type="button" class="tb" data-cmd="redo">↪</button>
               </div>
               <div class="toolbar-sep"></div>
-              <button type="button" class="tb tb-mode" id="html-raw-toggle" title="Raw HTML">&lt;/&gt; HTML</button>
+              <button type="button" class="tb tb-mode" id="html-raw-toggle" title="<?= __raw("tb_html") ?>">&lt;/&gt; HTML</button>
             </div>
 
             <!-- Markdown toolbar -->
             <div id="md-toolbar" style="display:none;align-items:center;gap:2px;flex-wrap:wrap;flex:1">
               <div class="toolbar-group">
-                <button type="button" class="tb md-btn" data-md="## " title="Heading 2">H2</button>
-                <button type="button" class="tb md-btn" data-md="### " title="Heading 3">H3</button>
+                <button type="button" class="tb md-btn" data-md="## " title="<?= __raw("tb_h2") ?>">H2</button>
+                <button type="button" class="tb md-btn" data-md="### " title="<?= __raw("tb_h3") ?>">H3</button>
               </div>
               <div class="toolbar-sep"></div>
               <div class="toolbar-group">
-                <button type="button" class="tb md-btn" data-wrap="**" title="Bold"><b>B</b></button>
-                <button type="button" class="tb md-btn" data-wrap="*" title="Italic"><i>I</i></button>
-                <button type="button" class="tb md-btn" data-wrap="~~" title="Strikethrough"><s>S</s></button>
+                <button type="button" class="tb md-btn" data-wrap="**" title="<?= __raw("tb_bold") ?>"><b>B</b></button>
+                <button type="button" class="tb md-btn" data-wrap="*" title="<?= __raw("tb_italic") ?>"><i>I</i></button>
+                <button type="button" class="tb md-btn" data-wrap="~~" title="<?= __raw("tb_strike") ?>"><s>S</s></button>
                 <button type="button" class="tb md-btn" data-wrap="`" title="Inline code">` `</button>
               </div>
               <div class="toolbar-sep"></div>
               <div class="toolbar-group">
-                <button type="button" class="tb md-btn" data-md="- " title="Bullet list">≡</button>
-                <button type="button" class="tb md-btn" data-md="1. " title="Ordered list">1.</button>
-                <button type="button" class="tb md-btn" data-md="> " title="Blockquote">"</button>
-                <button type="button" class="tb md-btn" data-block="```\n\n```" title="Code block">&lt;/&gt;</button>
+                <button type="button" class="tb md-btn" data-md="- " title="<?= __raw("tb_ul") ?>">≡</button>
+                <button type="button" class="tb md-btn" data-md="1. " title="<?= __raw("tb_ol") ?>">1.</button>
+                <button type="button" class="tb md-btn" data-md="> " title="<?= __raw("tb_quote") ?>">"</button>
+                <button type="button" class="tb md-btn" data-block="```\n\n```" title="<?= __raw("tb_code") ?>">&lt;/&gt;</button>
               </div>
               <div class="toolbar-sep"></div>
               <div class="toolbar-group">
-                <button type="button" class="tb" id="md-link-btn" title="Link">🔗</button>
-                <button type="button" class="tb" id="md-img-btn" title="Image">🖼</button>
-                <button type="button" class="tb md-btn" data-md="---" title="Divider">—</button>
+                <button type="button" class="tb" id="md-link-btn" title="<?= __raw("tb_link") ?>">🔗</button>
+                <button type="button" class="tb" id="md-img-btn" title="<?= __raw("tb_image") ?>">🖼</button>
+                <button type="button" class="tb md-btn" data-md="---" title="<?= __raw("tb_hr") ?>">—</button>
               </div>
               <div class="toolbar-sep"></div>
-              <button type="button" class="tb tb-mode" id="md-preview-btn">👁 Preview</button>
+              <button type="button" class="tb tb-mode" id="md-preview-btn"><?= __("tb_preview") ?></button>
             </div>
 
-            <!-- Mode switcher (always visible) -->
+            <!-- Mode switcher + extras (always visible) -->
             <div class="toolbar-right" style="margin-left:auto;display:flex;gap:4px;padding-left:8px;border-left:1px solid var(--border2)">
-              <button type="button" class="tb mode-switch <?= $content_format === 'html' ? 'active' : '' ?>" id="switch-html" title="Switch to HTML mode">HTML</button>
-              <button type="button" class="tb mode-switch <?= $content_format === 'markdown' ? 'active' : '' ?>" id="switch-md" title="Switch to Markdown mode">MD</button>
+              <button type="button" class="tb mode-switch <?= $content_format === 'html' ? 'active' : '' ?>" id="switch-html" title="<?= __raw("tb_html_mode") ?>">HTML</button>
+              <button type="button" class="tb mode-switch <?= $content_format === 'markdown' ? 'active' : '' ?>" id="switch-md" title="<?= __raw("tb_md_mode") ?>">MD</button>
+              <!-- Font size control -->
+              <div style="display:flex;align-items:center;gap:1px;border:1px solid var(--border2);border-radius:5px;overflow:hidden;margin:0 2px">
+                <button type="button" class="tb" id="font-size-down" title="Reducir tamaño de fuente" style="padding:0.3rem 0.45rem;border-radius:0;border:none">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+                <span id="font-size-label" style="font-size:0.7rem;color:var(--muted);min-width:26px;text-align:center;user-select:none;padding:0 2px">16</span>
+                <button type="button" class="tb" id="font-size-up" title="Aumentar tamaño de fuente" style="padding:0.3rem 0.45rem;border-radius:0;border:none">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+              </div>
+              <div style="width:1px;height:18px;background:var(--border2);margin:0 2px;align-self:center"></div>
+              <!-- Floating toolbar toggle -->
+              <button type="button" class="tb" id="float-toolbar-btn" title="<?= __raw("tb_float") ?>">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="4" rx="1"/><line x1="7" y1="10" x2="17" y2="10"/><line x1="7" y1="14" x2="14" y2="14"/></svg>
+              </button>
+              <!-- Article preview -->
+              <button type="button" class="tb" id="preview-btn" title="<?= __raw("tb_preview_article") ?>">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+              <!-- Focus mode -->
+              <button type="button" class="tb" id="focus-btn" title="<?= __raw("tb_focus") ?>">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+              </button>
             </div>
           </div>
 
@@ -201,8 +224,8 @@ admin_header(($is_new ? 'New ' : 'Edit ') . $label, $type);
           <div class="panel">
             <div class="panel-title">Status</div>
             <select name="status" id="status-select">
-              <option value="draft" <?= ($post['status'] ?? 'draft') === 'draft' ? 'selected' : '' ?>>Draft</option>
-              <option value="published" <?= ($post['status'] ?? '') === 'published' ? 'selected' : '' ?>>Published</option>
+              <option value="draft" <?= ($post['status'] ?? 'draft') === 'draft' ? 'selected' : '' ?>><?= __("status_draft") ?></option>
+              <option value="published" <?= ($post['status'] ?? '') === 'published' ? 'selected' : '' ?>><?= __("status_published") ?></option>
             </select>
           </div>
 
@@ -210,13 +233,13 @@ admin_header(($is_new ? 'New ' : 'Edit ') . $label, $type);
             <div class="panel-title">URL Slug</div>
             <input type="text" name="custom_slug" id="custom-slug"
               value="<?= htmlspecialchars($post['slug'] ?? '') ?>"
-              placeholder="auto-generated">
-            <div class="panel-hint">Leave empty to auto-generate from title.</div>
+              placeholder="<?= __raw("panel_slug") ?>">
+            <div class="panel-hint"><?= __("panel_slug_hint") ?></div>
           </div>
 
           <div class="panel">
             <div class="panel-title">Excerpt</div>
-            <textarea name="excerpt" rows="3" placeholder="Short summary…"><?= htmlspecialchars($post['excerpt'] ?? '') ?></textarea>
+            <textarea name="excerpt" rows="3" placeholder="<?= __raw("panel_excerpt_ph") ?>"><?= htmlspecialchars($post['excerpt'] ?? '') ?></textarea>
           </div>
 
           <?php if ($type === 'articles'): ?>
@@ -224,7 +247,7 @@ admin_header(($is_new ? 'New ' : 'Edit ') . $label, $type);
             <div class="panel-title">Categorías</div>
             <div class="tag-input-wrap" id="cat-wrap">
               <div class="tag-chips" id="cat-chips"></div>
-              <input type="text" id="cat-input" placeholder="Añadir categoría…" autocomplete="off">
+              <input type="text" id="cat-input" placeholder="<?= __raw("panel_cat_ph") ?>" autocomplete="off">
               <input type="hidden" name="categories" id="cat-hidden"
                 value="<?= htmlspecialchars(implode(', ', $post['categories'] ?? [])) ?>">
             </div>
@@ -240,7 +263,7 @@ admin_header(($is_new ? 'New ' : 'Edit ') . $label, $type);
             <div class="panel-title">Etiquetas</div>
             <div class="tag-input-wrap" id="tag-wrap" style="position:relative">
               <div class="tag-chips" id="tag-chips"></div>
-              <input type="text" id="tag-input" placeholder="Escribe para buscar…" autocomplete="off">
+              <input type="text" id="tag-input" placeholder="<?= __raw("panel_tag_ph") ?>" autocomplete="off">
               <input type="hidden" name="tags" id="tag-hidden"
                 value="<?= htmlspecialchars(implode(', ', $post['tags'] ?? [])) ?>">
             </div>
@@ -262,10 +285,10 @@ admin_header(($is_new ? 'New ' : 'Edit ') . $label, $type);
               value="<?= htmlspecialchars($post['featured_image'] ?? '') ?>">
             <div style="margin-top:0.5rem;display:flex;gap:0.5rem;align-items:center">
               <label class="btn btn-secondary btn-sm" style="cursor:pointer;font-size:0.78rem">
-                📁 Subir imagen
+                <?= __("panel_featured_upload") ?>
                 <input type="file" id="feat-upload" accept="image/*" style="display:none">
               </label>
-              <span style="font-size:0.72rem;color:var(--muted)">o pega una URL</span>
+              <span style="font-size:0.72rem;color:var(--muted)"><?= __("panel_featured_or") ?></span>
             </div>
             <div id="featured-preview" style="<?= empty($post['featured_image']) ? 'display:none' : '' ?>">
               <img src="<?= htmlspecialchars($post['featured_image'] ?? '') ?>" style="width:100%;border-radius:6px;margin-top:0.6rem;max-height:120px;object-fit:cover;" alt="" id="featured-img">
@@ -275,9 +298,9 @@ admin_header(($is_new ? 'New ' : 'Edit ') . $label, $type);
 
           <div class="panel">
             <div class="panel-title">URL de Mastodon</div>
-            <input type="text" name="mastodon_url" placeholder="https://mastodon.social/@u/123"
+            <input type="text" name="mastodon_url" placeholder="<?= __raw("panel_mastodon_ph") ?>"
               value="<?= htmlspecialchars($post['mastodon_url'] ?? '') ?>">
-            <div class="panel-hint">Pega la URL del toot de Mastodon para activar comentarios.</div>
+            <div class="panel-hint"><?= __("panel_mastodon_hint") ?></div>
           </div>
 
           <?php if ($post): ?>
@@ -285,7 +308,7 @@ admin_header(($is_new ? 'New ' : 'Edit ') . $label, $type);
             <div class="panel-title" style="color:var(--red)">Danger Zone</div>
             <a href="<?= base_url() ?>/admin/delete.php?type=<?= $type ?>&slug=<?= htmlspecialchars($slug) ?>&csrf=<?= $csrf ?>"
                class="btn btn-danger" style="width:100%;justify-content:center"
-               onclick="return confirm('Delete this <?= $label ?>? This cannot be undone.')">
+               onclick="return confirm('<?= __raw("confirm_delete_article") ?>')">
               Delete <?= $label ?>
             </a>
           </div>
@@ -296,6 +319,7 @@ admin_header(($is_new ? 'New ' : 'Edit ') . $label, $type);
   </div>
 </div>
 
+
 <style>
 .editor-layout {
   display: grid;
@@ -304,9 +328,13 @@ admin_header(($is_new ? 'New ' : 'Edit ') . $label, $type);
   align-items: start;
 }
 .editor-main {
-  display: flex; flex-direction: column; gap: 0;
+  display: flex; flex-direction: column;
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); overflow: hidden;
+  border-radius: var(--radius);
+  height: calc(100vh - 130px);
+  min-height: 500px;
+  position: sticky;
+  top: 57px;
 }
 .title-area { padding: 1.25rem 1.5rem 0; }
 .title-area input {
@@ -324,7 +352,7 @@ admin_header(($is_new ? 'New ' : 'Edit ') . $label, $type);
   border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
   margin-top: 1rem; flex-wrap: wrap;
   background: var(--surface);
-  position: sticky; top: 57px; z-index: 40;
+  flex-shrink: 0;
 }
 .toolbar-group { display: flex; gap: 1px; }
 .toolbar-sep { width: 1px; height: 20px; background: var(--border2); margin: 0 4px; flex-shrink: 0; }
@@ -379,14 +407,16 @@ admin_header(($is_new ? 'New ' : 'Edit ') . $label, $type);
 }
 
 /* ── Editor panes ── */
-.editor-wrap { min-height: 440px; position: relative; }
+.editor-wrap { flex: 1; overflow-y: auto; position: relative; min-height: 0; }
 .prose-editor {
-  min-height: 440px; padding: 1.5rem; outline: none; line-height: 1.8;
+  min-height: 100%;
+  padding: 1.5rem; outline: none; line-height: 1.8;
   color: var(--text); font-size: 1rem;
 }
 .prose-editor h2 { font-size: 1.5rem; font-weight: 700; margin: 1.5rem 0 0.75rem; }
 .prose-editor h3 { font-size: 1.2rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
-.prose-editor p { margin: 0 0 1rem; }
+#editor p, #editor > p, [contenteditable] p { margin-top: 0 !important; margin-bottom: 1em !important; display: block !important; }
+.prose-editor p { margin-top: 0 !important; margin-bottom: 1em !important; }
 .prose-editor a { color: var(--accent); }
 .prose-editor blockquote { border-left: 3px solid var(--accent); padding: 0.5rem 1rem; margin: 1rem 0; color: var(--text2); font-style: italic; background: var(--surface2); border-radius: 0 8px 8px 0; }
 .prose-editor pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; font-family: monospace; font-size: 0.875rem; overflow-x: auto; margin: 1rem 0; }
@@ -400,7 +430,7 @@ admin_header(($is_new ? 'New ' : 'Edit ') . $label, $type);
 .prose-editor del { text-decoration: line-through; color: var(--muted); }
 
 .html-editor, .md-editor {
-  width: 100%; min-height: 440px; padding: 1.5rem;
+  width: 100%; min-height: 100%; padding: 1.5rem;
   background: #1a1a24; color: #a8e6cf;
   font-family: 'Fira Code', 'Cascadia Code', 'Courier New', monospace;
   font-size: 0.9rem; border: none; resize: vertical; line-height: 1.7;
@@ -417,9 +447,9 @@ body.focus-mode .alert { display: none !important; }
 body.focus-mode .main { margin-left: 0 !important; }
 body.focus-mode .page-body { padding: 0; }
 body.focus-mode .editor-layout { grid-template-columns: 1fr; }
-body.focus-mode .editor-main { border-radius: 0; border-left: none; border-right: none; border-top: none; min-height: 100vh; }
+body.focus-mode .editor-main { border-radius: 0; border-left: none; border-right: none; border-top: none; height: 100vh !important; top: 0 !important; }
 body.focus-mode .toolbar { top: 0; border-top: none; }
-body.focus-mode .prose-editor, body.focus-mode .md-editor { min-height: calc(100vh - 120px); max-width: 760px; margin: 0 auto; }
+body.focus-mode .prose-editor, body.focus-mode .md-editor { max-width: 760px; margin: 0 auto; }
 body.focus-mode #focus-btn { color: var(--accent); }
 .focus-exit-hint { display: none; position: fixed; bottom: 1rem; right: 1rem; background: var(--surface2); color: var(--muted); font-size: 0.75rem; padding: 0.35rem 0.75rem; border-radius: 6px; z-index: 9999; }
 body.focus-mode .focus-exit-hint { display: block; }
@@ -475,31 +505,31 @@ body.focus-mode .focus-exit-hint { display: block; }
 
 /* ── RESPONSIVE ── */
 @media (max-width: 768px) {
-  /* Stack editor + sidebar vertically */
   .editor-layout {
     grid-template-columns: 1fr;
   }
-  /* Sidebar goes below editor */
   .editor-sidebar { order: 2; }
-  .editor-main { order: 1; }
+  /* On mobile: natural height, no sticky constraint */
+  .editor-main {
+    order: 1;
+    height: auto !important;
+    min-height: 60vh;
+    position: static !important;
+  }
+  .editor-wrap { overflow-y: visible !important; }
 
-  /* Smaller title on mobile */
   .title-area input { font-size: 1.2rem; }
 
-  /* Toolbar scrolls horizontally instead of wrapping */
   .toolbar {
-    position: sticky; top: 56px;
     overflow-x: auto; flex-wrap: nowrap;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    flex-shrink: 0;
   }
   .toolbar::-webkit-scrollbar { display: none; }
   .toolbar-right { flex-shrink: 0; }
 
-  /* Panel titles collapsible on mobile */
   .editor-sidebar .panel { padding: 0.75rem; }
-
-  /* Save/publish buttons in topbar on mobile */
   .topbar-actions .btn span { display: none; }
 }
 
@@ -523,6 +553,66 @@ const htmlToolbar  = document.getElementById('html-toolbar');
 const mdToolbar    = document.getElementById('md-toolbar');
 
 let mode       = <?= json_encode($content_format) ?>;  // 'html' | 'markdown'
+
+// Inject paragraph spacing directly — guarantees it overrides any reset CSS
+(function() {
+  const style = document.createElement('style');
+  style.textContent = '#editor p { margin-top: 0 !important; margin-bottom: 1em !important; }';
+  document.head.appendChild(style);
+})();
+
+// Wrap loose text nodes in <p> so the first paragraph is always tagged
+function wrapLooseNodes() {
+  if (!editor) return;
+  let changed = false;
+  // Collect child nodes that are bare text or inline elements (not block-level)
+  const blockTags = new Set(['P','DIV','H1','H2','H3','H4','H5','H6',
+                              'BLOCKQUOTE','PRE','UL','OL','LI',
+                              'TABLE','FIGURE','HR','SECTION','ARTICLE']);
+  const nodes = Array.from(editor.childNodes);
+  let group = [];
+
+  function flushGroup() {
+    if (!group.length) return;
+    // Only wrap if there's actual content (not just whitespace)
+    const hasContent = group.some(n =>
+      n.nodeType === 3 ? n.textContent.trim() !== '' : true
+    );
+    if (hasContent) {
+      const p = document.createElement('p');
+      group[0].parentNode.insertBefore(p, group[0]);
+      group.forEach(n => p.appendChild(n));
+      changed = true;
+    }
+    group = [];
+  }
+
+  nodes.forEach(node => {
+    if (node.nodeType === 3) {
+      // Text node — add to group
+      group.push(node);
+    } else if (node.nodeType === 1) {
+      const tag = node.tagName.toUpperCase();
+      if (blockTags.has(tag)) {
+        flushGroup(); // flush any preceding loose nodes first
+      } else {
+        // Inline element (span, b, i, a, img…) — add to group
+        group.push(node);
+      }
+    }
+  });
+  flushGroup(); // flush any trailing loose nodes
+}
+
+// Run on every input event in the WYSIWYG editor
+editor.addEventListener('input', () => {
+  if (mode === 'html' && !rawHtml) wrapLooseNodes();
+});
+
+// Also run once on load in case existing content has bare text
+document.addEventListener('DOMContentLoaded', () => {
+  if (mode === 'html' && !rawHtml) wrapLooseNodes();
+});
 let rawHtml    = false;
 let mdPreviewing = false;
 let slugManuallySet = <?= $is_new ? 'false' : 'true' ?>;
@@ -591,7 +681,7 @@ document.querySelectorAll('.tb[data-cmd]').forEach(btn => {
 
 document.getElementById('link-btn').addEventListener('mousedown', e => {
   e.preventDefault();
-  const url = prompt('URL:');
+  const url = prompt(<?= json_encode(__raw('prompt_link_url')) ?>);
   if (url) document.execCommand('createLink', false, url);
   editor.focus();
 });
@@ -633,7 +723,7 @@ document.getElementById('img-btn').addEventListener('mousedown', e => {
       editor.focus();
     });
   } else {
-    const url = prompt('URL de la imagen:');
+    const url = prompt(<?= json_encode(__raw('prompt_img_url')) ?>);
     if (url) document.execCommand('insertHTML', false, `<img src="${url}" alt="">`);
     editor.focus();
   }
@@ -649,7 +739,7 @@ document.getElementById('audio-btn')?.addEventListener('mousedown', e => {
       editor.focus();
     });
   } else {
-    const url = prompt('URL del audio (mp3, ogg, wav…):');
+    const url = prompt(<?= json_encode(__raw('prompt_audio_url')) ?>);
     if (url) document.execCommand('insertHTML', false, insertAudioHtml(url));
     editor.focus();
   }
@@ -665,7 +755,7 @@ document.getElementById('video-btn')?.addEventListener('mousedown', e => {
       editor.focus();
     });
   } else {
-    const url = prompt('URL del vídeo (mp4, webm…):');
+    const url = prompt(<?= json_encode(__raw('prompt_video_url')) ?>);
     if (url) document.execCommand('insertHTML', false, insertVideoHtml(url));
     editor.focus();
   }
@@ -700,12 +790,59 @@ editor.addEventListener('paste', e => {
   e.preventDefault();
   const html = e.clipboardData.getData('text/html');
   const txt  = e.clipboardData.getData('text/plain');
-  const clean = (html || txt)
+  let clean  = html || txt.replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br>');
+  clean = clean
     .replace(/<script[^>]*>.*?<\/script>/gi, '')
     .replace(/\s+style="[^"]*"/gi, '')
-    .replace(/\s+class="[^"]*"/gi, '');
+    .replace(/\s+class="[^"]*"/gi, '')
+    // Convert divs to paragraphs on paste too
+    .replace(/<div><br\s*\/?><\/div>/gi, '')
+    .replace(/<div>/gi, '<p>')
+    .replace(/<\/div>/gi, '</p>');
   document.execCommand('insertHTML', false, clean);
 });
+
+// ── Enter = new paragraph, Shift+Enter = <br> ────────────────────────────
+// Tell the browser to use <p> as the paragraph separator
+document.execCommand('defaultParagraphSeparator', false, 'p');
+
+editor.addEventListener('keydown', e => {
+  if (rawHtml || mode !== 'html') return;
+
+  if (e.key === 'Enter' && e.shiftKey) {
+    // Shift+Enter → soft line break
+    e.preventDefault();
+    document.execCommand('insertLineBreak');
+    return;
+  }
+
+  if (e.key === 'Enter' && !e.shiftKey) {
+    // Inside <pre>/<code> let browser handle it natively
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount) {
+      const node  = sel.getRangeAt(0).startContainer;
+      const block = node.nodeType === 3 ? node.parentElement : node;
+      if (block && block.closest('pre, code')) return;
+    }
+    // Everywhere else: browser uses <p> via defaultParagraphSeparator — no intervention needed
+  }
+});
+
+// Clean divs to paragraphs on save
+function sanitizeDivsToParagraphs(html) {
+  return html
+    .replace(/<div>/gi, '<p>')
+    .replace(/<\/div>/gi, '</p>')
+    .replace(/<br\s*\/?>\s*<\/p>/gi, '</p>');
+}
+
+// Apply sanitization on submit
+document.getElementById('editor-form').addEventListener('submit', function() {
+  if (mode === 'html' && !rawHtml) {
+    const cleaned = sanitizeDivsToParagraphs(editor.innerHTML);
+    editor.innerHTML = cleaned;
+  }
+}, true); // capture phase so it runs before the existing submit handler
 
 // ── Markdown toolbar ───────────────────────────────────────────────────────
 document.querySelectorAll('.md-btn').forEach(btn => {
@@ -733,7 +870,7 @@ document.querySelectorAll('.md-btn').forEach(btn => {
 });
 
 document.getElementById('md-link-btn').addEventListener('click', () => {
-  const url   = prompt('URL:') || 'https://';
+  const url   = prompt(<?= json_encode(__raw('prompt_link_url')) ?>) || 'https://';
   const label = prompt('Label:') || 'link';
   insertAtCursor(mdEditor, `[${label}](${url})`, mdEditor.selectionStart, mdEditor.selectionEnd);
 });
@@ -1113,7 +1250,7 @@ floatToolbar?.querySelectorAll('.ftb[data-cmd]').forEach(btn => {
 
 document.getElementById('ft-link')?.addEventListener('mousedown', e => {
   e.preventDefault();
-  const url = prompt('URL:');
+  const url = prompt(<?= json_encode(__raw('prompt_link_url')) ?>);
   if (url) document.execCommand('createLink', false, url);
   editor.focus();
   floatToolbar.style.display = 'none';
@@ -1134,6 +1271,123 @@ editor?.addEventListener('keyup', e => {
   }
 });
 
+// ── Editor font size ──────────────────────────────────────────────────────
+const FONT_SIZE_KEY = 'brisa_editor_font_size';
+const FONT_MIN = 12, FONT_MAX = 28, FONT_STEP = 1;
+let editorFontSize = parseInt(localStorage.getItem(FONT_SIZE_KEY) || '16', 10);
+
+function applyEditorFontSize(size) {
+  editorFontSize = Math.min(FONT_MAX, Math.max(FONT_MIN, size));
+  const targets = [
+    document.getElementById('editor'),
+    document.getElementById('html-editor'),
+    document.getElementById('md-editor'),
+  ];
+  targets.forEach(el => { if (el) el.style.fontSize = editorFontSize + 'px'; });
+  const label = document.getElementById('font-size-label');
+  if (label) label.textContent = editorFontSize;
+  localStorage.setItem(FONT_SIZE_KEY, editorFontSize);
+}
+
+// Apply saved size on load
+applyEditorFontSize(editorFontSize);
+
+document.getElementById('font-size-up')?.addEventListener('click', () => applyEditorFontSize(editorFontSize + FONT_STEP));
+document.getElementById('font-size-down')?.addEventListener('click', () => applyEditorFontSize(editorFontSize - FONT_STEP));
+
+
+// ── Article Preview ───────────────────────────────────────────────────────
+const previewBtn   = document.getElementById('preview-btn');
+const postSlug     = <?= json_encode($post['slug'] ?? '') ?>;
+const postType     = <?= json_encode($type) ?>;
+const siteBase     = <?= json_encode(base_url()) ?>;
+
+previewBtn?.addEventListener('click', openPreview);
+
+function openPreview() {
+  const adminBase = siteBase + '/admin';
+
+  // If article has a slug (saved at least once), use the server-side preview
+  // which works for both drafts and published articles
+  if (postSlug) {
+    const url = adminBase + '/preview.php?type=' + encodeURIComponent(postType)
+              + '&slug=' + encodeURIComponent(postSlug)
+              + '&t=' + Date.now();
+    window.open(url, '_blank');
+    return;
+  }
+
+  // No slug yet (brand new, never saved): build a local HTML preview
+  // and open it in a new tab via a blob URL
+  let content = '';
+  if (mode === 'markdown') {
+    content = '<p style="color:#888;font-style:italic">Contenido Markdown — guarda primero para ver la vista previa completa con el tema activo.</p>'
+            + '<pre style="background:#1a1a24;color:#a8e6cf;padding:1rem;border-radius:6px;font-size:0.875rem;line-height:1.6;overflow-x:auto;margin-top:1rem">'
+            + (mdEditor.value || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            + '</pre>';
+  } else if (rawHtml) {
+    content = htmlEditor.value;
+  } else {
+    content = editor.innerHTML;
+  }
+
+  const title   = document.getElementById('post-title').value || '(Sin título)';
+  const excerpt = document.querySelector('[name="excerpt"]')?.value || '';
+  const accent  = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#e05c1a';
+
+  const html = `<!DOCTYPE html><html lang="es"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vista previa — ${title.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@300;400;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:#f1f1f1;color:#1a1a1a;font-family:'Roboto',sans-serif;font-size:16px;line-height:1.5;padding:2rem 1rem}
+.banner{position:sticky;top:0;background:#f59e0b;color:#000;font-weight:700;font-size:0.78rem;text-align:center;padding:0.4rem 1rem;margin:-2rem -1rem 2rem;letter-spacing:0.04em}
+.wrap{max-width:780px;margin:0 auto;background:#fff;border:1px solid #e0e0e0;padding:2rem}
+h1{font-family:'Roboto Condensed',sans-serif;font-size:clamp(1.5rem,4vw,2.2rem);font-weight:700;margin-bottom:1rem;line-height:1.2}
+.excerpt{color:#555;font-size:1.05rem;margin-bottom:1.5rem;padding-bottom:1.5rem;border-bottom:1px solid #e0e0e0;font-style:italic}
+.prose{font-size:1rem;line-height:1.8;color:#444}
+.prose h2{font-family:'Roboto Condensed',sans-serif;font-size:1.4rem;font-weight:700;color:#1a1a1a;margin:2rem 0 0.75rem;border-bottom:2px solid ${accent};padding-bottom:0.3rem;text-transform:uppercase}
+.prose h3{font-family:'Roboto Condensed',sans-serif;font-size:1.15rem;font-weight:700;color:#1a1a1a;margin:1.5rem 0 0.5rem}
+.prose p{margin-bottom:1.25rem}
+.prose a{color:${accent}}
+.prose strong{color:#1a1a1a;font-weight:700}
+.prose blockquote{border-left:3px solid ${accent};background:#f9f9f9;padding:0.75rem 1.25rem;margin:1.5rem 0;color:#555;font-style:italic}
+.prose pre{background:#1e1e2e;color:#cdd6f4;border-radius:4px;padding:1rem;overflow-x:auto;font-size:0.875rem;margin:1.5rem 0}
+.prose code{background:#f0f0f0;border:1px solid #e0e0e0;padding:.1rem .4rem;border-radius:3px;font-size:.875em;color:#c7254e}
+.prose pre code{background:none;border:none;padding:0;color:inherit}
+.prose ul,.prose ol{padding-left:1.75rem;margin-bottom:1.25rem}
+.prose li{margin-bottom:.35rem}
+.prose img{max-width:100%;border-radius:4px;margin:1.5rem 0;display:block}
+.prose hr{border:none;border-top:1px solid #e0e0e0;margin:2rem 0}
+.yt-embed{position:relative;padding-bottom:56.25%;height:0;overflow:hidden;margin:1.5rem 0}
+.yt-embed iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:none}
+.media-audio{margin:1.5rem 0;background:#f5f5f5;border:1px solid #e0e0e0;border-left:3px solid ${accent};border-radius:8px;padding:1rem 1.25rem;display:flex;align-items:center;gap:.75rem}
+.media-audio::before{content:"🎵";font-size:1.5rem;flex-shrink:0}
+.media-audio audio{width:100%;height:36px}
+.media-video{margin:1.5rem 0;border-radius:8px;overflow:hidden;background:#000;line-height:0}
+.media-video video{width:100%;display:block}
+</style></head><body>
+<div class="banner">👁 VISTA PREVIA — AÚN NO GUARDADO — guarda el artículo para ver la vista previa con el tema activo del sitio</div>
+<div class="wrap">
+  <h1>${title.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</h1>
+  ${excerpt ? '<p class="excerpt">' + excerpt.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</p>' : ''}
+  <div class="prose">${content}</div>
+</div>
+</body></html>`;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const url  = URL.createObjectURL(blob);
+  const tab  = window.open(url, '_blank');
+  // Revoke the blob URL once the new tab has loaded it
+  if (tab) {
+    tab.addEventListener('load', () => URL.revokeObjectURL(url), { once: true });
+  } else {
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+}
+
+
 // ── Focus / distraction-free mode ────────────────────────────────────────
 const focusBtn = document.getElementById('focus-btn');
 focusBtn?.addEventListener('click', toggleFocus);
@@ -1149,5 +1403,5 @@ function toggleFocus() {
 
 </script>
 <!-- focus hint -->
-<div class="focus-exit-hint">Presiona Esc para salir del modo sin distracciones</div>
+<div class="focus-exit-hint"><?= __("focus_exit_hint") ?></div>
 </body></html>
