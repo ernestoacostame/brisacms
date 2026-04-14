@@ -66,7 +66,7 @@ $csrf = generate_csrf();
 <body>
 <div class="wrap">
   <div class="logo">
-    <h1>Flux<span>CMS</span></h1>
+    <h1>Brisa<span>CMS</span></h1>
     <p><?= __("login_title") ?></p>
   </div>
   <div class="card">
@@ -74,11 +74,11 @@ $csrf = generate_csrf();
     <form method="POST">
       <input type="hidden" name="csrf" value="<?= $csrf ?>">
       <div class="field">
-        <label>Username</label>
+        <label><?= __("login_username") ?></label>
         <input type="text" name="username" required autofocus autocomplete="username">
       </div>
       <div class="field">
-        <label>Password</label>
+        <label><?= __("login_password") ?></label>
         <input type="password" name="password" required autocomplete="current-password">
       </div>
       <button type="submit" class="btn"><?= __("login_btn") ?></button>

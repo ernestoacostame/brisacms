@@ -91,104 +91,140 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 
           <!-- Toolbar -->
           <div class="toolbar" id="toolbar">
-            <!-- HTML toolbar -->
-            <div id="html-toolbar" style="display:flex;align-items:center;gap:2px;flex-wrap:wrap;flex:1">
-              <div class="toolbar-group">
-                <button type="button" class="tb" data-cmd="formatBlock" data-val="h2" title="<?= __raw("tb_h2") ?>">H2</button>
-                <button type="button" class="tb" data-cmd="formatBlock" data-val="h3" title="<?= __raw("tb_h3") ?>">H3</button>
-                <button type="button" class="tb" data-cmd="formatBlock" data-val="p" title="<?= __raw("tb_p") ?>">¶</button>
+
+            <!-- ── MOBILE: compact bar + overflow menu ── -->
+            <div class="tb-mobile">
+              <div class="tb-primary" id="tb-primary">
+                <button type="button" class="tb" id="mb-bold" title="Negrita"><b>B</b></button>
+                <button type="button" class="tb" id="mb-italic" title="Cursiva"><i>I</i></button>
+                <button type="button" class="tb" id="mb-link" title="Enlace">🔗</button>
+                <button type="button" class="tb" id="mb-h2" title="H2">H2</button>
+                <button type="button" class="tb" id="mb-h3" title="H3">H3</button>
+                <button type="button" class="tb" id="mb-ul" title="Lista">≡</button>
+                <button type="button" class="tb" id="mb-img" title="Imagen">🖼</button>
               </div>
-              <div class="toolbar-sep"></div>
-              <div class="toolbar-group">
-                <button type="button" class="tb" data-cmd="bold" title="<?= __raw("tb_bold") ?>"><b>B</b></button>
-                <button type="button" class="tb" data-cmd="italic" title="<?= __raw("tb_italic") ?>"><i>I</i></button>
-                <button type="button" class="tb" data-cmd="underline" title="<?= __raw("tb_underline") ?>"><u>U</u></button>
-                <button type="button" class="tb" data-cmd="strikeThrough" title="<?= __raw("tb_strike") ?>"><s>S</s></button>
-              </div>
-              <div class="toolbar-sep"></div>
-              <div class="toolbar-group">
-                <button type="button" class="tb" data-cmd="insertUnorderedList" title="<?= __raw("tb_ul") ?>">≡</button>
-                <button type="button" class="tb" data-cmd="insertOrderedList" title="<?= __raw("tb_ol") ?>">1.</button>
-                <button type="button" class="tb" data-cmd="formatBlock" data-val="blockquote" title="<?= __raw("tb_quote") ?>">"</button>
-                <button type="button" class="tb" data-cmd="formatBlock" data-val="pre" title="<?= __raw("tb_code") ?>">&lt;/&gt;</button>
-              </div>
-              <div class="toolbar-sep"></div>
-              <div class="toolbar-group">
-                <button type="button" class="tb" id="link-btn" title="<?= __raw("tb_link") ?>">🔗</button>
-                <button type="button" class="tb" id="img-btn" title="<?= __raw("tb_image") ?>">🖼</button>
-                <button type="button" class="tb" id="audio-btn" title="<?= __raw("tb_audio") ?>">🎵</button>
-                <button type="button" class="tb" id="video-btn" title="<?= __raw("tb_video") ?>">🎬</button>
-                <button type="button" class="tb" data-cmd="insertHorizontalRule" title="<?= __raw("tb_hr") ?>">—</button>
-              </div>
-              <div class="toolbar-sep"></div>
-              <div class="toolbar-group">
-                <button type="button" class="tb" data-cmd="undo">↩</button>
-                <button type="button" class="tb" data-cmd="redo">↪</button>
-              </div>
-              <div class="toolbar-sep"></div>
-              <button type="button" class="tb tb-mode" id="html-raw-toggle" title="<?= __raw("tb_html") ?>">&lt;/&gt; HTML</button>
+              <button type="button" class="tb tb-more-btn" id="tb-more-btn" aria-label="Más opciones" aria-expanded="false">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+              </button>
             </div>
 
-            <!-- Markdown toolbar -->
-            <div id="md-toolbar" style="display:none;align-items:center;gap:2px;flex-wrap:wrap;flex:1">
-              <div class="toolbar-group">
-                <button type="button" class="tb md-btn" data-md="## " title="<?= __raw("tb_h2") ?>">H2</button>
-                <button type="button" class="tb md-btn" data-md="### " title="<?= __raw("tb_h3") ?>">H3</button>
+            <!-- ── MOBILE: overflow dropdown ── -->
+            <div class="tb-overflow-menu" id="tb-overflow-menu">
+              <div class="tb-overflow-section">
+                <button class="tb-item" id="mb-strike"><s>S</s> <?= __raw("tb_strike") ?></button>
+                <button class="tb-item" id="mb-quote">" <?= __raw("tb_quote") ?></button>
+                <button class="tb-item" id="mb-code">&lt;/&gt; <?= __raw("tb_code") ?></button>
+                <button class="tb-item" id="mb-ol">1. <?= __raw("tb_ol") ?></button>
+                <button class="tb-item" id="mb-audio">🎵 <?= __raw("tb_audio") ?></button>
+                <button class="tb-item" id="mb-video">🎬 <?= __raw("tb_video") ?></button>
+                <button class="tb-item" id="mb-hr">— <?= __raw("tb_hr") ?></button>
+                <button class="tb-item" id="mb-undo">↩ <?= __raw("tb_undo") ?></button>
+                <button class="tb-item" id="mb-redo">↪ <?= __raw("tb_redo") ?></button>
+                <button class="tb-item" id="mb-raw-html">&lt;/&gt; <?= __raw("tb_html") ?></button>
               </div>
-              <div class="toolbar-sep"></div>
-              <div class="toolbar-group">
-                <button type="button" class="tb md-btn" data-wrap="**" title="<?= __raw("tb_bold") ?>"><b>B</b></button>
-                <button type="button" class="tb md-btn" data-wrap="*" title="<?= __raw("tb_italic") ?>"><i>I</i></button>
-                <button type="button" class="tb md-btn" data-wrap="~~" title="<?= __raw("tb_strike") ?>"><s>S</s></button>
-                <button type="button" class="tb md-btn" data-wrap="`" title="Inline code">` `</button>
+              <div class="tb-overflow-sep"></div>
+              <div class="tb-overflow-section tb-overflow-row">
+                <button type="button" class="tb mode-switch <?= $content_format === 'html' ? 'active' : '' ?>" id="mb-switch-html">HTML</button>
+                <button type="button" class="tb mode-switch <?= $content_format === 'markdown' ? 'active' : '' ?>" id="mb-switch-md">MD</button>
+                <span style="flex:1"></span>
+                <button type="button" class="tb" id="mb-font-down"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+                <span id="mb-font-label" style="font-size:0.7rem;color:var(--muted);padding:0 3px">16</span>
+                <button type="button" class="tb" id="mb-font-up"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
               </div>
-              <div class="toolbar-sep"></div>
-              <div class="toolbar-group">
-                <button type="button" class="tb md-btn" data-md="- " title="<?= __raw("tb_ul") ?>">≡</button>
-                <button type="button" class="tb md-btn" data-md="1. " title="<?= __raw("tb_ol") ?>">1.</button>
-                <button type="button" class="tb md-btn" data-md="> " title="<?= __raw("tb_quote") ?>">"</button>
-                <button type="button" class="tb md-btn" data-block="```\n\n```" title="<?= __raw("tb_code") ?>">&lt;/&gt;</button>
+              <div class="tb-overflow-row" style="margin-top:4px">
+                <button type="button" class="tb" id="mb-float"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="4" rx="1"/><line x1="7" y1="10" x2="17" y2="10"/></svg> <?= __raw("tb_float") ?></button>
+                <button type="button" class="tb" id="mb-preview"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <button type="button" class="tb" id="mb-focus"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
               </div>
-              <div class="toolbar-sep"></div>
-              <div class="toolbar-group">
-                <button type="button" class="tb" id="md-link-btn" title="<?= __raw("tb_link") ?>">🔗</button>
-                <button type="button" class="tb" id="md-img-btn" title="<?= __raw("tb_image") ?>">🖼</button>
-                <button type="button" class="tb md-btn" data-md="---" title="<?= __raw("tb_hr") ?>">—</button>
-              </div>
-              <div class="toolbar-sep"></div>
-              <button type="button" class="tb tb-mode" id="md-preview-btn"><?= __("tb_preview") ?></button>
             </div>
 
-            <!-- Mode switcher + extras (always visible) -->
-            <div class="toolbar-right" style="margin-left:auto;display:flex;gap:4px;padding-left:8px;border-left:1px solid var(--border2)">
+            <!-- ── DESKTOP: full HTML toolbar ── -->
+            <div id="html-toolbar" class="tb-desktop-bar">
+              <div style="display:flex;align-items:center;gap:2px;flex:1">
+                <div class="toolbar-group">
+                  <button type="button" class="tb" data-cmd="formatBlock" data-val="h2" title="<?= __raw("tb_h2") ?>">H2</button>
+                  <button type="button" class="tb" data-cmd="formatBlock" data-val="h3" title="<?= __raw("tb_h3") ?>">H3</button>
+                  <button type="button" class="tb" data-cmd="formatBlock" data-val="p" title="<?= __raw("tb_p") ?>">¶</button>
+                </div>
+                <div class="toolbar-sep"></div>
+                <div class="toolbar-group">
+                  <button type="button" class="tb" data-cmd="bold" title="<?= __raw("tb_bold") ?>"><b>B</b></button>
+                  <button type="button" class="tb" data-cmd="italic" title="<?= __raw("tb_italic") ?>"><i>I</i></button>
+                  <button type="button" class="tb" data-cmd="underline" title="<?= __raw("tb_underline") ?>"><u>U</u></button>
+                  <button type="button" class="tb" data-cmd="strikeThrough" title="<?= __raw("tb_strike") ?>"><s>S</s></button>
+                </div>
+                <div class="toolbar-sep"></div>
+                <div class="toolbar-group">
+                  <button type="button" class="tb" data-cmd="insertUnorderedList" title="<?= __raw("tb_ul") ?>">≡</button>
+                  <button type="button" class="tb" data-cmd="insertOrderedList" title="<?= __raw("tb_ol") ?>">1.</button>
+                  <button type="button" class="tb" data-cmd="formatBlock" data-val="blockquote" title="<?= __raw("tb_quote") ?>">"</button>
+                  <button type="button" class="tb" data-cmd="formatBlock" data-val="pre" title="<?= __raw("tb_code") ?>">&lt;/&gt;</button>
+                </div>
+                <div class="toolbar-sep"></div>
+                <div class="toolbar-group">
+                  <button type="button" class="tb" id="link-btn" title="<?= __raw("tb_link") ?>">🔗</button>
+                  <button type="button" class="tb" id="img-btn" title="<?= __raw("tb_image") ?>">🖼</button>
+                  <button type="button" class="tb" id="audio-btn" title="<?= __raw("tb_audio") ?>">🎵</button>
+                  <button type="button" class="tb" id="video-btn" title="<?= __raw("tb_video") ?>">🎬</button>
+                  <button type="button" class="tb" data-cmd="insertHorizontalRule" title="<?= __raw("tb_hr") ?>">—</button>
+                </div>
+                <div class="toolbar-sep"></div>
+                <div class="toolbar-group">
+                  <button type="button" class="tb" data-cmd="undo">↩</button>
+                  <button type="button" class="tb" data-cmd="redo">↪</button>
+                </div>
+                <div class="toolbar-sep"></div>
+                <button type="button" class="tb tb-mode" id="html-raw-toggle" title="<?= __raw("tb_html") ?>">&lt;/&gt; HTML</button>
+              </div>
+            </div>
+
+            <!-- ── DESKTOP: Markdown toolbar ── -->
+            <div id="md-toolbar" class="tb-desktop-bar" style="display:none">
+              <div style="display:flex;align-items:center;gap:2px;flex:1">
+                <div class="toolbar-group">
+                  <button type="button" class="tb md-btn" data-md="## " title="<?= __raw("tb_h2") ?>">H2</button>
+                  <button type="button" class="tb md-btn" data-md="### " title="<?= __raw("tb_h3") ?>">H3</button>
+                </div>
+                <div class="toolbar-sep"></div>
+                <div class="toolbar-group">
+                  <button type="button" class="tb md-btn" data-wrap="**" title="<?= __raw("tb_bold") ?>"><b>B</b></button>
+                  <button type="button" class="tb md-btn" data-wrap="*" title="<?= __raw("tb_italic") ?>"><i>I</i></button>
+                  <button type="button" class="tb md-btn" data-wrap="~~" title="<?= __raw("tb_strike") ?>"><s>S</s></button>
+                  <button type="button" class="tb md-btn" data-wrap="`" title="Inline code">` `</button>
+                </div>
+                <div class="toolbar-sep"></div>
+                <div class="toolbar-group">
+                  <button type="button" class="tb md-btn" data-md="- " title="<?= __raw("tb_ul") ?>">≡</button>
+                  <button type="button" class="tb md-btn" data-md="1. " title="<?= __raw("tb_ol") ?>">1.</button>
+                  <button type="button" class="tb md-btn" data-md="> " title="<?= __raw("tb_quote") ?>">"</button>
+                  <button type="button" class="tb md-btn" data-block="```\n\n```" title="<?= __raw("tb_code") ?>">&lt;/&gt;</button>
+                </div>
+                <div class="toolbar-sep"></div>
+                <div class="toolbar-group">
+                  <button type="button" class="tb" id="md-link-btn" title="<?= __raw("tb_link") ?>">🔗</button>
+                  <button type="button" class="tb" id="md-img-btn" title="<?= __raw("tb_image") ?>">🖼</button>
+                  <button type="button" class="tb md-btn" data-md="---" title="<?= __raw("tb_hr") ?>">—</button>
+                </div>
+                <div class="toolbar-sep"></div>
+                <button type="button" class="tb tb-mode" id="md-preview-btn"><?= __("tb_preview") ?></button>
+              </div>
+            </div>
+
+            <!-- ── DESKTOP: mode + extras (always visible on desktop) ── -->
+            <div class="toolbar-right tb-desktop-right">
               <button type="button" class="tb mode-switch <?= $content_format === 'html' ? 'active' : '' ?>" id="switch-html" title="<?= __raw("tb_html_mode") ?>">HTML</button>
               <button type="button" class="tb mode-switch <?= $content_format === 'markdown' ? 'active' : '' ?>" id="switch-md" title="<?= __raw("tb_md_mode") ?>">MD</button>
-              <!-- Font size control -->
-              <div style="display:flex;align-items:center;gap:1px;border:1px solid var(--border2);border-radius:5px;overflow:hidden;margin:0 2px">
-                <button type="button" class="tb" id="font-size-down" title="Reducir tamaño de fuente" style="padding:0.3rem 0.45rem;border-radius:0;border:none">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                </button>
-                <span id="font-size-label" style="font-size:0.7rem;color:var(--muted);min-width:26px;text-align:center;user-select:none;padding:0 2px">16</span>
-                <button type="button" class="tb" id="font-size-up" title="Aumentar tamaño de fuente" style="padding:0.3rem 0.45rem;border-radius:0;border:none">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                </button>
+              <div style="display:flex;align-items:center;gap:1px;border:1px solid var(--border2);border-radius:5px;overflow:hidden;margin:0 4px">
+                <button type="button" class="tb" id="font-size-down" style="padding:0.3rem 0.45rem;border-radius:0;border:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+                <span id="font-size-label" style="font-size:0.7rem;color:var(--muted);min-width:26px;text-align:center;user-select:none">16</span>
+                <button type="button" class="tb" id="font-size-up" style="padding:0.3rem 0.45rem;border-radius:0;border:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
               </div>
-              <div style="width:1px;height:18px;background:var(--border2);margin:0 2px;align-self:center"></div>
-              <!-- Floating toolbar toggle -->
-              <button type="button" class="tb" id="float-toolbar-btn" title="<?= __raw("tb_float") ?>">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="4" rx="1"/><line x1="7" y1="10" x2="17" y2="10"/><line x1="7" y1="14" x2="14" y2="14"/></svg>
-              </button>
-              <!-- Article preview -->
-              <button type="button" class="tb" id="preview-btn" title="<?= __raw("tb_preview_article") ?>">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-              </button>
-              <!-- Focus mode -->
-              <button type="button" class="tb" id="focus-btn" title="<?= __raw("tb_focus") ?>">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
-              </button>
+              <button type="button" class="tb" id="float-toolbar-btn" title="<?= __raw("tb_float") ?>"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="4" rx="1"/><line x1="7" y1="10" x2="17" y2="10"/><line x1="7" y1="14" x2="14" y2="14"/></svg></button>
+              <button type="button" class="tb" id="preview-btn" title="<?= __raw("tb_preview_article") ?>"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+              <button type="button" class="tb" id="focus-btn" title="<?= __raw("tb_focus") ?>"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
             </div>
-          </div>
 
+          </div>
           <!-- Floating selection toolbar -->
           <div id="float-toolbar" class="float-toolbar" style="display:none">
             <button type="button" class="ftb" data-cmd="bold"><b>B</b></button>
@@ -348,15 +384,52 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 /* ── Toolbar ── */
 .toolbar {
   display: flex; align-items: center; gap: 2px;
-  padding: 0.65rem 0.85rem;
+  padding: 0.5rem 0.85rem;
   border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-  margin-top: 1rem; flex-wrap: wrap;
+  margin-top: 1rem;
   background: var(--surface);
   flex-shrink: 0;
+  position: relative;
 }
 .toolbar-group { display: flex; gap: 1px; }
 .toolbar-sep { width: 1px; height: 20px; background: var(--border2); margin: 0 4px; flex-shrink: 0; }
-.toolbar-right { margin-left: auto; }
+.toolbar-right { margin-left: auto; padding-left: 6px; border-left: 1px solid var(--border2); }
+
+/* ── Mobile: show compact bar, hide desktop bar ── */
+.tb-mobile         { display: none; align-items: center; gap: 2px; flex: 1; }
+.tb-primary        { display: flex; align-items: center; gap: 1px; flex: 1; }
+.tb-more-btn       { display: none; flex-shrink: 0; margin-left: 4px; padding: 0.35rem 0.5rem; }
+.tb-desktop-bar    { display: flex; align-items: center; flex: 1; }
+.tb-desktop-right  { display: flex; }
+
+/* Overflow dropdown */
+.tb-overflow-menu {
+  display: none; flex-direction: column; gap: 2px;
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 500;
+  background: var(--surface); border: 1px solid var(--border2); border-top: none;
+  padding: 0.6rem 0.75rem;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+}
+.tb-overflow-menu.open { display: flex; }
+.tb-overflow-section { display: flex; flex-direction: column; gap: 1px; }
+.tb-overflow-sep  { height: 1px; background: var(--border); margin: 0.4rem 0; }
+.tb-overflow-row  { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.tb-item {
+  display: flex; align-items: center; gap: 0.6rem;
+  background: none; border: none; color: var(--text2);
+  padding: 0.5rem 0.6rem; border-radius: 6px; cursor: pointer;
+  font-size: 0.875rem; font-family: inherit; text-align: left; width: 100%;
+  transition: background 0.1s;
+}
+.tb-item:hover { background: var(--surface2); color: var(--text); }
+
+@media (max-width: 768px) {
+  .tb-mobile      { display: flex; }
+  .tb-more-btn    { display: flex; }
+  .tb-desktop-bar { display: none !important; }
+  .tb-desktop-right { display: none !important; }
+  .toolbar { flex-wrap: nowrap; padding: 0.4rem 0.6rem; }
+}
 .tb {
   background: none; border: none; color: var(--text2);
   padding: 0.35rem 0.55rem; border-radius: 5px; cursor: pointer;
@@ -515,21 +588,13 @@ body.focus-mode .focus-exit-hint { display: block; }
     height: auto !important;
     min-height: 60vh;
     position: static !important;
+    overflow: visible;
   }
   .editor-wrap { overflow-y: visible !important; }
 
   .title-area input { font-size: 1.2rem; }
 
-  .toolbar {
-    flex-wrap: wrap;       /* grupos se reorganizan en varias filas */
-    flex-shrink: 0;
-    gap: 2px;
-    row-gap: 4px;          /* pequeño espacio entre filas */
-  }
-  /* En móvil el toolbar-right no se empuja al final — fluye naturalmente */
-  .toolbar-right { margin-left: 0; }
-  /* Los separadores verticales se ocultan al hacer wrap para que no queden solos */
-  .toolbar-sep { display: none; }
+  /* Toolbar handled by .tb-primary + .tb-more-btn on mobile (see toolbar CSS) */
 
   .editor-sidebar .panel { padding: 0.75rem; }
   .topbar-actions .btn span { display: none; }
@@ -1375,6 +1440,168 @@ if (featUpload) {
     }
   });
 }
+
+// ── Mobile overflow menu ─────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+  var moreBtn = document.getElementById('tb-more-btn');
+  var menu    = document.getElementById('tb-overflow-menu');
+  if (!moreBtn || !menu) { console.warn('BrisaCMS: overflow menu elements not found'); return; }
+
+  function toggleMenu(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    var isOpen = menu.classList.toggle('open');
+    moreBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  }
+
+  moreBtn.addEventListener('click',     toggleMenu);
+  moreBtn.addEventListener('touchend',  toggleMenu, { passive: false });
+
+  document.addEventListener('click', function(e) {
+    if (!menu.contains(e.target) && e.target !== moreBtn) {
+      menu.classList.remove('open');
+    }
+  });
+
+  function closeMenu() { menu.classList.remove('open'); }
+
+  // Helper: exec on editor
+  function exec(cmd, val) {
+    document.execCommand(cmd, false, val || null);
+    editor.focus();
+  }
+
+  // ── Primary bar buttons ─────────────────────────────────────────────
+  function wireBtn(id, fn) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    ['mousedown', 'touchend'].forEach(function(evt) {
+      el.addEventListener(evt, function(e) { e.preventDefault(); fn(); }, { passive: false });
+    });
+  }
+
+  wireBtn('mb-bold',   function() { exec('bold'); });
+  wireBtn('mb-italic', function() { exec('italic'); });
+  wireBtn('mb-h2',     function() { exec('formatBlock', 'h2'); });
+  wireBtn('mb-h3',     function() { exec('formatBlock', 'h3'); });
+  wireBtn('mb-ul',     function() { exec('insertUnorderedList'); });
+  wireBtn('mb-link',   function() { var u = prompt(<?= json_encode(__raw('prompt_link_url')) ?>); if(u) exec('createLink', u); });
+  wireBtn('mb-img',    function() { var btn = document.getElementById('img-btn'); if(btn) btn.dispatchEvent(new MouseEvent('mousedown')); });
+
+  // ── Overflow menu buttons ───────────────────────────────────────────
+  function wireItem(id, fn) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    ['mousedown', 'touchend'].forEach(function(evt) {
+      el.addEventListener(evt, function(e) { e.preventDefault(); fn(); closeMenu(); }, { passive: false });
+    });
+  }
+
+  wireItem('mb-strike',      function() { exec('strikeThrough'); });
+  wireItem('mb-quote',       function() { exec('formatBlock', 'blockquote'); });
+  wireItem('mb-code',        function() { exec('formatBlock', 'pre'); });
+  wireItem('mb-ol',          function() { exec('insertOrderedList'); });
+  wireItem('mb-hr',          function() { exec('insertHorizontalRule'); });
+  wireItem('mb-undo',        function() { exec('undo'); });
+  wireItem('mb-redo',        function() { exec('redo'); });
+  wireItem('mb-audio',       function() { var b = document.getElementById('audio-btn'); if(b) b.dispatchEvent(new MouseEvent('mousedown')); });
+  wireItem('mb-video',       function() { var b = document.getElementById('video-btn'); if(b) b.dispatchEvent(new MouseEvent('mousedown')); });
+  wireItem('mb-raw-html',    function() { var b = document.getElementById('html-raw-toggle'); if(b) b.click(); });
+  wireItem('mb-switch-html', function() { switchMode('html'); });
+  wireItem('mb-switch-md',   function() { switchMode('markdown'); });
+  wireItem('mb-font-up',     function() { applyEditorFontSize(editorFontSize + 1); var m = document.getElementById('mb-font-label'); if(m) m.textContent = editorFontSize; });
+  wireItem('mb-font-down',   function() { applyEditorFontSize(editorFontSize - 1); var m = document.getElementById('mb-font-label'); if(m) m.textContent = editorFontSize; });
+  wireItem('mb-float',       function() { var b = document.getElementById('float-toolbar-btn'); if(b) b.click(); });
+  wireItem('mb-preview',     function() { var b = document.getElementById('preview-btn'); if(b) b.click(); });
+  wireItem('mb-focus',       function() { var b = document.getElementById('focus-btn'); if(b) b.click(); });
+
+  // Sync mobile font label with desktop
+  ['font-size-up','font-size-down'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('click', function() {
+      setTimeout(function() { var m = document.getElementById('mb-font-label'); if(m) m.textContent = editorFontSize; }, 10);
+    });
+  });
+});
+
+
+// ── Mobile overflow menu ─────────────────────────────────────────────────
+(function() {
+  const moreBtn = document.getElementById('tb-more-btn');
+  const menu    = document.getElementById('tb-overflow-menu');
+  if (!moreBtn || !menu) return;
+
+  moreBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = menu.classList.toggle('open');
+    moreBtn.setAttribute('aria-expanded', open);
+  });
+  document.addEventListener('click', e => {
+    if (!menu.contains(e.target) && e.target !== moreBtn) {
+      menu.classList.remove('open');
+    }
+  });
+  // Close after action
+  menu.addEventListener('click', e => {
+    if (e.target.closest('.tb-item')) setTimeout(() => menu.classList.remove('open'), 100);
+  });
+
+  // Helper: exec on editor
+  function exec(cmd, val) {
+    document.execCommand(cmd, false, val || null);
+    editor.focus();
+  }
+  function closeMenu() { menu.classList.remove('open'); }
+
+  // ── Primary bar buttons ───────────────────────────────────────────────
+  const pb = {
+    'mb-bold':   () => exec('bold'),
+    'mb-italic': () => exec('italic'),
+    'mb-h2':     () => exec('formatBlock', 'h2'),
+    'mb-h3':     () => exec('formatBlock', 'h3'),
+    'mb-ul':     () => exec('insertUnorderedList'),
+    'mb-link':   () => { const u = prompt(<?= json_encode(__raw('prompt_link_url')) ?>); if(u) exec('createLink', u); },
+    'mb-img':    () => document.getElementById('img-btn')?.dispatchEvent(new MouseEvent('mousedown')),
+  };
+  Object.entries(pb).forEach(([id, fn]) => {
+    document.getElementById(id)?.addEventListener('mousedown', e => { e.preventDefault(); fn(); });
+  });
+
+  // ── Overflow menu buttons ─────────────────────────────────────────────
+  const ob = {
+    'mb-strike':   () => exec('strikeThrough'),
+    'mb-quote':    () => exec('formatBlock', 'blockquote'),
+    'mb-code':     () => exec('formatBlock', 'pre'),
+    'mb-ol':       () => exec('insertOrderedList'),
+    'mb-hr':       () => exec('insertHorizontalRule'),
+    'mb-undo':     () => exec('undo'),
+    'mb-redo':     () => exec('redo'),
+    'mb-audio':    () => document.getElementById('audio-btn')?.dispatchEvent(new MouseEvent('mousedown')),
+    'mb-video':    () => document.getElementById('video-btn')?.dispatchEvent(new MouseEvent('mousedown')),
+    'mb-raw-html': () => document.getElementById('html-raw-toggle')?.click(),
+    'mb-switch-html': () => switchMode('html'),
+    'mb-switch-md':   () => switchMode('markdown'),
+    'mb-font-up':   () => { applyEditorFontSize(editorFontSize + 1); document.getElementById('mb-font-label').textContent = editorFontSize; },
+    'mb-font-down': () => { applyEditorFontSize(editorFontSize - 1); document.getElementById('mb-font-label').textContent = editorFontSize; },
+    'mb-float':   () => document.getElementById('float-toolbar-btn')?.click(),
+    'mb-preview': () => document.getElementById('preview-btn')?.click(),
+    'mb-focus':   () => document.getElementById('focus-btn')?.click(),
+  };
+  Object.entries(ob).forEach(([id, fn]) => {
+    document.getElementById(id)?.addEventListener('mousedown', e => { e.preventDefault(); fn(); closeMenu(); });
+  });
+
+  // Sync mobile font label with desktop
+  const origApply = window.applyEditorFontSize;
+  // Patch via input event on desktop buttons
+  document.getElementById('font-size-up')?.addEventListener('click', () => {
+    setTimeout(() => { const m = document.getElementById('mb-font-label'); if(m) m.textContent = editorFontSize; }, 10);
+  });
+  document.getElementById('font-size-down')?.addEventListener('click', () => {
+    setTimeout(() => { const m = document.getElementById('mb-font-label'); if(m) m.textContent = editorFontSize; }, 10);
+  });
+})();
+
 
 // ── Floating toolbar ──────────────────────────────────────────────────────
 const floatToolbar    = document.getElementById('float-toolbar');
