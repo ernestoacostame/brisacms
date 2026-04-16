@@ -84,175 +84,93 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
       <div class="editor-layout">
         <!-- Main editor area -->
         <div class="editor-main">
+          <!-- Format Bar -->
+          <div class="format-bar" id="toolbar">
+            <!-- HTML mode toolbar -->
+            <div id="html-toolbar" style="display: <?= $content_format === 'html' ? 'flex' : 'none' ?>; align-items: center; gap: 2px; flex-shrink: 0; overflow-x: auto;">
+              <select class="fmt-select" onchange="formatBlock(this.value); this.value='p'" title="Formato de bloque">
+                <option value="p">Párrafo</option>
+                <option value="h1">Encabezado 1</option>
+                <option value="h2">Encabezado 2</option>
+                <option value="h3">Encabezado 3</option>
+                <option value="pre">Código</option>
+                <option value="blockquote">Cita</option>
+              </select>
+              <div class="fmt-sep"></div>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('bold')" title="<?= __raw("tb_bold") ?>"><b>B</b></button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('italic')" title="<?= __raw("tb_italic") ?>"><i>I</i></button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('underline')" title="<?= __raw("tb_underline") ?>"><u>U</u></button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('strikeThrough')" title="<?= __raw("tb_strike") ?>"><s>S</s></button>
+              <div class="fmt-sep"></div>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('insertUnorderedList')" title="<?= __raw("tb_ul") ?>">≡</button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('insertOrderedList')" title="<?= __raw("tb_ol") ?>">1.</button>
+              <div class="fmt-sep"></div>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); insertLink()" title="<?= __raw("tb_link") ?>">🔗</button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); insertImage()" title="<?= __raw("tb_image") ?>">🖼</button>
+              <button type="button" class="fmt-btn tb-upload" id="upload-img-html" title="Subir imagen">📤</button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); insertVideo()" title="URL de video">📹</button>
+              <div class="fmt-sep"></div>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('undo')" title="<?= __raw("tb_undo") ?>">↩</button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('redo')" title="<?= __raw("tb_redo") ?>">↪</button>
+            </div>
+            
+            <!-- Markdown mode toolbar -->
+            <div id="md-toolbar" style="display: <?= $content_format === 'markdown' ? 'flex' : 'none' ?>; align-items: center; gap: 2px; flex-shrink: 0; overflow-x: auto;">
+              <select class="fmt-select" id="md-format-select" title="Formato de bloque">
+                <option value="p">Párrafo</option>
+                <option value="h1"># Encabezado 1</option>
+                <option value="h2">## Encabezado 2</option>
+                <option value="h3">### Encabezado 3</option>
+                <option value="code">``` Código ```</option>
+                <option value="blockquote">> Cita</option>
+              </select>
+              <div class="fmt-sep"></div>
+              <button type="button" class="fmt-btn md-btn" data-wrap="**" title="<?= __raw("tb_bold") ?>"><b>B</b></button>
+              <button type="button" class="fmt-btn md-btn" data-wrap="*" title="<?= __raw("tb_italic") ?>"><i>I</i></button>
+              <button type="button" class="fmt-btn md-btn" data-wrap="~~" title="<?= __raw("tb_strike") ?>"><s>S</s></button>
+              <button type="button" class="fmt-btn md-btn" data-wrap="`" title="Inline code"><code>`</code></button>
+              <div class="fmt-sep"></div>
+              <button type="button" class="fmt-btn md-btn" data-md="- " title="<?= __raw("tb_ul") ?>">≡</button>
+              <button type="button" class="fmt-btn md-btn" data-md="1. " title="<?= __raw("tb_ol") ?>">1.</button>
+              <div class="fmt-sep"></div>
+              <button type="button" class="fmt-btn" id="md-link-btn" title="<?= __raw("tb_link") ?>">🔗</button>
+              <button type="button" class="fmt-btn" id="md-img-btn" title="<?= __raw("tb_image") ?>">🖼</button>
+              <button type="button" class="fmt-btn tb-upload" id="upload-img-md" title="Subir imagen">📤</button>
+              <div class="fmt-sep"></div>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('undo')" title="<?= __raw("tb_undo") ?>">↩</button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('redo')" title="<?= __raw("tb_redo") ?>">↪</button>
+              <div class="fmt-sep"></div>
+              <button type="button" class="fmt-btn tb-mode" id="md-preview-btn"><?= __("tb_preview") ?></button>
+            </div>
+            
+            <!-- Mode switcher and other controls -->
+            <div id="toolbar-right" style="margin-left: auto; display: flex; align-items: center; gap: 8px; position: relative;">
+              <button type="button" class="fmt-btn mode-switch <?= $content_format === 'html' ? 'active' : '' ?>" id="switch-html" title="<?= __raw("tb_html_mode") ?>">HTML</button>
+              <button type="button" class="fmt-btn mode-switch <?= $content_format === 'markdown' ? 'active' : '' ?>" id="switch-md" title="<?= __raw("tb_md_mode") ?>">MD</button>
+              <button type="button" class="fmt-btn" id="preview-btn" title="<?= __raw("tb_preview_article") ?>"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+              <button type="button" class="fmt-btn" id="focus-btn" title="<?= __raw("tb_focus") ?>" onclick='if(window.toggleFocus)window.toggleFocus()'><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
+            </div>
+          </div>
+          
           <div class="title-area">
             <input type="text" name="title" id="post-title" placeholder="<?= __raw("editor_title_ph") ?>"
               value="<?= htmlspecialchars($post['title'] ?? '') ?>" required autocomplete="off">
           </div>
-
-          <!-- Toolbar -->
-          <div class="toolbar" id="toolbar">
-
-            <!-- ── MOBILE: compact bar + overflow menu ── -->
-            <div class="tb-mobile">
-              <div class="tb-primary" id="tb-primary">
-                <button type="button" class="tb" id="mb-bold" title="Negrita"><b>B</b></button>
-                <button type="button" class="tb" id="mb-italic" title="Cursiva"><i>I</i></button>
-                <button type="button" class="tb" id="mb-link" title="Enlace">🔗</button>
-                <button type="button" class="tb" id="mb-h2" title="H2">H2</button>
-                <button type="button" class="tb" id="mb-h3" title="H3">H3</button>
-                <button type="button" class="tb" id="mb-ul" title="Lista">≡</button>
-                <button type="button" class="tb" id="mb-img" title="Imagen">🖼</button>
-              </div>
-              <button type="button" class="tb tb-more-btn" id="tb-more-btn" aria-label="Más opciones" aria-expanded="false">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
-              </button>
-            </div>
-
-            <!-- ── MOBILE: overflow dropdown ── -->
-            <div class="tb-overflow-menu" id="tb-overflow-menu">
-              <div class="tb-overflow-section">
-                <button class="tb-item" id="mb-strike"><s>S</s> <?= __raw("tb_strike") ?></button>
-                <button class="tb-item" id="mb-quote">" <?= __raw("tb_quote") ?></button>
-                <button class="tb-item" id="mb-code">&lt;/&gt; <?= __raw("tb_code") ?></button>
-                <button class="tb-item" id="mb-ol">1. <?= __raw("tb_ol") ?></button>
-                <button class="tb-item" id="mb-audio">🎵 <?= __raw("tb_audio") ?></button>
-                <button class="tb-item" id="mb-video">🎬 <?= __raw("tb_video") ?></button>
-                <button class="tb-item" id="mb-hr">— <?= __raw("tb_hr") ?></button>
-                <button class="tb-item" id="mb-undo">↩ <?= __raw("tb_undo") ?></button>
-                <button class="tb-item" id="mb-redo">↪ <?= __raw("tb_redo") ?></button>
-                <button class="tb-item" id="mb-raw-html">&lt;/&gt; <?= __raw("tb_html") ?></button>
-              </div>
-              <div class="tb-overflow-sep"></div>
-              <div class="tb-overflow-section tb-overflow-row">
-                <button type="button" class="tb mode-switch <?= $content_format === 'html' ? 'active' : '' ?>" id="mb-switch-html">HTML</button>
-                <button type="button" class="tb mode-switch <?= $content_format === 'markdown' ? 'active' : '' ?>" id="mb-switch-md">MD</button>
-                <span style="flex:1"></span>
-                <button type="button" class="tb" id="mb-font-down"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
-                <span id="mb-font-label" style="font-size:0.7rem;color:var(--muted);padding:0 3px">16</span>
-                <button type="button" class="tb" id="mb-font-up"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
-              </div>
-              <div class="tb-overflow-row" style="margin-top:4px">
-                <button type="button" class="tb" id="mb-float"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="4" rx="1"/><line x1="7" y1="10" x2="17" y2="10"/></svg> <?= __raw("tb_float") ?></button>
-                <button type="button" class="tb" id="mb-preview"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
-                <button type="button" class="tb" id="mb-focus"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
-              </div>
-            </div>
-
-            <!-- ── DESKTOP: full HTML toolbar ── -->
-            <div id="html-toolbar" class="tb-desktop-bar">
-              <div style="display:flex;align-items:center;gap:2px;flex:1">
-                <div class="toolbar-group">
-                  <button type="button" class="tb" data-cmd="formatBlock" data-val="h2" title="<?= __raw("tb_h2") ?>">H2</button>
-                  <button type="button" class="tb" data-cmd="formatBlock" data-val="h3" title="<?= __raw("tb_h3") ?>">H3</button>
-                  <button type="button" class="tb" data-cmd="formatBlock" data-val="p" title="<?= __raw("tb_p") ?>">¶</button>
-                </div>
-                <div class="toolbar-sep"></div>
-                <div class="toolbar-group">
-                  <button type="button" class="tb" data-cmd="bold" title="<?= __raw("tb_bold") ?>"><b>B</b></button>
-                  <button type="button" class="tb" data-cmd="italic" title="<?= __raw("tb_italic") ?>"><i>I</i></button>
-                  <button type="button" class="tb" data-cmd="underline" title="<?= __raw("tb_underline") ?>"><u>U</u></button>
-                  <button type="button" class="tb" data-cmd="strikeThrough" title="<?= __raw("tb_strike") ?>"><s>S</s></button>
-                </div>
-                <div class="toolbar-sep"></div>
-                <div class="toolbar-group">
-                  <button type="button" class="tb" data-cmd="insertUnorderedList" title="<?= __raw("tb_ul") ?>">≡</button>
-                  <button type="button" class="tb" data-cmd="insertOrderedList" title="<?= __raw("tb_ol") ?>">1.</button>
-                  <button type="button" class="tb" data-cmd="formatBlock" data-val="blockquote" title="<?= __raw("tb_quote") ?>">"</button>
-                  <button type="button" class="tb" data-cmd="formatBlock" data-val="pre" title="<?= __raw("tb_code") ?>">&lt;/&gt;</button>
-                </div>
-                <div class="toolbar-sep"></div>
-                <div class="toolbar-group">
-                  <button type="button" class="tb" id="link-btn" title="<?= __raw("tb_link") ?>">🔗</button>
-                  <button type="button" class="tb" id="img-btn" title="<?= __raw("tb_image") ?>">🖼</button>
-                  <button type="button" class="tb" id="audio-btn" title="<?= __raw("tb_audio") ?>">🎵</button>
-                  <button type="button" class="tb" id="video-btn" title="<?= __raw("tb_video") ?>">🎬</button>
-                  <button type="button" class="tb" data-cmd="insertHorizontalRule" title="<?= __raw("tb_hr") ?>">—</button>
-                </div>
-                <div class="toolbar-sep"></div>
-                <div class="toolbar-group">
-                  <button type="button" class="tb" data-cmd="undo">↩</button>
-                  <button type="button" class="tb" data-cmd="redo">↪</button>
-                </div>
-                <div class="toolbar-sep"></div>
-                <button type="button" class="tb tb-mode" id="html-raw-toggle" title="<?= __raw("tb_html") ?>">&lt;/&gt; HTML</button>
-              </div>
-            </div>
-
-            <!-- ── DESKTOP: Markdown toolbar ── -->
-            <div id="md-toolbar" class="tb-desktop-bar" style="display:none">
-              <div style="display:flex;align-items:center;gap:2px;flex:1">
-                <div class="toolbar-group">
-                  <button type="button" class="tb md-btn" data-md="## " title="<?= __raw("tb_h2") ?>">H2</button>
-                  <button type="button" class="tb md-btn" data-md="### " title="<?= __raw("tb_h3") ?>">H3</button>
-                </div>
-                <div class="toolbar-sep"></div>
-                <div class="toolbar-group">
-                  <button type="button" class="tb md-btn" data-wrap="**" title="<?= __raw("tb_bold") ?>"><b>B</b></button>
-                  <button type="button" class="tb md-btn" data-wrap="*" title="<?= __raw("tb_italic") ?>"><i>I</i></button>
-                  <button type="button" class="tb md-btn" data-wrap="~~" title="<?= __raw("tb_strike") ?>"><s>S</s></button>
-                  <button type="button" class="tb md-btn" data-wrap="`" title="Inline code">` `</button>
-                </div>
-                <div class="toolbar-sep"></div>
-                <div class="toolbar-group">
-                  <button type="button" class="tb md-btn" data-md="- " title="<?= __raw("tb_ul") ?>">≡</button>
-                  <button type="button" class="tb md-btn" data-md="1. " title="<?= __raw("tb_ol") ?>">1.</button>
-                  <button type="button" class="tb md-btn" data-md="> " title="<?= __raw("tb_quote") ?>">"</button>
-                  <button type="button" class="tb md-btn" data-block="```\n\n```" title="<?= __raw("tb_code") ?>">&lt;/&gt;</button>
-                </div>
-                <div class="toolbar-sep"></div>
-                <div class="toolbar-group">
-                  <button type="button" class="tb" id="md-link-btn" title="<?= __raw("tb_link") ?>">🔗</button>
-                  <button type="button" class="tb" id="md-img-btn" title="<?= __raw("tb_image") ?>">🖼</button>
-                  <button type="button" class="tb md-btn" data-md="---" title="<?= __raw("tb_hr") ?>">—</button>
-                </div>
-                <div class="toolbar-sep"></div>
-                <button type="button" class="tb tb-mode" id="md-preview-btn"><?= __("tb_preview") ?></button>
-              </div>
-            </div>
-
-            <!-- ── DESKTOP: mode + extras (always visible on desktop) ── -->
-            <div class="toolbar-right tb-desktop-right">
-              <button type="button" class="tb mode-switch <?= $content_format === 'html' ? 'active' : '' ?>" id="switch-html" title="<?= __raw("tb_html_mode") ?>">HTML</button>
-              <button type="button" class="tb mode-switch <?= $content_format === 'markdown' ? 'active' : '' ?>" id="switch-md" title="<?= __raw("tb_md_mode") ?>">MD</button>
-              <div style="display:flex;align-items:center;gap:1px;border:1px solid var(--border2);border-radius:5px;overflow:hidden;margin:0 4px">
-                <button type="button" class="tb" id="font-size-down" style="padding:0.3rem 0.45rem;border-radius:0;border:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
-                <span id="font-size-label" style="font-size:0.7rem;color:var(--muted);min-width:26px;text-align:center;user-select:none">16</span>
-                <button type="button" class="tb" id="font-size-up" style="padding:0.3rem 0.45rem;border-radius:0;border:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
-              </div>
-              <button type="button" class="tb" id="float-toolbar-btn" title="<?= __raw("tb_float") ?>"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="4" rx="1"/><line x1="7" y1="10" x2="17" y2="10"/><line x1="7" y1="14" x2="14" y2="14"/></svg></button>
-              <button type="button" class="tb" id="preview-btn" title="<?= __raw("tb_preview_article") ?>"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
-              <button type="button" class="tb" id="focus-btn" title="<?= __raw("tb_focus") ?>"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
-            </div>
-
-          </div>
-          <!-- Floating selection toolbar -->
-          <div id="float-toolbar" class="float-toolbar" style="display:none">
-            <button type="button" class="ftb" data-cmd="bold"><b>B</b></button>
-            <button type="button" class="ftb" data-cmd="italic"><i>I</i></button>
-            <button type="button" class="ftb" data-cmd="underline"><u>U</u></button>
-            <button type="button" class="ftb" data-cmd="strikeThrough"><s>S</s></button>
-            <div class="ftb-sep"></div>
-            <button type="button" class="ftb" data-cmd="formatBlock" data-val="h2">H2</button>
-            <button type="button" class="ftb" data-cmd="formatBlock" data-val="h3">H3</button>
-            <div class="ftb-sep"></div>
-            <button type="button" class="ftb" id="ft-link">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-            </button>
-          </div>
-
+          
           <!-- Editor panes -->
           <div class="editor-wrap">
-            <!-- WYSIWYG (HTML mode) -->
-            <div id="editor" contenteditable="true" class="prose-editor"
-              style="<?= $content_format === 'markdown' ? 'display:none' : '' ?>"><?= $content_format !== 'markdown' ? ($post['content'] ?? '') : '' ?></div>
-            <!-- Raw HTML textarea -->
-            <textarea id="html-editor" class="html-editor" style="display:none"></textarea>
+            <!-- HTML editor (contentEditable div) -->
+            <div id="editor" class="prose-editor" contenteditable="true" 
+                 style="<?= $content_format === 'markdown' ? 'display:none' : '' ?>"><?= $content_format !== 'markdown' ? ($post['content'] ?? '') : '' ?></div>
+            <!-- Hidden textarea to store content for form submission -->
+            <textarea id="editor-hidden" name="content" style="display:none"></textarea>
             <!-- Markdown textarea -->
             <textarea id="md-editor" class="md-editor"
               style="<?= $content_format === 'markdown' ? '' : 'display:none' ?>"><?= $content_format === 'markdown' ? htmlspecialchars($post['content'] ?? '') : '' ?></textarea>
             <!-- Markdown preview -->
             <div id="md-preview" class="prose-editor md-preview-pane" style="display:none"></div>
           </div>
+          
         </div>
 
         <!-- Sidebar panel -->
@@ -357,6 +275,16 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 
 
 <style>
+:root {
+  --surface2-rgb: 40, 40, 50;
+  /* Añadir si no existen */
+  --surface2: #2d2d3d;
+  --border-soft: #3a3a4a;
+  --text-muted: #a0a0b0;
+  --text-faint: #6a6a7a;
+  --accent-light: #4a8bf5;
+  --accent-bg: rgba(74, 139, 245, 0.15);
+}
 .editor-layout {
   display: grid;
   grid-template-columns: 1fr 260px;
@@ -364,86 +292,526 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
   align-items: start;
 }
 .editor-main {
-  display: flex; flex-direction: column;
-  background: var(--surface); border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   height: calc(100vh - 130px);
   min-height: 500px;
-  position: sticky;
-  top: 57px;
+  overflow: hidden;
 }
-.title-area { padding: 1.25rem 1.5rem 0; }
-.title-area input {
-  background: transparent; border: none; padding: 0;
-  font-size: 1.6rem; font-weight: 700; color: var(--text);
-  letter-spacing: -0.03em; width: 100%;
-}
-.title-area input::placeholder { color: var(--muted); }
-.title-area input:focus { outline: none; }
 
-/* ── Toolbar ── */
-.toolbar {
-  display: flex; align-items: center; gap: 2px;
-  padding: 0.5rem 0.85rem;
-  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-  margin-top: 1rem;
+/* ── Format Bar ───────────────────────────────────── */
+.format-bar {
+  height: 36px;
   background: var(--surface);
+  border-bottom: 1px solid var(--border-soft);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 2px;
   flex-shrink: 0;
+  z-index: 1000;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  position: sticky;
+  top: 0;
+}
+
+.title-area {
+  padding: 1.25rem 1.5rem 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.title-area input {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.03em;
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.title-area input::placeholder {
+  color: var(--muted);
+}
+
+.title-area input:focus {
+  outline: none;
+}
+
+/* Ajustar el editor-wrap para que ocupe el espacio restante */
+.editor-wrap {
+  flex: 1;
+  overflow-y: auto;
   position: relative;
+  min-height: 0;
+  padding: 0;
 }
-.toolbar-group { display: flex; gap: 1px; }
-.toolbar-sep { width: 1px; height: 20px; background: var(--border2); margin: 0 4px; flex-shrink: 0; }
-.toolbar-right { margin-left: auto; padding-left: 6px; border-left: 1px solid var(--border2); }
 
-/* ── Mobile: show compact bar, hide desktop bar ── */
-.tb-mobile         { display: none; align-items: center; gap: 2px; flex: 1; }
-.tb-primary        { display: flex; align-items: center; gap: 1px; flex: 1; }
-.tb-more-btn       { display: none; flex-shrink: 0; margin-left: 4px; padding: 0.35rem 0.5rem; }
-.tb-desktop-bar    { display: flex; align-items: center; flex: 1; }
-.tb-desktop-right  { display: flex; }
-
-/* Overflow dropdown */
-.tb-overflow-menu {
-  display: none; flex-direction: column; gap: 2px;
-  position: absolute; top: 100%; left: 0; right: 0; z-index: 500;
-  background: var(--surface); border: 1px solid var(--border2); border-top: none;
-  padding: 0.6rem 0.75rem;
-  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+.fmt-select {
+  background: none;
+  border: none;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 5px;
+  outline: none;
+  transition: all .12s;
+  min-height: 34px;
+  max-width: 140px; /* Nuevo: reducir ancho */
 }
-.tb-overflow-menu.open { display: flex; }
-.tb-overflow-section { display: flex; flex-direction: column; gap: 1px; }
-.tb-overflow-sep  { height: 1px; background: var(--border); margin: 0.4rem 0; }
-.tb-overflow-row  { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-.tb-item {
-  display: flex; align-items: center; gap: 0.6rem;
-  background: none; border: none; color: var(--text2);
-  padding: 0.5rem 0.6rem; border-radius: 6px; cursor: pointer;
-  font-size: 0.875rem; font-family: inherit; text-align: left; width: 100%;
-  transition: background 0.1s;
-}
-.tb-item:hover { background: var(--surface2); color: var(--text); }
 
+/* Ajustar para pantallas más pequeñas */
 @media (max-width: 768px) {
-  .tb-mobile      { display: flex; }
-  .tb-more-btn    { display: flex; }
-  .tb-desktop-bar { display: none !important; }
-  .tb-desktop-right { display: none !important; }
-  .toolbar { flex-wrap: nowrap; padding: 0.4rem 0.6rem; }
+  .fmt-select {
+    max-width: 110px;
+    font-size: 12px;
+    padding: 3px 5px;
+    min-height: 30px;
+  }
 }
-.tb {
-  background: none; border: none; color: var(--text2);
-  padding: 0.35rem 0.55rem; border-radius: 5px; cursor: pointer;
-  font-size: 0.825rem; font-family: inherit; transition: all 0.1s;
-  line-height: 1; white-space: nowrap;
+
+@media (max-width: 480px) {
+  .fmt-select {
+    max-width: 90px;
+    font-size: 11px;
+    padding: 3px 4px;
+    min-height: 28px;
+  }
 }
-.tb:hover { background: var(--surface2); color: var(--text); }
-.tb.active { background: rgba(var(--accent-rgb), 0.15); color: var(--accent); }
+
+.fmt-select:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+.fmt-btn {
+  background: none;
+  border: none;
+  border-radius: 5px;
+  min-width: 36px; /* Cambiar de width a min-width */
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 15px;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+  transition: all .12s;
+  padding: 10px; /* Añadir padding de 10px */
+  box-sizing: border-box; /* Para incluir padding en el tamaño total */
+}
+
+.fmt-btn.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+  padding: 2px 20px !important; /* Padding específico para active */
+}
+
+/* Ajustar el hover */
+.fmt-btn:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+/* Ajustar para responsive */
+@media (max-width: 768px) {
+  .fmt-btn {
+    padding: 8px;
+    min-width: 32px;
+    height: 30px;
+    font-size: 14px;
+  }
+  
+  .fmt-btn.active {
+    padding: 1px 16px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .fmt-btn {
+    padding: 6px;
+    min-width: 30px;
+    height: 28px;
+    font-size: 13px;
+  }
+  
+  .fmt-btn.active {
+    padding: 1px 12px !important;
+  }
+}
+
+/* Asegurar que los botones con texto tengan suficiente espacio */
+.fmt-btn[title*="Cita"],
+.fmt-btn[title*="Código"],
+.fmt-btn[title*="Lista"] {
+  min-width: 40px;
+}
+
+/* Ajustar iconos específicos */
+.fmt-btn b,
+.fmt-btn i,
+.fmt-btn u,
+.fmt-btn s,
+.fmt-btn code {
+  font-style: normal;
+  font-weight: normal;
+  text-decoration: none;
+}
+
+/* Asegurar que los separadores se ajusten a la nueva altura */
+.fmt-sep {
+  height: 22px;
+  align-self: center;
+}
+
+/* Añadir estilos para los botones mode-switch */
 .mode-switch {
-  font-size: 0.72rem; font-weight: 600;
-  border: 1px solid var(--border2) !important;
-  border-radius: 4px !important; padding: 0.25rem 0.55rem !important;
+  min-width: 50px !important;
+  padding: 10px !important;
 }
-.mode-switch.active { background: var(--accent) !important; color: #fff !important; border-color: var(--accent) !important; }
+
+.mode-switch.active {
+  padding: 2px 20px !important;
+}
+
+.fmt-sep {
+  width: 1px;
+  height: 22px;
+  background: var(--border);
+  margin: 0 6px;
+}
+
+/* Responsive design para format-bar */
+@media (max-width: 768px) {
+  .format-bar {
+    padding: 0 6px;
+    gap: 2px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  #html-toolbar, #md-toolbar {
+    gap: 2px;
+    flex-wrap: nowrap;
+  }
+  
+  .fmt-btn {
+    width: 32px;
+    height: 30px;
+    font-size: 14px;
+  }
+  
+  .fmt-select {
+    font-size: 12px;
+    padding: 3px 5px;
+    min-height: 30px;
+  }
+  
+  .fmt-sep {
+    margin: 0 4px;
+    height: 20px;
+  }
+  
+  #toolbar-right {
+    gap: 6px;
+  }
+  
+  .mode-switch {
+    font-size: 12px;
+    padding: 3px 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .format-bar {
+    height: 38px;
+  }
+  
+  .fmt-btn {
+    width: 30px;
+    height: 28px;
+    font-size: 13px;
+  }
+  
+  .fmt-select {
+    font-size: 11px;
+    max-width: 85px;
+    padding: 3px 4px;
+    min-height: 28px;
+  }
+  
+  #toolbar-right .mode-switch {
+    display: none;
+  }
+  
+  .fmt-sep {
+    margin: 0 3px;
+    height: 18px;
+  }
+}
+
+/* ── TITLEBAR ─────────────────────────────────────── */
+#titlebar {
+  height: 44px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 8px;
+  flex-shrink: 0;
+  user-select: none;
+}
+#titlebar .logo {
+  font-family: 'Lora', serif;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: -0.3px;
+}
+#titlebar .sep { flex: 1; }
+#titlebar .site-badge {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--text-muted);
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 20px; padding: 3px 10px; gap: 6px; cursor: pointer;
+  transition: all .15s;
+}
+#titlebar .site-badge:hover { border-color: var(--accent); color: var(--accent); }
+#titlebar .site-badge .dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+}
+.tb-btn {
+  background: none; border: 1px solid transparent;
+  border-radius: 6px; padding: 5px 8px;
+  color: var(--text-muted); cursor: pointer; font-size: 12px;
+  display: flex; align-items: center; gap: 5px;
+  font-family: 'DM Sans', sans-serif; transition: all .15s;
+}
+.tb-btn:hover { background: var(--surface2); border-color: var(--border); color: var(--text); }
+.tb-btn.primary {
+  background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 500;
+}
+.tb-btn.primary:hover { background: var(--accent-light); }
+
+/* ── FORMATTING TOOLBAR ───────────────────────────── */
+#format-bar {
+  height: 36px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-soft);
+  display: flex; align-items: center; padding: 0 8px; gap: 2px; flex-shrink: 0;
+}
+.fmt-btn {
+  background: none; border: none; border-radius: 4px;
+  width: 28px; height: 26px; display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); cursor: pointer; font-size: 13px;
+  font-family: 'DM Sans', sans-serif; font-weight: 500; transition: all .12s;
+}
+.fmt-btn:hover { background: var(--surface2); color: var(--text); }
+.fmt-btn.active { background: var(--accent-bg); color: var(--accent); }
+.fmt-sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; }
+.fmt-select {
+  background: none; border: none; font-family: 'DM Sans', sans-serif;
+  font-size: 12px; color: var(--text-muted); cursor: pointer; padding: 2px 4px;
+  border-radius: 4px; outline: none; transition: all .12s;
+}
+.fmt-select:hover { background: var(--surface2); color: var(--text); }
+
+/* Actualizar variables CSS para mantener el estilo actual */
+:root {
+  --surface2: #2d2d3d;
+  --border-soft: #3a3a4a;
+  --text-muted: #a0a0b0;
+  --text-faint: #6a6a7a;
+  --accent-light: #4a8bf5;
+  --accent-bg: rgba(74, 139, 245, 0.15);
+}
+
+/* Ajustar el layout principal */
+.page-body {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 57px); /* Ajustar según la altura del header principal */
+  overflow: hidden;
+}
+
+.editor-layout {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 1.5rem;
+  align-items: start;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+.editor-main {
+  display: flex; 
+  flex-direction: column;
+  background: var(--surface); 
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  height: 100%;
+  min-height: 500px;
+  overflow: hidden;
+}
+
+/* Ajustar el área del editor */
+.editor-wrap { 
+  flex: 1; 
+  overflow-y: auto; 
+  position: relative; 
+  min-height: 0; 
+  display: flex;
+  flex-direction: column;
+}
+
+/* Asegurar que las toolbars internas funcionen correctamente */
+#html-toolbar, #md-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  #titlebar {
+    padding: 0 8px;
+    gap: 4px;
+    height: 40px;
+  }
+  .tb-btn {
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+  #format-bar {
+    height: 32px;
+    padding: 0 4px;
+    overflow-x: auto;
+  }
+  .fmt-btn {
+    width: 26px;
+    height: 24px;
+    font-size: 12px;
+  }
+  .fmt-select {
+    font-size: 11px;
+  }
+}
+  background: none;
+  border: none;
+  color: var(--text2);
+  padding: 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.825rem;
+  font-family: inherit;
+  transition: all 0.1s;
+  line-height: 1;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
+}
+.tb:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+.tb.active {
+  background: rgba(var(--accent-rgb), 0.15);
+  color: var(--accent);
+}
+.tb-icon {
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0.5rem;
+}
+.tb-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.tb-mode {
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid var(--border2) !important;
+  border-radius: 4px !important;
+  padding: 0.4rem 0.75rem !important;
+  min-width: auto;
+}
+.tb-mode.active {
+  background: var(--accent) !important;
+  color: #fff !important;
+  border-color: var(--accent) !important;
+}
+@media (max-width: 768px) {
+  .toolbar {
+    padding: 0.4rem 0.6rem;
+    overflow-x: auto;
+  }
+  .tb {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0.4rem;
+  }
+  .tb-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+  .toolbar-sep {
+    height: 20px;
+    margin: 0 4px;
+  }
+}
+
+/* Mobile toolbar */
+@media (max-width: 768px) {
+  .toolbar {
+    overflow-x: auto;
+    padding: 0.4rem 0.5rem;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+  }
+  #html-toolbar, #md-toolbar {
+    gap: 2px;
+    flex-wrap: nowrap;
+  }
+  .tb {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0.3rem;
+    flex-shrink: 0;
+  }
+  .toolbar-sep {
+    height: 20px;
+    margin: 0 3px;
+    flex-shrink: 0;
+  }
+  .tb-mode {
+    font-size: 0.7rem;
+    padding: 0.3rem 0.5rem !important;
+    flex-shrink: 0;
+  }
+  /* Hide some buttons on very small screens */
+  @media (max-width: 480px) {
+    .tb:nth-child(n+8) {
+      display: none;
+    }
+  }
+}
 
 /* ── Floating toolbar ── */
 .float-toolbar {
@@ -480,11 +848,57 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 }
 
 /* ── Editor panes ── */
-.editor-wrap { flex: 1; overflow-y: auto; position: relative; min-height: 0; }
+.editor-wrap { 
+  flex: 1; 
+  overflow-y: auto; 
+  position: relative; 
+  min-height: 0; 
+  display: flex;
+  flex-direction: column;
+}
 .prose-editor {
   min-height: 100%;
-  padding: 1.5rem; outline: none; line-height: 1.8;
-  color: var(--text); font-size: 1rem;
+  padding: 1.5rem; 
+  outline: none; 
+  line-height: 1.8;
+  color: var(--text); 
+  font-size: 1rem;
+}
+/* TinyMCE container */
+#editor {
+  flex: 1;
+  min-height: 100%;
+  width: 100%;
+  border: none;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.8;
+  padding: 1.5rem;
+  resize: none;
+  overflow-y: auto;
+}
+/* Ensure TinyMCE iframe fills the container */
+.tox-tinymce {
+  border: none !important;
+  border-radius: 0 !important;
+  height: 100% !important;
+}
+.tox-editor-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.tox-sidebar-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.tox .tox-edit-area {
+  flex: 1;
+}
+.tox .tox-edit-area__iframe {
+  flex: 1;
 }
 .prose-editor h2 { font-size: 1.5rem; font-weight: 700; margin: 1.5rem 0 0.75rem; }
 .prose-editor h3 { font-size: 1.2rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
@@ -524,8 +938,31 @@ body.focus-mode .editor-main { border-radius: 0; border-left: none; border-right
 body.focus-mode .toolbar { top: 0; border-top: none; }
 body.focus-mode .prose-editor, body.focus-mode .md-editor { max-width: 760px; margin: 0 auto; }
 body.focus-mode #focus-btn { color: var(--accent); }
-.focus-exit-hint { display: none; position: fixed; bottom: 1rem; right: 1rem; background: var(--surface2); color: var(--muted); font-size: 0.75rem; padding: 0.35rem 0.75rem; border-radius: 6px; z-index: 9999; }
-body.focus-mode .focus-exit-hint { display: block; }
+.focus-exit-hint { display: none; position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 9999; width: 100%; max-width: 300px; }
+body.focus-mode .focus-exit-hint { display: flex; justify-content: center; align-items: center; }
+.focus-exit-btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 50px;
+  padding: 1rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+  transition: all 0.2s;
+  white-space: nowrap;
+  text-align: center;
+}
+.focus-exit-btn:hover {
+  opacity: 0.9;
+  transform: scale(1.05);
+}
+.focus-exit-btn:active {
+  transform: scale(0.98);
+}
+body.focus-mode .floating-buttons-container { display: none !important; }
 
 /* ── Tag chips ── */
 .tag-input-wrap {
@@ -578,38 +1015,335 @@ body.focus-mode .focus-exit-hint { display: block; }
 
 /* ── RESPONSIVE ── */
 @media (max-width: 768px) {
+  /* Prevent ANY horizontal scroll on the editor page */
+  html, body { overflow-x: hidden !important; }
+  .main       { overflow-x: hidden !important; }
+  .page-body  { overflow-x: hidden !important; padding: 0.75rem !important; }
+
   .editor-layout {
     grid-template-columns: 1fr;
+    width: 100%;
+    max-width: 100%;
+    gap: 1rem;
   }
   .editor-sidebar { order: 2; }
-  /* On mobile: natural height, no sticky constraint */
   .editor-main {
     order: 1;
     height: auto !important;
     min-height: 60vh;
     position: static !important;
     overflow: visible;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
   }
-  .editor-wrap { overflow-y: visible !important; }
+  .editor-wrap { 
+    overflow-y: visible !important; 
+    overflow-x: hidden !important; 
+    padding: 0 0.75rem;
+  }
+  .prose-editor { 
+    padding: 1rem 0.75rem; 
+    overflow-x: hidden; 
+    word-break: break-word; 
+    margin: 0;
+  }
+  #editor, .md-editor { 
+    padding: 1rem 0.75rem; 
+    width: 100%;
+    box-sizing: border-box;
+  }
 
-  .title-area input { font-size: 1.2rem; }
+  .title-area { 
+    padding: 1rem 0.75rem 0; 
+  }
+  .title-area input { 
+    font-size: 1.2rem; 
+    padding: 0;
+  }
 
-  /* Toolbar handled by .tb-primary + .tb-more-btn on mobile (see toolbar CSS) */
-
-  .editor-sidebar .panel { padding: 0.75rem; }
+  .editor-sidebar .panel { 
+    padding: 0.75rem; 
+    margin: 0 0.75rem;
+  }
   .topbar-actions .btn span { display: none; }
+
+  /* Ensure toolbar has proper spacing */
+  .toolbar {
+    padding: 0.4rem 0.75rem;
+    margin-left: 0;
+    margin-right: 0;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .tb-primary {
+    padding-left: 0;
+    padding-right: 0;
+  }
 }
 
 @media (max-width: 480px) {
-  .prose-editor { padding: 1rem; }
-  .page-body { padding: 0.75rem !important; }
+  .prose-editor { 
+    padding: 1rem 0.75rem; 
+    margin: 0;
+  }
+  .page-body { 
+    padding: 0.75rem !important; 
+  }
+  .editor-main {
+    border-left: 0;
+    border-right: 0;
+  }
+  .editor-wrap {
+    padding: 0 0.5rem;
+  }
+  #editor, .md-editor {
+    padding: 1rem 0.5rem;
+  }
+  .title-area {
+    padding: 1rem 0.5rem 0;
+  }
+  .toolbar {
+    padding: 0.4rem 0.5rem;
+  }
 }
+/* More toolbar dropdown */
+.more-tb-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 0.5rem;
+    z-index: 10000;
+    max-width: 300px;
+    max-height: 400px;
+    overflow-y: auto;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    margin-top: 4px;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.more-tb-dropdown .tb {
+    min-width: 36px;
+    min-height: 36px;
+    font-size: 0.8rem;
+}
+
+/* Mobile dropdown menu */
+.mobile-dropdown-menu {
+  display: none;
+  position: fixed;
+  top: 100%;
+  right: 0;
+  background: rgba(var(--surface2-rgb, 40, 40, 50), 0.98);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 0.5rem;
+  z-index: 10050;
+  max-width: 300px;
+  max-height: 400px;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  margin-top: 4px;
+  flex-wrap: wrap;
+  gap: 4px;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  /* Safari specific fixes */
+  -webkit-overflow-scrolling: touch;
+  will-change: transform, opacity;
+  isolation: isolate; /* Create new stacking context */
+}
+
+/* Add a wrapper to ensure proper stacking */
+.mobile-dropdown-menu::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: -1;
+  background: transparent;
+}
+
+.mobile-dropdown-menu .tb {
+  min-width: 36px;
+  min-height: 36px;
+  font-size: 0.8rem;
+}
+
+/* Mobile dropdown button */
+.mobile-dropdown-btn {
+  display: none !important;
+}
+
+/* Ensure the toolbar has proper stacking context */
+.toolbar {
+  position: relative;
+  z-index: 10000;
+  isolation: isolate;
+}
+
+/* Fix for Safari's stacking context issues */
+#editor, .md-editor, .prose-editor {
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+}
+
+/* Ensure editor-sidebar has lower z-index */
+.editor-sidebar {
+  position: relative;
+  z-index: 1;
+}
+
+/* Add this for Safari to properly handle fixed positioning */
+@supports (-webkit-touch-callout: none) {
+  .mobile-dropdown-menu {
+    position: absolute;
+    transform: translate3d(0, 0, 0);
+    -webkit-transform: translate3d(0, 0, 0);
+  }
+  
+  .toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 10000;
+  }
+}
+
+/* Desktop view - hide mobile dropdown elements */
+@media (min-width: 769px) {
+  .mobile-dropdown-menu {
+    display: none !important;
+  }
+  
+  .mobile-dropdown-btn {
+    display: none !important;
+  }
+  
+  .mobile-hidden-tools {
+    display: flex !important;
+  }
+}
+
+/* For screens between 481px and 768px, show all tools */
+@media (min-width: 481px) and (max-width: 768px) {
+  .mobile-hidden-tools {
+    display: flex !important;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  
+  .mobile-dropdown-btn {
+    display: none !important;
+  }
+  
+  .mobile-dropdown-menu {
+    display: none !important;
+  }
+}
+
+/* Mobile view */
+@media (max-width: 480px) {
+  .mobile-hidden-tools {
+    display: none !important;
+  }
+  
+  .mobile-dropdown-btn {
+    display: flex !important;
+  }
+  
+  /* Adjust toolbar spacing for mobile */
+  #html-toolbar, #md-toolbar {
+    gap: 2px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Ensure the dropdown button appears after the link button */
+  #html-toolbar .mobile-dropdown-btn,
+  #md-toolbar .mobile-dropdown-btn {
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+  
+  /* Hide specific buttons that are in the dropdown */
+  #html-toolbar .tb:nth-child(n+15):not(.mobile-dropdown-btn),
+  #md-toolbar .tb:nth-child(n+13):not(.mobile-dropdown-btn) {
+    display: none !important;
+  }
+  
+  /* Safari specific mobile fixes */
+  @supports (-webkit-touch-callout: none) {
+    .mobile-dropdown-menu {
+      position: fixed;
+      z-index: 10060;
+      transform: translate3d(0, 0, 0);
+      -webkit-transform: translate3d(0, 0, 0);
+    }
+    
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 10050;
+      background: var(--surface);
+    }
+    
+    /* Prevent body scroll when dropdown is open */
+    body.dropdown-open {
+      overflow: hidden;
+      position: fixed;
+      width: 100%;
+      height: 100%;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+    /* hide unwanted right toolbar items */
+    #toolbar-right .mode-switch,
+    #font-size-group,
+    #more-tb-btn,
+    #focus-btn,
+    #preview-btn {
+        display: none !important;
+    }
+}
+@media (min-width: 769px) {
+    #more-tb-btn {
+        display: none;
+    }
+}
+
+/* Ensure editor elements have proper z-index */
+#editor, .md-editor, .prose-editor {
+  position: relative;
+  z-index: 1;
+}
+
+/* Fix for Safari textarea/editor z-index */
+#editor, #md-editor {
+  isolation: isolate;
+}
+
 </style>
+<input type="file" id="editor-image-upload" accept="image/*" multiple style="display:none">
 
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
-const editor       = document.getElementById('editor');
-const htmlEditor   = document.getElementById('html-editor');
 const mdEditor     = document.getElementById('md-editor');
 const mdPreview    = document.getElementById('md-preview');
 const contentInput = document.getElementById('content-input');
@@ -620,67 +1354,6 @@ const htmlToolbar  = document.getElementById('html-toolbar');
 const mdToolbar    = document.getElementById('md-toolbar');
 
 let mode       = <?= json_encode($content_format) ?>;  // 'html' | 'markdown'
-
-// Inject paragraph spacing directly — guarantees it overrides any reset CSS
-(function() {
-  const style = document.createElement('style');
-  style.textContent = '#editor p { margin-top: 0 !important; margin-bottom: 1em !important; }';
-  document.head.appendChild(style);
-})();
-
-// Wrap loose text nodes in <p> so the first paragraph is always tagged
-function wrapLooseNodes() {
-  if (!editor) return;
-  let changed = false;
-  // Collect child nodes that are bare text or inline elements (not block-level)
-  const blockTags = new Set(['P','DIV','H1','H2','H3','H4','H5','H6',
-                              'BLOCKQUOTE','PRE','UL','OL','LI',
-                              'TABLE','FIGURE','HR','SECTION','ARTICLE']);
-  const nodes = Array.from(editor.childNodes);
-  let group = [];
-
-  function flushGroup() {
-    if (!group.length) return;
-    // Only wrap if there's actual content (not just whitespace)
-    const hasContent = group.some(n =>
-      n.nodeType === 3 ? n.textContent.trim() !== '' : true
-    );
-    if (hasContent) {
-      const p = document.createElement('p');
-      group[0].parentNode.insertBefore(p, group[0]);
-      group.forEach(n => p.appendChild(n));
-      changed = true;
-    }
-    group = [];
-  }
-
-  nodes.forEach(node => {
-    if (node.nodeType === 3) {
-      // Text node — add to group
-      group.push(node);
-    } else if (node.nodeType === 1) {
-      const tag = node.tagName.toUpperCase();
-      if (blockTags.has(tag)) {
-        flushGroup(); // flush any preceding loose nodes first
-      } else {
-        // Inline element (span, b, i, a, img…) — add to group
-        group.push(node);
-      }
-    }
-  });
-  flushGroup(); // flush any trailing loose nodes
-}
-
-// Run on every input event in the WYSIWYG editor
-editor.addEventListener('input', () => {
-  if (mode === 'html' && !rawHtml) wrapLooseNodes();
-});
-
-// Also run once on load in case existing content has bare text
-document.addEventListener('DOMContentLoaded', () => {
-  if (mode === 'html' && !rawHtml) wrapLooseNodes();
-});
-let rawHtml    = false;
 let mdPreviewing = false;
 let slugManuallySet = <?= $is_new ? 'false' : 'true' ?>;
 
@@ -688,26 +1361,21 @@ let slugManuallySet = <?= $is_new ? 'false' : 'true' ?>;
 document.getElementById('editor-form').addEventListener('submit', () => {
   if (mode === 'markdown') {
     contentInput.value = mdEditor.value;
-  } else if (rawHtml) {
-    contentInput.value = htmlEditor.value;
   } else {
-    contentInput.value = editor.innerHTML;
+    contentInput.value = document.getElementById('editor').value;
   }
   fmtInput.value = mode;
 });
 
-
-// ── Autosave: localStorage (instant) + server sync (every 60s) ───────────
+// ── Autosave ──────────────────────────────────────────────────────────────
 const AUTOSAVE_KEY  = 'brisa_autosave_' + <?= json_encode($type) ?> + '_' + <?= json_encode($slug ?: 'new') ?>;
 const AUTOSAVE_URL  = <?= json_encode(base_url() . '/admin/autosave.php') ?>;
 const AUTOSAVE_CSRF = <?= json_encode(generate_csrf()) ?>;
 
-let autosaveSlug    = <?= json_encode($slug) ?>;       // may update if new article gets saved
-let lastSavedHash   = null;       // hash of last content saved to server
-let localDirty      = false;      // has content changed since last localStorage save
+let autosaveSlug    = <?= json_encode($slug) ?>;
+let lastSavedHash   = null;
 let serverSyncTimer = null;
 
-// ── Indicator element ────────────────────────────────────────────────────
 const autosaveBar = document.createElement('div');
 autosaveBar.id = 'autosave-bar';
 autosaveBar.style.cssText = [
@@ -727,11 +1395,9 @@ function showAutosaveMsg(msg, color) {
   autosaveBar._t = setTimeout(() => autosaveBar.style.opacity = '0', 3000);
 }
 
-// ── Get current content from whichever editor is active ──────────────────
 function getCurrentContent() {
   if (mode === 'markdown') return mdEditor.value;
-  if (rawHtml)             return htmlEditor.value;
-  return editor.innerHTML;
+  return document.getElementById('editor').innerHTML;
 }
 
 function getFormData() {
@@ -753,10 +1419,8 @@ function simpleHash(str) {
   return h;
 }
 
-// ── 1. localStorage save — on every input, debounced 2s ──────────────────
 let localSaveTimer;
 function scheduleLocalSave() {
-  localDirty = true;
   clearTimeout(localSaveTimer);
   localSaveTimer = setTimeout(() => {
     try {
@@ -767,18 +1431,16 @@ function scheduleLocalSave() {
         slug: autosaveSlug,
         savedAt: Date.now(),
       }));
-      localDirty = false;
     } catch(e) {}
   }, 2000);
 }
 
-// ── 2. Server sync — every 60s if content changed ────────────────────────
 async function syncToServer() {
   const data = getFormData();
-  if (!data.title) return; // don't save without a title
+  if (!data.title) return;
 
   const hash = simpleHash(data.title + data.content);
-  if (hash === lastSavedHash) return; // nothing changed
+  if (hash === lastSavedHash) return;
 
   try {
     const fd = new FormData();
@@ -799,137 +1461,90 @@ async function syncToServer() {
 
     if (json.ok) {
       lastSavedHash = hash;
-      // If this was a new article and now has a slug, update our key
       if (json.new && json.slug && !autosaveSlug) {
         autosaveSlug = json.slug;
-        // Update URL without reloading so manual save works correctly
         const url = new URL(location.href);
         url.searchParams.set('slug', json.slug);
         history.replaceState({}, '', url);
       }
       showAutosaveMsg('✓ Borrador guardado automáticamente', 'var(--green)');
-      // Clear localStorage copy — server has it now
       try { localStorage.removeItem(AUTOSAVE_KEY); } catch(e) {}
     }
-  } catch(e) {
-    // Network error — silent, we have localStorage as backup
-  }
+  } catch(e) {}
 }
 
-// Start the 60s server sync loop
 serverSyncTimer = setInterval(syncToServer, 60000);
 
-// ── Listen to all editor inputs ───────────────────────────────────────────
-[editor, htmlEditor, mdEditor].forEach(el => {
+[mdEditor, document.getElementById('editor')].forEach(el => {
   el?.addEventListener('input', scheduleLocalSave);
 });
 document.getElementById('post-title')?.addEventListener('input', scheduleLocalSave);
 
-// ── On manual save: clear autosave data ──────────────────────────────────
 document.getElementById('editor-form').addEventListener('submit', () => {
   try { localStorage.removeItem(AUTOSAVE_KEY); } catch(e) {}
   clearInterval(serverSyncTimer);
-  lastSavedHash = null; // reset so next cycle re-checks
+  lastSavedHash = null;
 }, true);
 
-// ── On page load: check for unsaved localStorage draft ───────────────────
-(function checkLocalDraft() {
-  let saved;
-  try { saved = JSON.parse(localStorage.getItem(AUTOSAVE_KEY) || 'null'); } catch(e) {}
-  if (!saved || !saved.title) return;
-
-  // Only offer restore if it's more recent than 7 days
-  if (Date.now() - saved.savedAt > 7 * 24 * 60 * 60 * 1000) {
-    try { localStorage.removeItem(AUTOSAVE_KEY); } catch(e) {}
-    return;
-  }
-
-  // Don't offer restore if the server version is already saved (has a slug and content)
-  const currentContent = getCurrentContent().trim();
-  if (autosaveSlug && currentContent && currentContent !== '<p><br></p>') {
-    // Silently discard — server copy is canonical
-    try { localStorage.removeItem(AUTOSAVE_KEY); } catch(e) {}
-    return;
-  }
-
-  const ago = Math.round((Date.now() - saved.savedAt) / 60000);
-  const label = ago < 2 ? 'hace un momento' : `hace ${ago} minutos`;
-
-  // Show restore banner
-  const banner = document.createElement('div');
-  banner.style.cssText = [
-    'position:fixed','top:64px','left:50%','transform:translateX(-50%)',
-    'background:var(--surface)','border:1px solid var(--accent)',
-    'border-radius:10px','padding:0.85rem 1.25rem','z-index:8500',
-    'font-size:0.82rem','color:var(--text)','box-shadow:0 4px 20px rgba(0,0,0,0.3)',
-    'display:flex','align-items:center','gap:1rem','max-width:480px',
-    'font-family:inherit',
-  ].join(';');
-  banner.innerHTML = `
-    <span>📝 Hay un borrador local guardado <strong>${label}</strong>: <em>${saved.title.slice(0,40)}</em></span>
-    <div style="display:flex;gap:0.5rem;flex-shrink:0">
-      <button id="autosave-restore" style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:0.3rem 0.7rem;cursor:pointer;font-size:0.78rem;font-family:inherit">Restaurar</button>
-      <button id="autosave-discard" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border2);border-radius:6px;padding:0.3rem 0.7rem;cursor:pointer;font-size:0.78rem;font-family:inherit">Descartar</button>
-    </div>`;
-  document.body.appendChild(banner);
-
-  document.getElementById('autosave-restore').addEventListener('click', () => {
-    // Restore title
-    const titleEl = document.getElementById('post-title');
-    if (titleEl) titleEl.value = saved.title;
-    // Restore content
-    if (saved.content_format === 'markdown') {
-      switchMode('markdown');
-      mdEditor.value = saved.content;
-    } else {
-      switchMode('html');
-      editor.innerHTML = saved.content;
-    }
-    // Restore sidebar fields
-    const excerptEl = document.querySelector('[name="excerpt"]');
-    if (excerptEl) excerptEl.value = saved.excerpt || '';
-    banner.remove();
-    showAutosaveMsg('✓ Borrador local restaurado', 'var(--green)');
-    try { localStorage.removeItem(AUTOSAVE_KEY); } catch(e) {}
-  });
-
-  document.getElementById('autosave-discard').addEventListener('click', () => {
-    try { localStorage.removeItem(AUTOSAVE_KEY); } catch(e) {}
-    banner.remove();
-  });
-})();
-
 // ── Mode switch HTML ↔ MD ─────────────────────────────────────────────────
-document.getElementById('switch-html').addEventListener('click', () => switchMode('html'));
-document.getElementById('switch-md').addEventListener('click',   () => switchMode('markdown'));
+document.getElementById('switch-html').addEventListener('click', function(e) {
+  e.preventDefault();
+  switchMode('html');
+  this.classList.add('active');
+  document.getElementById('switch-md').classList.remove('active');
+});
+
+document.getElementById('switch-md').addEventListener('click', function(e) {
+  e.preventDefault();
+  switchMode('markdown');
+  this.classList.add('active');
+  document.getElementById('switch-html').classList.remove('active');
+});
 
 function switchMode(newMode) {
   if (newMode === mode) return;
 
   if (newMode === 'markdown') {
-    // Convert current HTML content to a notice (keep raw HTML as-is if switching)
-    if (!mdEditor.value) {
-      mdEditor.value = editor.innerHTML
-        ? '<!-- Content converted from HTML — clean up as needed -->\n' + editor.innerHTML
-        : '';
-    }
-    editor.style.display = 'none';
+    // Convert HTML content to plain text for markdown
+    const htmlEditor = document.getElementById('editor');
+    const mdEditor = document.getElementById('md-editor');
+    
+    // Get HTML content and convert to plain text (basic conversion)
+    let htmlContent = htmlEditor.innerHTML;
+    
+    // Simple HTML to text conversion
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlContent;
+    
+    // Basic conversions for common formatting
+    let markdownContent = htmlToMarkdown(tempDiv);
+    
+    // Set markdown editor content
+    mdEditor.value = markdownContent;
+    
+    // Switch to markdown
     htmlEditor.style.display = 'none';
     mdEditor.style.display = '';
-    mdPreview.style.display = 'none';
-    htmlToolbar.style.display = 'none';
-    mdToolbar.style.display = 'flex';
-    rawHtml = false;
+    document.getElementById('md-preview').style.display = 'none';
+    document.getElementById('html-toolbar').style.display = 'none';
+    document.getElementById('md-toolbar').style.display = 'flex';
     mdPreviewing = false;
     document.getElementById('md-preview-btn').textContent = '👁 Preview';
   } else {
-    editor.style.display = '';
-    htmlEditor.style.display = 'none';
+    // Convert markdown content to HTML
+    const mdEditor = document.getElementById('md-editor');
+    const htmlEditor = document.getElementById('editor');
+    
+    // For now, just set the markdown as plain text in HTML editor
+    // TODO: Implement proper markdown to HTML conversion
+    htmlEditor.innerHTML = mdEditor.value;
+    
+    // Switch to HTML
     mdEditor.style.display = 'none';
-    mdPreview.style.display = 'none';
-    htmlToolbar.style.display = 'flex';
-    mdToolbar.style.display = 'none';
-    rawHtml = false;
+    document.getElementById('md-preview').style.display = 'none';
+    htmlEditor.style.display = '';
+    document.getElementById('html-toolbar').style.display = 'flex';
+    document.getElementById('md-toolbar').style.display = 'none';
   }
 
   mode = newMode;
@@ -938,181 +1553,184 @@ function switchMode(newMode) {
   document.getElementById('switch-md').classList.toggle('active', mode === 'markdown');
 }
 
-// ── HTML WYSIWYG toolbar ───────────────────────────────────────────────────
-document.querySelectorAll('.tb[data-cmd]').forEach(btn => {
-  btn.addEventListener('mousedown', e => {
-    e.preventDefault();
-    if (mode !== 'html' || rawHtml) return;
-    document.execCommand(btn.dataset.cmd, false, btn.dataset.val || null);
-    editor.focus();
-    updateToolbar();
-  });
-});
-
-document.getElementById('link-btn').addEventListener('mousedown', e => {
-  e.preventDefault();
-  const url = prompt(<?= json_encode(__raw('prompt_link_url')) ?>);
-  if (url) document.execCommand('createLink', false, url);
-  editor.focus();
-});
-// ── Media upload helper ──────────────────────────────────────────────────
-function uploadMediaFile(accept, onSuccess) {
-  const picker   = document.createElement('input');
-  picker.type    = 'file';
-  picker.accept  = accept;
-  picker.onchange = async () => {
-    const file = picker.files[0];
-    if (!file) return;
-    const fd = new FormData();
-    fd.append('upload', file);
-    fd.append('csrf', <?= json_encode(generate_csrf()) ?>);
-    try {
-      const res  = await fetch(<?= json_encode(base_url() . '/admin/upload_media.php') ?>, { method:'POST', body:fd });
-      const data = await res.json();
-      if (data.url) onSuccess(data.url, data.type);
-      else alert('Error: ' + (data.error || 'desconocido'));
-    } catch(e) { alert('Error de red al subir'); }
-  };
-  picker.click();
-}
-
-function insertAudioHtml(url) {
-  return `<figure class="media-audio"><audio controls preload="metadata"><source src="${url}">Tu navegador no soporta audio HTML5.</audio></figure>`;
-}
-function insertVideoHtml(url) {
-  return `<figure class="media-video"><video controls preload="metadata" style="max-width:100%"><source src="${url}">Tu navegador no soporta vídeo HTML5.</video></figure>`;
-}
-
-// Image
-document.getElementById('img-btn').addEventListener('mousedown', e => {
-  e.preventDefault();
-  const choice = confirm('¿Subir imagen desde tu ordenador?\n\nOK = subir archivo  ·  Cancelar = pegar URL');
-  if (choice) {
-    uploadMediaFile('image/*', (url) => {
-      document.execCommand('insertHTML', false, `<img src="${url}" alt="">`);
-      editor.focus();
-    });
-  } else {
-    const url = prompt(<?= json_encode(__raw('prompt_img_url')) ?>);
-    if (url) document.execCommand('insertHTML', false, `<img src="${url}" alt="">`);
-    editor.focus();
-  }
-});
-
-// Audio
-document.getElementById('audio-btn')?.addEventListener('mousedown', e => {
-  e.preventDefault();
-  const choice = confirm('¿Subir audio desde tu ordenador?\nFormatos: MP3, OGG, WAV, M4A, FLAC\n\nOK = subir archivo  ·  Cancelar = pegar URL');
-  if (choice) {
-    uploadMediaFile('audio/*,.mp3,.ogg,.wav,.m4a,.flac', (url) => {
-      document.execCommand('insertHTML', false, insertAudioHtml(url));
-      editor.focus();
-    });
-  } else {
-    const url = prompt(<?= json_encode(__raw('prompt_audio_url')) ?>);
-    if (url) document.execCommand('insertHTML', false, insertAudioHtml(url));
-    editor.focus();
-  }
-});
-
-// Video
-document.getElementById('video-btn')?.addEventListener('mousedown', e => {
-  e.preventDefault();
-  const choice = confirm('¿Subir vídeo desde tu ordenador?\nFormatos: MP4, WebM, OGV\n\nOK = subir archivo  ·  Cancelar = pegar URL');
-  if (choice) {
-    uploadMediaFile('video/*,.mp4,.webm,.ogv,.mov', (url) => {
-      document.execCommand('insertHTML', false, insertVideoHtml(url));
-      editor.focus();
-    });
-  } else {
-    const url = prompt(<?= json_encode(__raw('prompt_video_url')) ?>);
-    if (url) document.execCommand('insertHTML', false, insertVideoHtml(url));
-    editor.focus();
-  }
-});
-
-// Raw HTML toggle
-document.getElementById('html-raw-toggle').addEventListener('click', () => {
-  rawHtml = !rawHtml;
-  if (rawHtml) {
-    htmlEditor.value = editor.innerHTML;
-    editor.style.display = 'none';
-    htmlEditor.style.display = '';
-    document.getElementById('html-raw-toggle').classList.add('active');
-  } else {
-    editor.innerHTML = htmlEditor.value;
-    htmlEditor.style.display = 'none';
-    editor.style.display = '';
-    document.getElementById('html-raw-toggle').classList.remove('active');
-  }
-});
-
-function updateToolbar() {
-  ['bold','italic','underline','strikeThrough'].forEach(cmd => {
-    const btn = document.querySelector(`.tb[data-cmd="${cmd}"]`);
-    if (btn) btn.classList.toggle('active', document.queryCommandState(cmd));
-  });
-}
-editor.addEventListener('keyup', updateToolbar);
-editor.addEventListener('mouseup', updateToolbar);
-
-editor.addEventListener('paste', e => {
-  e.preventDefault();
-  const html = e.clipboardData.getData('text/html');
-  const txt  = e.clipboardData.getData('text/plain');
-  let clean  = html || txt.replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br>');
-  clean = clean
-    .replace(/<script[^>]*>.*?<\/script>/gi, '')
-    .replace(/\s+style="[^"]*"/gi, '')
-    .replace(/\s+class="[^"]*"/gi, '')
-    // Convert divs to paragraphs on paste too
-    .replace(/<div><br\s*\/?><\/div>/gi, '')
-    .replace(/<div>/gi, '<p>')
-    .replace(/<\/div>/gi, '</p>');
-  document.execCommand('insertHTML', false, clean);
-});
-
-// ── Enter = new paragraph, Shift+Enter = <br> ────────────────────────────
-// Tell the browser to use <p> as the paragraph separator
-document.execCommand('defaultParagraphSeparator', false, 'p');
-
-editor.addEventListener('keydown', e => {
-  if (rawHtml || mode !== 'html') return;
-
-  if (e.key === 'Enter' && e.shiftKey) {
-    // Shift+Enter → soft line break
-    e.preventDefault();
-    document.execCommand('insertLineBreak');
-    return;
-  }
-
-  if (e.key === 'Enter' && !e.shiftKey) {
-    // Inside <pre>/<code> let browser handle it natively
-    const sel = window.getSelection();
-    if (sel && sel.rangeCount) {
-      const node  = sel.getRangeAt(0).startContainer;
-      const block = node.nodeType === 3 ? node.parentElement : node;
-      if (block && block.closest('pre, code')) return;
+// Helper function for basic HTML to Markdown conversion
+function htmlToMarkdown(element) {
+  let markdown = '';
+  
+  for (let node of element.childNodes) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      markdown += node.textContent;
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const tagName = node.tagName.toLowerCase();
+      const text = node.textContent;
+      
+      switch(tagName) {
+        case 'b':
+        case 'strong':
+          markdown += '**' + text + '**';
+          break;
+        case 'i':
+        case 'em':
+          markdown += '*' + text + '*';
+          break;
+        case 'u':
+          markdown += '__' + text + '__';
+          break;
+        case 's':
+        case 'del':
+          markdown += '~~' + text + '~~';
+          break;
+        case 'code':
+          if (node.parentNode.tagName === 'PRE') {
+            markdown += '```\n' + text + '\n```';
+          } else {
+            markdown += '`' + text + '`';
+          }
+          break;
+        case 'blockquote':
+          const lines = text.split('\n');
+          markdown += lines.map(line => '> ' + line).join('\n') + '\n\n';
+          break;
+        case 'h1':
+          markdown += '# ' + text + '\n\n';
+          break;
+        case 'h2':
+          markdown += '## ' + text + '\n\n';
+          break;
+        case 'h3':
+          markdown += '### ' + text + '\n\n';
+          break;
+        case 'ul':
+        case 'ol':
+          const lis = node.querySelectorAll('li');
+          lis.forEach((li, index) => {
+            if (tagName === 'ul') {
+              markdown += '- ' + li.textContent + '\n';
+            } else {
+              markdown += (index + 1) + '. ' + li.textContent + '\n';
+            }
+          });
+          markdown += '\n';
+          break;
+        case 'p':
+          markdown += text + '\n\n';
+          break;
+        default:
+          markdown += text;
+          break;
+      }
     }
-    // Everywhere else: browser uses <p> via defaultParagraphSeparator — no intervention needed
   }
-});
-
-// Clean divs to paragraphs on save
-function sanitizeDivsToParagraphs(html) {
-  return html
-    .replace(/<div>/gi, '<p>')
-    .replace(/<\/div>/gi, '</p>')
-    .replace(/<br\s*\/?>\s*<\/p>/gi, '</p>');
+  
+  return markdown.trim();
 }
 
-// Apply sanitization on submit
-document.getElementById('editor-form').addEventListener('submit', function() {
-  if (mode === 'html' && !rawHtml) {
-    const cleaned = sanitizeDivsToParagraphs(editor.innerHTML);
-    editor.innerHTML = cleaned;
+// ── HTML Editor Toolbar ──────────────────────────────────────────────────
+// Función para manejar el dropdown de formatos (HTML mode)
+function formatBlock(tag) {
+  const editor = document.getElementById('editor');
+  if (mode !== 'html' || !editor) return;
+  
+  editor.focus();
+  document.execCommand('formatBlock', false, tag);
+}
+
+function exec(cmd, val = null) {
+  if (mode !== 'html') return;
+  const editor = document.getElementById('editor');
+  editor.focus();
+  document.execCommand(cmd, false, val);
+}
+
+function insertLink() {
+  const url = prompt(<?= json_encode(__raw('prompt_link_url')) ?>);
+  if (url) {
+    const editor = document.getElementById('editor');
+    editor.focus();
+    document.execCommand('createLink', false, url);
   }
-}, true); // capture phase so it runs before the existing submit handler
+}
+
+function insertImage() {
+  const url = prompt('URL de la imagen:');
+  if (url) {
+    const editor = document.getElementById('editor');
+    editor.focus();
+    document.execCommand('insertHTML', false, `<img src="${url}" alt="" style="max-width:100%;">`);
+  }
+}
+
+function insertAudio() {
+  const url = prompt('URL del audio:');
+  if (url) {
+    const editor = document.getElementById('editor');
+    editor.focus();
+    document.execCommand('insertHTML', false, `<audio controls src="${url}" style="width:100%;"></audio>`);
+  }
+}
+
+function insertVideo() {
+  const url = prompt('URL del video:');
+  if (url) {
+    const editor = document.getElementById('editor');
+    editor.focus();
+    document.execCommand('insertHTML', false, `<video controls src="${url}" style="max-width:100%;"></video>`);
+  }
+}
+
+// Connect toolbar buttons
+function setupToolbarButtons() {
+  // Font size buttons
+  const fontSizeUp = document.getElementById('font-size-up');
+  if (fontSizeUp) {
+    fontSizeUp.addEventListener('click', e => {
+      e.preventDefault();
+      applyEditorFontSize(editorFontSize + 1);
+    });
+  }
+
+  const fontSizeDown = document.getElementById('font-size-down');
+  if (fontSizeDown) {
+    fontSizeDown.addEventListener('click', e => {
+      e.preventDefault();
+      applyEditorFontSize(editorFontSize - 1);
+    });
+  }
+
+  // Preview button
+  const previewBtn = document.getElementById('preview-btn');
+  if (previewBtn) {
+    previewBtn.addEventListener('click', e => {
+      e.preventDefault();
+      openPreview();
+    });
+  }
+
+  // Focus button
+  const focusBtn = document.getElementById('focus-btn');
+  if (focusBtn) {
+    focusBtn.addEventListener('click', e => {
+      e.preventDefault();
+      toggleFocus();
+    });
+  }
+}
+
+// Initialize toolbar buttons when the page loads
+document.addEventListener('DOMContentLoaded', function() {
+  setupToolbarButtons();
+  
+  // Also set up mode switchers
+  document.getElementById('switch-html').addEventListener('click', () => switchMode('html'));
+  document.getElementById('switch-md').addEventListener('click', () => switchMode('markdown'));
+  
+  // Update hidden textarea before form submission
+  document.getElementById('editor-form').addEventListener('submit', function() {
+    if (mode === 'html') {
+      document.getElementById('editor-hidden').value = document.getElementById('editor').innerHTML;
+    }
+  });
+});
 
 // ── Markdown toolbar ───────────────────────────────────────────────────────
 document.querySelectorAll('.md-btn').forEach(btn => {
@@ -1127,7 +1745,6 @@ document.querySelectorAll('.md-btn').forEach(btn => {
       insertAtCursor(ta, replacement, start, end);
     } else if (btn.dataset.md) {
       const prefix = btn.dataset.md;
-      // Insert at start of line
       const lineStart = ta.value.lastIndexOf('\n', start - 1) + 1;
       ta.focus();
       ta.setSelectionRange(lineStart, lineStart);
@@ -1150,6 +1767,45 @@ document.getElementById('md-img-btn').addEventListener('click', () => {
   insertAtCursor(mdEditor, `![${alt}](${url})`, mdEditor.selectionStart, mdEditor.selectionEnd);
 });
 
+// Función para manejar el dropdown de formatos (Markdown mode)
+document.getElementById('md-format-select')?.addEventListener('change', function() {
+  const value = this.value;
+  const ta = mdEditor;
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+  
+  let text = '';
+  switch(value) {
+    case 'p':
+      text = '';
+      break;
+    case 'h1':
+      text = '# ';
+      break;
+    case 'h2':
+      text = '## ';
+      break;
+    case 'h3':
+      text = '### ';
+      break;
+    case 'code':
+      text = '```\n\n```';
+      break;
+    case 'blockquote':
+      text = '> ';
+      break;
+  }
+  
+  if (text) {
+    ta.focus();
+    ta.setSelectionRange(start, end);
+    insertAtCursor(ta, text, start, end);
+  }
+  
+  // Reset al valor por defecto
+  this.value = 'p';
+});
+
 // Markdown preview toggle
 document.getElementById('md-preview-btn').addEventListener('click', () => {
   mdPreviewing = !mdPreviewing;
@@ -1168,7 +1824,6 @@ document.getElementById('md-preview-btn').addEventListener('click', () => {
 mdEditor.addEventListener('input', () => { if (mdPreviewing) updateMdPreview(); });
 
 function updateMdPreview() {
-  // Send to PHP for rendering via AJAX
   fetch('<?= base_url() ?>/admin/markdown_preview.php', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -1205,6 +1860,7 @@ document.getElementById('featured_image_input').addEventListener('input', functi
     preview.style.display = 'none';
   }
 });
+
 // ── Tag/Category chip input ───────────────────────────────────────────────
 function initTagInput(inputId, chipsId, hiddenId, suggestionsId) {
   const input    = document.getElementById(inputId);
@@ -1213,7 +1869,6 @@ function initTagInput(inputId, chipsId, hiddenId, suggestionsId) {
   const sugArea  = document.getElementById(suggestionsId);
   if (!input) return;
 
-  // Init from existing value
   let values = hidden.value.split(',').map(v => v.trim()).filter(Boolean);
   values.forEach(v => addChip(v));
 
@@ -1230,7 +1885,6 @@ function initTagInput(inputId, chipsId, hiddenId, suggestionsId) {
       values = values.filter(v => v !== val);
       chip.remove();
       updateHidden();
-      // Re-enable suggestion
       if (sugArea) {
         sugArea.querySelectorAll('.tag-sug').forEach(s => {
           if (s.textContent.trim() === val) s.classList.remove('used');
@@ -1239,7 +1893,6 @@ function initTagInput(inputId, chipsId, hiddenId, suggestionsId) {
     });
     chips.appendChild(chip);
 
-    // Mark suggestion as used
     if (sugArea) {
       sugArea.querySelectorAll('.tag-sug').forEach(s => {
         if (s.textContent.trim() === val) s.classList.add('used');
@@ -1270,14 +1923,11 @@ function initTagInput(inputId, chipsId, hiddenId, suggestionsId) {
     if (input.value.trim()) { addChip(input.value); input.value = ''; }
   });
 
-  // Click on wrap focuses input
   document.getElementById(chipsId.replace('-chips','-wrap'))
     ?.addEventListener('click', () => input.focus());
 
-  // Suggestion clicks
   if (sugArea) {
     sugArea.querySelectorAll('.tag-sug').forEach(sug => {
-      // Mark already-used suggestions
       if (values.includes(sug.textContent.trim())) sug.classList.add('used');
       sug.addEventListener('click', () => {
         addChip(sug.textContent.trim());
@@ -1288,7 +1938,8 @@ function initTagInput(inputId, chipsId, hiddenId, suggestionsId) {
 }
 
 initTagInput('cat-input', 'cat-chips', 'cat-hidden', 'cat-suggestions');
-// ── Tags: autocomplete-only (no static suggestion list) ──────────────────
+
+// ── Tags autocomplete ─────────────────────────────────────────────────────
 (function() {
   const input      = document.getElementById('tag-input');
   const chips      = document.getElementById('tag-chips');
@@ -1298,7 +1949,6 @@ initTagInput('cat-input', 'cat-chips', 'cat-hidden', 'cat-suggestions');
   const dataEl     = document.getElementById('all-tags-data');
   if (!input) return;
 
-  // Build tag list from hidden data element
   const allTags = dataEl
     ? Array.from(dataEl.querySelectorAll('span')).map(s => s.textContent)
     : [];
@@ -1306,7 +1956,6 @@ initTagInput('cat-input', 'cat-chips', 'cat-hidden', 'cat-suggestions');
   let values = hidden.value.split(',').map(v => v.trim()).filter(Boolean);
   let focusedIdx = -1;
 
-  // Init chips from existing value
   values.forEach(v => addChip(v, false));
 
   function addChip(val, updateList = true) {
@@ -1441,268 +2090,6 @@ if (featUpload) {
   });
 }
 
-// ── Mobile overflow menu ─────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', function() {
-  var moreBtn = document.getElementById('tb-more-btn');
-  var menu    = document.getElementById('tb-overflow-menu');
-  if (!moreBtn || !menu) { console.warn('BrisaCMS: overflow menu elements not found'); return; }
-
-  function toggleMenu(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    var isOpen = menu.classList.toggle('open');
-    moreBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-  }
-
-  moreBtn.addEventListener('click',     toggleMenu);
-  moreBtn.addEventListener('touchend',  toggleMenu, { passive: false });
-
-  document.addEventListener('click', function(e) {
-    if (!menu.contains(e.target) && e.target !== moreBtn) {
-      menu.classList.remove('open');
-    }
-  });
-
-  function closeMenu() { menu.classList.remove('open'); }
-
-  // Helper: exec on editor
-  function exec(cmd, val) {
-    document.execCommand(cmd, false, val || null);
-    editor.focus();
-  }
-
-  // ── Primary bar buttons ─────────────────────────────────────────────
-  function wireBtn(id, fn) {
-    var el = document.getElementById(id);
-    if (!el) return;
-    ['mousedown', 'touchend'].forEach(function(evt) {
-      el.addEventListener(evt, function(e) { e.preventDefault(); fn(); }, { passive: false });
-    });
-  }
-
-  wireBtn('mb-bold',   function() { exec('bold'); });
-  wireBtn('mb-italic', function() { exec('italic'); });
-  wireBtn('mb-h2',     function() { exec('formatBlock', 'h2'); });
-  wireBtn('mb-h3',     function() { exec('formatBlock', 'h3'); });
-  wireBtn('mb-ul',     function() { exec('insertUnorderedList'); });
-  wireBtn('mb-link',   function() { var u = prompt(<?= json_encode(__raw('prompt_link_url')) ?>); if(u) exec('createLink', u); });
-  wireBtn('mb-img',    function() { var btn = document.getElementById('img-btn'); if(btn) btn.dispatchEvent(new MouseEvent('mousedown')); });
-
-  // ── Overflow menu buttons ───────────────────────────────────────────
-  function wireItem(id, fn) {
-    var el = document.getElementById(id);
-    if (!el) return;
-    ['mousedown', 'touchend'].forEach(function(evt) {
-      el.addEventListener(evt, function(e) { e.preventDefault(); fn(); closeMenu(); }, { passive: false });
-    });
-  }
-
-  wireItem('mb-strike',      function() { exec('strikeThrough'); });
-  wireItem('mb-quote',       function() { exec('formatBlock', 'blockquote'); });
-  wireItem('mb-code',        function() { exec('formatBlock', 'pre'); });
-  wireItem('mb-ol',          function() { exec('insertOrderedList'); });
-  wireItem('mb-hr',          function() { exec('insertHorizontalRule'); });
-  wireItem('mb-undo',        function() { exec('undo'); });
-  wireItem('mb-redo',        function() { exec('redo'); });
-  wireItem('mb-audio',       function() { var b = document.getElementById('audio-btn'); if(b) b.dispatchEvent(new MouseEvent('mousedown')); });
-  wireItem('mb-video',       function() { var b = document.getElementById('video-btn'); if(b) b.dispatchEvent(new MouseEvent('mousedown')); });
-  wireItem('mb-raw-html',    function() { var b = document.getElementById('html-raw-toggle'); if(b) b.click(); });
-  wireItem('mb-switch-html', function() { switchMode('html'); });
-  wireItem('mb-switch-md',   function() { switchMode('markdown'); });
-  wireItem('mb-font-up',     function() { applyEditorFontSize(editorFontSize + 1); var m = document.getElementById('mb-font-label'); if(m) m.textContent = editorFontSize; });
-  wireItem('mb-font-down',   function() { applyEditorFontSize(editorFontSize - 1); var m = document.getElementById('mb-font-label'); if(m) m.textContent = editorFontSize; });
-  wireItem('mb-float',       function() { var b = document.getElementById('float-toolbar-btn'); if(b) b.click(); });
-  wireItem('mb-preview',     function() { var b = document.getElementById('preview-btn'); if(b) b.click(); });
-  wireItem('mb-focus',       function() { var b = document.getElementById('focus-btn'); if(b) b.click(); });
-
-  // Sync mobile font label with desktop
-  ['font-size-up','font-size-down'].forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el) el.addEventListener('click', function() {
-      setTimeout(function() { var m = document.getElementById('mb-font-label'); if(m) m.textContent = editorFontSize; }, 10);
-    });
-  });
-});
-
-
-// ── Mobile overflow menu ─────────────────────────────────────────────────
-(function() {
-  const moreBtn = document.getElementById('tb-more-btn');
-  const menu    = document.getElementById('tb-overflow-menu');
-  if (!moreBtn || !menu) return;
-
-  moreBtn.addEventListener('click', e => {
-    e.stopPropagation();
-    const open = menu.classList.toggle('open');
-    moreBtn.setAttribute('aria-expanded', open);
-  });
-  document.addEventListener('click', e => {
-    if (!menu.contains(e.target) && e.target !== moreBtn) {
-      menu.classList.remove('open');
-    }
-  });
-  // Close after action
-  menu.addEventListener('click', e => {
-    if (e.target.closest('.tb-item')) setTimeout(() => menu.classList.remove('open'), 100);
-  });
-
-  // Helper: exec on editor
-  function exec(cmd, val) {
-    document.execCommand(cmd, false, val || null);
-    editor.focus();
-  }
-  function closeMenu() { menu.classList.remove('open'); }
-
-  // ── Primary bar buttons ───────────────────────────────────────────────
-  const pb = {
-    'mb-bold':   () => exec('bold'),
-    'mb-italic': () => exec('italic'),
-    'mb-h2':     () => exec('formatBlock', 'h2'),
-    'mb-h3':     () => exec('formatBlock', 'h3'),
-    'mb-ul':     () => exec('insertUnorderedList'),
-    'mb-link':   () => { const u = prompt(<?= json_encode(__raw('prompt_link_url')) ?>); if(u) exec('createLink', u); },
-    'mb-img':    () => document.getElementById('img-btn')?.dispatchEvent(new MouseEvent('mousedown')),
-  };
-  Object.entries(pb).forEach(([id, fn]) => {
-    document.getElementById(id)?.addEventListener('mousedown', e => { e.preventDefault(); fn(); });
-  });
-
-  // ── Overflow menu buttons ─────────────────────────────────────────────
-  const ob = {
-    'mb-strike':   () => exec('strikeThrough'),
-    'mb-quote':    () => exec('formatBlock', 'blockquote'),
-    'mb-code':     () => exec('formatBlock', 'pre'),
-    'mb-ol':       () => exec('insertOrderedList'),
-    'mb-hr':       () => exec('insertHorizontalRule'),
-    'mb-undo':     () => exec('undo'),
-    'mb-redo':     () => exec('redo'),
-    'mb-audio':    () => document.getElementById('audio-btn')?.dispatchEvent(new MouseEvent('mousedown')),
-    'mb-video':    () => document.getElementById('video-btn')?.dispatchEvent(new MouseEvent('mousedown')),
-    'mb-raw-html': () => document.getElementById('html-raw-toggle')?.click(),
-    'mb-switch-html': () => switchMode('html'),
-    'mb-switch-md':   () => switchMode('markdown'),
-    'mb-font-up':   () => { applyEditorFontSize(editorFontSize + 1); document.getElementById('mb-font-label').textContent = editorFontSize; },
-    'mb-font-down': () => { applyEditorFontSize(editorFontSize - 1); document.getElementById('mb-font-label').textContent = editorFontSize; },
-    'mb-float':   () => document.getElementById('float-toolbar-btn')?.click(),
-    'mb-preview': () => document.getElementById('preview-btn')?.click(),
-    'mb-focus':   () => document.getElementById('focus-btn')?.click(),
-  };
-  Object.entries(ob).forEach(([id, fn]) => {
-    document.getElementById(id)?.addEventListener('mousedown', e => { e.preventDefault(); fn(); closeMenu(); });
-  });
-
-  // Sync mobile font label with desktop
-  const origApply = window.applyEditorFontSize;
-  // Patch via input event on desktop buttons
-  document.getElementById('font-size-up')?.addEventListener('click', () => {
-    setTimeout(() => { const m = document.getElementById('mb-font-label'); if(m) m.textContent = editorFontSize; }, 10);
-  });
-  document.getElementById('font-size-down')?.addEventListener('click', () => {
-    setTimeout(() => { const m = document.getElementById('mb-font-label'); if(m) m.textContent = editorFontSize; }, 10);
-  });
-})();
-
-
-// ── Floating toolbar ──────────────────────────────────────────────────────
-const floatToolbar    = document.getElementById('float-toolbar');
-const floatToolbarBtn = document.getElementById('float-toolbar-btn');
-let floatEnabled = localStorage.getItem('brisa_float_toolbar') !== '0';
-
-function updateFloatBtn() {
-  if (floatToolbarBtn) {
-    floatToolbarBtn.classList.toggle('active', floatEnabled);
-    floatToolbarBtn.title = floatEnabled
-      ? 'Toolbar flotante: ON (clic para desactivar)'
-      : 'Toolbar flotante: OFF (clic para activar)';
-  }
-}
-updateFloatBtn();
-
-floatToolbarBtn?.addEventListener('click', () => {
-  floatEnabled = !floatEnabled;
-  localStorage.setItem('brisa_float_toolbar', floatEnabled ? '1' : '0');
-  if (!floatEnabled) floatToolbar.style.display = 'none';
-  updateFloatBtn();
-});
-
-// Show float toolbar on text selection inside WYSIWYG editor
-let floatHideTimer;
-document.addEventListener('mouseup', () => {
-  clearTimeout(floatHideTimer);
-  if (!floatEnabled || mode !== 'html' || rawHtml) {
-    floatToolbar.style.display = 'none';
-    return;
-  }
-  requestAnimationFrame(() => {
-    const sel = window.getSelection();
-    if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
-      floatToolbar.style.display = 'none';
-      return;
-    }
-    // Only show if selection is inside our editor
-    const range = sel.getRangeAt(0);
-    if (!editor.contains(range.commonAncestorContainer)) {
-      floatToolbar.style.display = 'none';
-      return;
-    }
-    // Position above the selection
-    const rect = range.getBoundingClientRect();
-    const tbW  = 240;
-    let left   = rect.left + rect.width / 2 - tbW / 2;
-    let top    = rect.top + window.scrollY - 46;
-    // Keep on screen
-    left = Math.max(8, Math.min(left, window.innerWidth - tbW - 8));
-    if (top < window.scrollY + 8) top = rect.bottom + window.scrollY + 8;
-
-    floatToolbar.style.display = 'flex';
-    floatToolbar.style.left    = left + 'px';
-    floatToolbar.style.top     = top  + 'px';
-    floatToolbar.style.width   = tbW  + 'px';
-  });
-});
-
-// Hide on click outside selection
-document.addEventListener('mousedown', (e) => {
-  if (!floatToolbar.contains(e.target)) {
-    floatHideTimer = setTimeout(() => {
-      const sel = window.getSelection();
-      if (!sel || sel.isCollapsed) floatToolbar.style.display = 'none';
-    }, 150);
-  }
-});
-
-// Floating toolbar button actions
-floatToolbar?.querySelectorAll('.ftb[data-cmd]').forEach(btn => {
-  btn.addEventListener('mousedown', e => {
-    e.preventDefault();
-    document.execCommand(btn.dataset.cmd, false, btn.dataset.val || null);
-    editor.focus();
-  });
-});
-
-document.getElementById('ft-link')?.addEventListener('mousedown', e => {
-  e.preventDefault();
-  const url = prompt(<?= json_encode(__raw('prompt_link_url')) ?>);
-  if (url) document.execCommand('createLink', false, url);
-  editor.focus();
-  floatToolbar.style.display = 'none';
-});
-
-// Hide float toolbar on scroll
-document.addEventListener('scroll', () => {
-  floatToolbar.style.display = 'none';
-}, { passive: true });
-
-// Also show on keyboard selection (Shift+arrows)
-editor?.addEventListener('keyup', e => {
-  if (e.shiftKey) {
-    // Trigger the same mouseup logic
-    document.dispatchEvent(new MouseEvent('mouseup'));
-  } else {
-    floatToolbar.style.display = 'none';
-  }
-});
-
 // ── Editor font size ──────────────────────────────────────────────────────
 const FONT_SIZE_KEY = 'brisa_editor_font_size';
 const FONT_MIN = 12, FONT_MAX = 28, FONT_STEP = 1;
@@ -1712,7 +2099,6 @@ function applyEditorFontSize(size) {
   editorFontSize = Math.min(FONT_MAX, Math.max(FONT_MIN, size));
   const targets = [
     document.getElementById('editor'),
-    document.getElementById('html-editor'),
     document.getElementById('md-editor'),
   ];
   targets.forEach(el => { if (el) el.style.fontSize = editorFontSize + 'px'; });
@@ -1721,12 +2107,10 @@ function applyEditorFontSize(size) {
   localStorage.setItem(FONT_SIZE_KEY, editorFontSize);
 }
 
-// Apply saved size on load
 applyEditorFontSize(editorFontSize);
 
 document.getElementById('font-size-up')?.addEventListener('click', () => applyEditorFontSize(editorFontSize + FONT_STEP));
 document.getElementById('font-size-down')?.addEventListener('click', () => applyEditorFontSize(editorFontSize - FONT_STEP));
-
 
 // ── Article Preview ───────────────────────────────────────────────────────
 const previewBtn   = document.getElementById('preview-btn');
@@ -1739,8 +2123,6 @@ previewBtn?.addEventListener('click', openPreview);
 function openPreview() {
   const adminBase = siteBase + '/admin';
 
-  // If article has a slug (saved at least once), use the server-side preview
-  // which works for both drafts and published articles
   if (postSlug) {
     const url = adminBase + '/preview.php?type=' + encodeURIComponent(postType)
               + '&slug=' + encodeURIComponent(postSlug)
@@ -1749,18 +2131,14 @@ function openPreview() {
     return;
   }
 
-  // No slug yet (brand new, never saved): build a local HTML preview
-  // and open it in a new tab via a blob URL
   let content = '';
   if (mode === 'markdown') {
     content = '<p style="color:#888;font-style:italic">Contenido Markdown — guarda primero para ver la vista previa completa con el tema activo.</p>'
             + '<pre style="background:#1a1a24;color:#a8e6cf;padding:1rem;border-radius:6px;font-size:0.875rem;line-height:1.6;overflow-x:auto;margin-top:1rem">'
             + (mdEditor.value || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
             + '</pre>';
-  } else if (rawHtml) {
-    content = htmlEditor.value;
   } else {
-    content = editor.innerHTML;
+    content = document.getElementById('editor').innerHTML;
   }
 
   const title   = document.getElementById('post-title').value || '(Sin título)';
@@ -1811,7 +2189,6 @@ h1{font-family:'Roboto Condensed',sans-serif;font-size:clamp(1.5rem,4vw,2.2rem);
   const blob = new Blob([html], { type: 'text/html' });
   const url  = URL.createObjectURL(blob);
   const tab  = window.open(url, '_blank');
-  // Revoke the blob URL once the new tab has loaded it
   if (tab) {
     tab.addEventListener('load', () => URL.revokeObjectURL(url), { once: true });
   } else {
@@ -1819,21 +2196,539 @@ h1{font-family:'Roboto Condensed',sans-serif;font-size:clamp(1.5rem,4vw,2.2rem);
   }
 }
 
+// ── More toolbar dropdown ────────────────────────────────────────────────
+function setupMoreDropdown() {
+  const moreBtn = document.getElementById('more-tb-btn');
+  const dropdown = document.getElementById('more-tb-dropdown');
+  const content = document.getElementById('more-tb-content');
+  if (!moreBtn || !dropdown) return;
+  dropdown.style.display = 'none';
 
-// ── Focus / distraction-free mode ────────────────────────────────────────
+  function populateDropdown() {
+    content.innerHTML = '';
+    const sourceToolbar = mode === 'html' ? document.getElementById('html-toolbar') : document.getElementById('md-toolbar');
+    if (!sourceToolbar) return;
+    // Clone buttons except mode switchers and more button
+    const btns = sourceToolbar.querySelectorAll('.tb:not(.mode-switch):not(#more-tb-btn)');
+    btns.forEach(btn => {
+      const clone = btn.cloneNode(true);
+      // ensure click works
+      clone.addEventListener('click', (e) => {
+        e.preventDefault();
+        btn.click();
+        dropdown.style.display = 'none';
+      });
+      content.appendChild(clone);
+    });
+  }
+
+  window.toggleMoreDropdown = function() {
+    populateDropdown();
+    const isVisible = dropdown.style.display === 'flex';
+    dropdown.style.display = isVisible ? 'none' : 'flex';
+  };
+
+  moreBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    window.toggleMoreDropdown();
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!moreBtn.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.style.display = 'none';
+    }
+  });
+}
+
+// ── Image upload (button & drag‑and‑drop) ────────────────────────────────
+function setupImageUpload() {
+  const fileInput = document.getElementById('editor-image-upload');
+  const uploadHtmlBtn = document.getElementById('upload-img-html');
+  const uploadMdBtn = document.getElementById('upload-img-md');
+
+  function triggerFileInput() {
+    if (fileInput) fileInput.click();
+  }
+
+  if (uploadHtmlBtn) uploadHtmlBtn.addEventListener('click', triggerFileInput);
+  if (uploadMdBtn) uploadMdBtn.addEventListener('click', triggerFileInput);
+
+  async function uploadImage(file) {
+    const fd = new FormData();
+    fd.append('upload', file);
+    fd.append('csrf', <?= json_encode(generate_csrf()) ?>);
+    try {
+      const res = await fetch(<?= json_encode(base_url() . '/admin/upload_media.php') ?>, {
+        method: 'POST',
+        body: fd
+      });
+      const data = await res.json();
+      return data.url || null;
+    } catch (e) {
+      console.error('Upload error:', e);
+      return null;
+    }
+  }
+
+  async function insertImageUrl(url, alt = '') {
+    if (mode === 'html') {
+      const editor = document.getElementById('editor');
+      editor.focus();
+      document.execCommand('insertHTML', false, `<img src="${url}" alt="${alt}" style="max-width:100%;">`);
+    } else {
+      const ta = mdEditor;
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      const md = `![${alt}](${url})`;
+      ta.value = ta.value.substring(0, start) + md + ta.value.substring(end);
+      ta.setSelectionRange(start + md.length, start + md.length);
+      ta.focus();
+      if (mdPreviewing) updateMdPreview();
+    }
+  }
+
+  fileInput.addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files);
+    for (const file of files) {
+      const url = await uploadImage(file);
+      if (url) {
+        await insertImageUrl(url, file.name.replace(/\.[^/.]+$/, ''));
+      }
+    }
+    fileInput.value = '';
+  });
+
+  // Drag & drop
+  const dropZones = [document.getElementById('editor'), mdEditor];
+  dropZones.forEach(zone => {
+    if (!zone) return;
+    zone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    });
+    zone.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+      for (const file of files) {
+        const url = await uploadImage(file);
+        if (url) {
+          await insertImageUrl(url, file.name.replace(/\.[^/.]+$/, ''));
+        }
+      }
+    });
+  });
+}
+
+// ── Mobile Dropdown Menu ──────────────────────────────────────────────────
+function setupMobileDropdown() {
+  const htmlDropdownBtn = document.getElementById('mobile-dropdown-btn');
+  const htmlDropdownMenu = document.getElementById('mobile-dropdown-menu');
+  const htmlDropdownContent = document.getElementById('mobile-dropdown-content');
+  
+  const mdDropdownBtn = document.getElementById('mobile-dropdown-btn-md');
+  const mdDropdownMenu = document.getElementById('mobile-dropdown-menu-md');
+  const mdDropdownContent = document.getElementById('mobile-dropdown-content-md');
+  
+  function setupDropdown(dropdownBtn, dropdownMenu, dropdownContent, isMarkdown = false) {
+    if (!dropdownBtn || !dropdownMenu) return;
+    
+    dropdownMenu.style.display = 'none';
+    
+    function populateDropdown() {
+      dropdownContent.innerHTML = '';
+      const sourceSelector = isMarkdown ? '.mobile-hidden-tools' : '.mobile-hidden-tools';
+      const sourceToolbar = dropdownBtn.closest(isMarkdown ? '#md-toolbar' : '#html-toolbar');
+      if (!sourceToolbar) return;
+      
+      const hiddenTools = sourceToolbar.querySelector(sourceSelector);
+      if (!hiddenTools) return;
+      
+      // Clone all buttons from the hidden tools section
+      const btns = hiddenTools.querySelectorAll('.tb');
+      btns.forEach(btn => {
+        const clone = btn.cloneNode(true);
+        // Remove any existing event listeners and add new ones
+        const newClone = clone.cloneNode(true);
+        newClone.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          btn.click();
+          dropdownMenu.style.display = 'none';
+        });
+        dropdownContent.appendChild(newClone);
+      });
+      
+      // Also clone separators if any
+      const separators = hiddenTools.querySelectorAll('.toolbar-sep');
+      separators.forEach(sep => {
+        const clone = sep.cloneNode(true);
+        clone.style.margin = '4px 2px';
+        dropdownContent.appendChild(clone);
+      });
+    }
+    
+    dropdownBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Check if we're on mobile (≤480px)
+      if (window.innerWidth > 480) {
+        return; // Don't show dropdown on desktop/tablet
+      }
+      
+      populateDropdown();
+      
+      // Position the dropdown - fixed positioning for Safari compatibility
+      const rect = dropdownBtn.getBoundingClientRect();
+      dropdownMenu.style.position = 'fixed';
+      dropdownMenu.style.top = (rect.bottom + window.scrollY) + 'px';
+      dropdownMenu.style.left = Math.max(10, rect.left) + 'px';
+      dropdownMenu.style.right = 'auto';
+      dropdownMenu.style.maxWidth = (window.innerWidth - 20) + 'px';
+      
+      const isVisible = dropdownMenu.style.display === 'flex';
+      dropdownMenu.style.display = isVisible ? 'none' : 'flex';
+      
+      // Force reflow for Safari
+      dropdownMenu.offsetHeight;
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!dropdownBtn.contains(e.target) && !dropdownMenu.contains(e.target)) {
+        dropdownMenu.style.display = 'none';
+      }
+    });
+    
+    // Close on escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && dropdownMenu.style.display === 'flex') {
+        dropdownMenu.style.display = 'none';
+      }
+    });
+    
+    // Close dropdown on window resize
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 480) {
+        dropdownMenu.style.display = 'none';
+      }
+    });
+  }
+  
+  // Setup HTML toolbar dropdown
+  setupDropdown(htmlDropdownBtn, htmlDropdownMenu, htmlDropdownContent, false);
+  
+  // Setup Markdown toolbar dropdown
+  setupDropdown(mdDropdownBtn, mdDropdownMenu, mdDropdownContent, true);
+}
+
+// ── Mobile toolbar helpers ────────────────────────────────────────────────
+window.execMobile = function(cmd, val) {
+  if (mode !== 'html') return;
+  exec(cmd, val);
+};
+window.execMobileLink = function() {
+  if (mode !== 'html') return;
+  insertLink();
+};
+window.execMobileImg = function() {
+  if (mode !== 'html') return;
+  insertImage();
+};
+window.execMobileAudio = function() {
+  if (mode !== 'html') return;
+  insertAudio();
+};
+window.execMobileVideo = function() {
+  if (mode !== 'html') return;
+  insertVideo();
+};
+
+// Mobile menu toggle for toolbar overflow
+function setupMobileMenu() {
+  const moreBtn = document.getElementById('tb-more-btn');
+  const overflowMenu = document.getElementById('tb-overflow-menu');
+  
+  if (!moreBtn || !overflowMenu) return;
+  
+  // Initially hide the menu
+  overflowMenu.style.display = 'none';
+  
+  moreBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    if (overflowMenu.style.display === 'flex') {
+      overflowMenu.style.display = 'none';
+    } else {
+      overflowMenu.style.display = 'flex';
+      // Position the menu
+      const rect = moreBtn.getBoundingClientRect();
+      overflowMenu.style.position = 'fixed';
+      overflowMenu.style.top = rect.bottom + 'px';
+      overflowMenu.style.right = (window.innerWidth - rect.right) + 'px';
+      
+      // Close on click outside
+      setTimeout(() => {
+        const clickOutside = (event) => {
+          if (!moreBtn.contains(event.target) && !overflowMenu.contains(event.target)) {
+            overflowMenu.style.display = 'none';
+            document.removeEventListener('click', clickOutside);
+          }
+        };
+        document.addEventListener('click', clickOutside);
+      }, 10);
+    }
+  });
+  
+  // Close on escape
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && overflowMenu.style.display === 'flex') {
+      overflowMenu.style.display = 'none';
+    }
+  });
+}
+
+// Initialize mobile menu
+document.addEventListener('DOMContentLoaded', function() {
+  setupMobileDropdown();
+  setupMobileMenu();
+  setupMoreDropdown();
+  setupImageUpload();
+  
+  // Hide mobile dropdown on resize to desktop
+  window.addEventListener('resize', function() {
+    if (window.innerWidth > 480) {
+      const dropdowns = document.querySelectorAll('.mobile-dropdown-menu');
+      dropdowns.forEach(dropdown => {
+        dropdown.style.display = 'none';
+      });
+    }
+  });
+});
+
+// ── Focus mode ────────────────────────────────────────────────────────────
+window.toggleFocus = function() {
+  document.body.classList.toggle('focus-mode');
+  const active = document.body.classList.contains('focus-mode');
+  const focusBtn = document.getElementById('focus-btn');
+  if (focusBtn) {
+    focusBtn.setAttribute('title', active ? 'Salir del modo sin distracciones (Esc)' : 'Modo sin distracciones (F11)');
+  }
+};
+
 const focusBtn = document.getElementById('focus-btn');
-focusBtn?.addEventListener('click', toggleFocus);
+if (focusBtn) {
+  focusBtn.addEventListener('click', toggleFocus);
+}
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && document.body.classList.contains('focus-mode')) toggleFocus();
   if (e.key === 'F11' && !e.altKey) { e.preventDefault(); toggleFocus(); }
 });
-function toggleFocus() {
-  document.body.classList.toggle('focus-mode');
-  const active = document.body.classList.contains('focus-mode');
-  focusBtn?.setAttribute('title', active ? 'Salir del modo sin distracciones (Esc)' : 'Modo sin distracciones (F11)');
-}
 
 </script>
 <!-- focus hint -->
-<div class="focus-exit-hint"><?= __("focus_exit_hint") ?></div>
+<div class="focus-exit-hint">
+  <button onclick="window.toggleFocus && window.toggleFocus()" class="focus-exit-btn"><?= __("focus_exit_hint") ?> (Salir)</button>
+</div>
+
+<!-- Floating buttons for mobile -->
+<div id="floating-buttons-container" class="floating-buttons-container">
+    <button id="floating-draft-btn" class="floating-draft-btn" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        <span><?= __("editor_save_draft") ?></span>
+    </button>
+    <button id="floating-focus-btn" class="floating-focus-btn" type="button" title="Modo sin distracción">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+        <span>Focus</span>
+    </button>
+    <button id="floating-preview-btn" class="floating-preview-btn" type="button" title="Vista previa">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span>Preview</span>
+    </button>
+    <button id="floating-publish-btn" class="floating-publish-btn" type="button">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span id="floating-publish-label"><?= $post && $post['status'] === 'published' ? __("editor_update") : __("editor_publish") ?></span>
+    </button>
+</div>
+
+<script>
+// Floating buttons logic for mobile
+(function() {
+    const floatingContainer = document.getElementById('floating-buttons-container');
+    const floatingDraftBtn  = document.getElementById('floating-draft-btn');
+    const floatingFocusBtn  = document.getElementById('floating-focus-btn');
+    const floatingPreviewBtn= document.getElementById('floating-preview-btn');
+    const floatingPublishBtn= document.getElementById('floating-publish-btn');
+    const publishBtn        = document.getElementById('publish-btn');
+    const statusSelect      = document.getElementById('status-select');
+    const form              = document.getElementById('editor-form');
+
+    if (!floatingContainer || !floatingPublishBtn || !floatingDraftBtn) return;
+
+    function updateFloatingLabel() {
+        const isPublished = statusSelect ? statusSelect.value === 'published' : false;
+        const label = isPublished ? '<?= __raw("editor_update") ?>' : '<?= __raw("editor_publish") ?>';
+        document.getElementById('floating-publish-label').textContent = label;
+    }
+
+    floatingDraftBtn.addEventListener('click', function() {
+        if (statusSelect && statusSelect.value !== 'draft') {
+            statusSelect.value = 'draft';
+        }
+        const hiddenStatus = document.createElement('input');
+        hiddenStatus.type = 'hidden';
+        hiddenStatus.name = 'status';
+        hiddenStatus.value = 'draft';
+        form.appendChild(hiddenStatus);
+        form.submit();
+    });
+
+    floatingFocusBtn.addEventListener('click', function() {
+        if (typeof window.toggleFocus === 'function') {
+            window.toggleFocus();
+        }
+    });
+
+    floatingPreviewBtn.addEventListener('click', function() {
+        if (typeof window.openPreview === 'function') {
+            window.openPreview();
+        }
+    });
+
+    floatingPublishBtn.addEventListener('click', function() {
+        if (statusSelect && statusSelect.value !== 'published') {
+            statusSelect.value = 'published';
+        }
+        const hiddenStatus = document.createElement('input');
+        hiddenStatus.type = 'hidden';
+        hiddenStatus.name = 'status';
+        hiddenStatus.value = 'published';
+        form.appendChild(hiddenStatus);
+        form.submit();
+    });
+
+    if (statusSelect) {
+        statusSelect.addEventListener('change', updateFloatingLabel);
+    }
+    updateFloatingLabel();
+
+    function checkMobile() {
+        const isMobile = window.innerWidth <= 768;
+        if (isMobile) {
+            publishBtn.style.display = 'none';
+            floatingContainer.style.display = 'flex';
+        } else {
+            publishBtn.style.display = '';
+            floatingContainer.style.display = 'none';
+        }
+    }
+
+    window.addEventListener('resize', checkMobile);
+    checkMobile();
+})();
+</script>
+
+<style>
+.floating-buttons-container {
+    display: none;
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--surface);
+    border-radius: 50px;
+    padding: 6px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+}
+.floating-draft-btn,
+.floating-focus-btn,
+.floating-preview-btn,
+.floating-publish-btn {
+    border: none;
+    border-radius: 50px;
+    padding: 14px 22px;
+    font-size: 1rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+    white-space: nowrap;
+    min-height: 52px;
+}
+.floating-draft-btn,
+.floating-focus-btn,
+.floating-preview-btn {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border2);
+}
+.floating-draft-btn:hover,
+.floating-focus-btn:hover,
+.floating-preview-btn:hover {
+    background: var(--border);
+}
+.floating-draft-btn:active,
+.floating-focus-btn:active,
+.floating-preview-btn:active {
+    transform: scale(0.98);
+}
+.floating-publish-btn {
+    background: var(--accent);
+    color: #fff;
+}
+.floating-publish-btn:hover {
+    opacity: 0.9;
+    transform: scale(1.05);
+}
+.floating-publish-btn:active {
+    transform: scale(0.98);
+}
+.floating-focus-btn,
+.floating-preview-btn {
+    gap: 0;
+}
+.floating-focus-btn span,
+.floating-preview-btn span {
+    display: none;
+}
+@media (max-width: 768px) {
+    #publish-btn,
+    button[name="status"][value="draft"] {
+        display: none !important;
+    }
+    .floating-buttons-container {
+        display: flex;
+    }
+    @media (max-width: 480px) {
+        .floating-buttons-container {
+            gap: 8px;
+            padding: 5px;
+        }
+        .floating-draft-btn,
+        .floating-focus-btn,
+        .floating-preview-btn,
+        .floating-publish-btn {
+            padding: 12px 16px;
+            font-size: 0.95rem;
+            min-height: 48px;
+        }
+        .floating-draft-btn svg,
+        .floating-focus-btn svg,
+        .floating-preview-btn svg,
+        .floating-publish-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+    }
+}
+</style>
 </body></html>

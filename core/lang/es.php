@@ -241,4 +241,13 @@ return [
     'install_done_title'=> '¡Instalación completa!',
     'install_done_text' => 'Tu sitio está listo. Ve al panel de administración para empezar a publicar.',
     'install_go_admin'  => 'Ir al panel de administración →',
+
+    // ── Admin panel color scheme ──────────────────────────────────────────
+    'field_admin_scheme'      => 'Esquema de color del panel',
+    'field_admin_scheme_hint' => 'Esquema de color para la interfaz del panel de administración.',
+    'scheme_dark'             => 'Oscuro',
+    'scheme_midnight'         => 'Medianoche',
+    'scheme_slate'            => 'Pizarra',
+    'scheme_warm'             => 'Cálido',
+    'scheme_light'            => 'Claro',
 ];

@@ -28,6 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'appearance') {
             $config['theme'] = sanitize_filename($_POST['theme'] ?? 'default');
             $config['theme_color'] = preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['theme_color'] ?? '') ? $_POST['theme_color'] : '#6366f1';
+            $config['admin_scheme'] = in_array($_POST['admin_scheme'] ?? '', ['dark','midnight','slate','warm','light']) ? $_POST['admin_scheme'] : 'dark';
             cms_save_config($config);
             $msg = 'Appearance saved!';
         }
@@ -127,6 +128,29 @@ admin_header(__("settings_title"), 'settings');
               </select>
               <div style="margin-top:0.5rem;font-size:0.78rem;color:var(--muted)">
                 To add themes, create a folder in <code style="background:var(--bg);padding:1px 5px;border-radius:4px">/themes/</code> with a <code style="background:var(--bg);padding:1px 5px;border-radius:4px">theme.json</code>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label"><?= __("field_admin_scheme") ?></label>
+              <select name="admin_scheme">
+                <?php
+                $scheme_options = [
+                  'dark'     => __("scheme_dark"),
+                  'midnight' => __("scheme_midnight"),
+                  'slate'    => __("scheme_slate"),
+                  'warm'     => __("scheme_warm"),
+                  'light'    => __("scheme_light"),
+                ];
+                $current_scheme = $config['admin_scheme'] ?? 'dark';
+                foreach ($scheme_options as $key => $label):
+                ?>
+                <option value="<?= htmlspecialchars($key) ?>" <?= $current_scheme === $key ? 'selected' : '' ?>>
+                  <?= htmlspecialchars($label) ?>
+                </option>
+                <?php endforeach; ?>
+              </select>
+              <div style="margin-top:0.5rem;font-size:0.78rem;color:var(--muted)">
+                <?= __("field_admin_scheme_hint") ?>
               </div>
             </div>
             <div class="form-group">

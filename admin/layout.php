@@ -7,9 +7,9 @@ function admin_header(string $page_title = '', string $active = ''): void {
     $c     = preg_match('/^#[0-9a-fA-F]{6}$/', $color) ? $color : '#6366f1';
     $rgb   = hexdec(substr($c,1,2)).','.hexdec(substr($c,3,2)).','.hexdec(substr($c,5,2));
 
-    // Admin theme colors (stored in session)
-    session_start_secure();
-    $admin_scheme = $_SESSION['admin_scheme'] ?? 'dark';
+    // Admin theme colors (stored in config)
+    $config = cms_config();
+    $admin_scheme = $config['admin_scheme'] ?? 'dark';
 
     $schemes = [
         'dark'     => ['--bg:#0c0c10','--sidebar:#111117','--surface:#17171e','--surface2:#1e1e27','--border:#252530','--border2:#2e2e3d','--text:#e2e2ed','--text2:#9090a8','--muted:#5a5a72'],
@@ -18,11 +18,6 @@ function admin_header(string $page_title = '', string $active = ''): void {
         'warm'     => ['--bg:#100e0c','--sidebar:#171310','--surface:#1e1a16','--surface2:#25201a','--border:#302820','--border2:#3a3028','--text:#ede8e0','--text2:#a09080','--muted:#6a5a50'],
         'light'    => ['--bg:#f0f0ec','--sidebar:#ffffff','--surface:#ffffff','--surface2:#f4f4f0','--border:#e0e0da','--border2:#cacac4','--text:#1a1a1a','--text2:#444444','--muted:#888888'],
     ];
-    // Allow light scheme
-    if (isset($_GET['scheme']) && in_array($_GET['scheme'], array_keys($schemes))) {
-        $admin_scheme = $_GET['scheme'];
-        $_SESSION['admin_scheme'] = $admin_scheme;
-    }
     $scheme_vars = implode(';', $schemes[$admin_scheme] ?? $schemes['dark']);
 ?>
 <!DOCTYPE html>
@@ -421,18 +416,6 @@ body.scheme-light .badge-gray  { background: #f3f4f6; color: #6b7280; }
           border:1px solid <?= $cur_lang==='en' ? 'rgba(var(--accent-rgb),0.4)' : 'var(--border)' ?>">EN</a>
       </div>
 
-      <!-- Panel color scheme switcher -->
-      <div class="scheme-dots" title="Color del panel">
-        <?php
-        $dot_colors = ['dark'=>'#111117','midnight'=>'#091220','slate'=>'#13151f','warm'=>'#171310','light'=>'#f0f0ec'];
-        foreach ($dot_colors as $s => $dc):
-        $is_light_dot = ($s === 'light');
-        ?>
-        <a href="?scheme=<?= $s ?>" class="scheme-dot <?= $admin_scheme === $s ? 'active' : '' ?>"
-           style="background:<?= $dc ?>;box-shadow:inset 0 0 0 1px <?= $is_light_dot ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.15)' ?>"
-           title="<?= ucfirst($s) ?>"></a>
-        <?php endforeach; ?>
-      </div>
 <?php } ?>
 <script>
 // Run immediately — body already exists at this point
@@ -471,16 +454,6 @@ body.scheme-light .badge-gray  { background: #f3f4f6; color: #6b7280; }
       });
     }
 
-    // ── Scheme switcher ───────────────────────────────────────────────────
-    document.querySelectorAll('.scheme-dot').forEach(function(dot) {
-      dot.addEventListener('click', function(e) {
-        e.preventDefault();
-        var scheme = new URL(dot.href).searchParams.get('scheme');
-        var url    = new URL(location.href);
-        url.searchParams.set('scheme', scheme);
-        location.href = url.toString();
-      });
-    });
   });
 })();
 </script>

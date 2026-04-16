@@ -7,7 +7,28 @@ require_once __DIR__ . '/layout.php';
 require_login();
 
 $page = max(1, (int)($_GET['page'] ?? 1));
-$result = list_content('articles', false, $page, 15);
+$status_filter = $_GET['status'] ?? null;
+$published_only = false;
+if ($status_filter === 'published') {
+    $published_only = true;
+} elseif ($status_filter === 'draft') {
+    $published_only = false; // pero necesitamos filtrar solo drafts
+}
+// Obtener todos los artículos sin filtrar por página para contar
+$all_items = list_content('articles', false, 1, 9999);
+$filtered_items = $all_items['items'];
+if ($status_filter === 'published') {
+    $filtered_items = array_filter($filtered_items, fn($p) => $p['status'] === 'published');
+} elseif ($status_filter === 'draft') {
+    $filtered_items = array_filter($filtered_items, fn($p) => $p['status'] === 'draft');
+}
+// Paginación manual
+$per_page = 15;
+$total = count($filtered_items);
+$pages = (int)ceil($total / $per_page);
+$offset = ($page - 1) * $per_page;
+$items = array_slice($filtered_items, $offset, $per_page);
+$result = ['items' => $items, 'total' => $total, 'pages' => $pages, 'page' => $page];
 
 admin_header(__("nav_articles"), 'articles');
 ?>
@@ -21,7 +42,15 @@ admin_header(__("nav_articles"), 'articles');
     <?php if (isset($_GET['deleted'])): ?><div class="alert alert-success"><?= __("editor_saved") ?></div><?php endif; ?>
     <div class="card">
       <div class="card-header">
-        <span class="card-title"><?= $result['total'] ?> <?= __("nav_articles") ?></span>
+        <span class="card-title">
+            <?php if ($status_filter === 'published'): ?>
+                <?= $result['total'] ?> Published Articles
+            <?php elseif ($status_filter === 'draft'): ?>
+                <?= $result['total'] ?> Draft Articles
+            <?php else: ?>
+                <?= $result['total'] ?> <?= __("nav_articles") ?>
+            <?php endif; ?>
+        </span>
       </div>
       <?php if (empty($result['items'])): ?>
         <div class="card-body" style="text-align:center;color:var(--muted);padding:3rem">
@@ -63,11 +92,11 @@ admin_header(__("nav_articles"), 'articles');
         $show = min(10, $result['pages']);
         for ($i = 1; $i <= $show; $i++):
         ?>
-        <a href="?page=<?= $i ?>" class="page-btn <?= $i === $page ? 'active' : '' ?>"><?= $i ?></a>
+        <a href="?page=<?= $i ?><?= $status_filter ? '&status=' . htmlspecialchars($status_filter) : '' ?>" class="page-btn <?= $i === $page ? 'active' : '' ?>"><?= $i ?></a>
         <?php endfor; ?>
         <?php if ($result['pages'] > 10 && $page < $result['pages']): ?>
-        <a href="?page=<?= $page + 1 ?>" class="page-btn">›</a>
-        <a href="?page=<?= $result['pages'] ?>" class="page-btn">»</a>
+        <a href="?page=<?= $page + 1 ?><?= $status_filter ? '&status=' . htmlspecialchars($status_filter) : '' ?>" class="page-btn">›</a>
+        <a href="?page=<?= $result['pages'] ?><?= $status_filter ? '&status=' . htmlspecialchars($status_filter) : '' ?>" class="page-btn">»</a>
         <?php endif; ?>
       </div>
       <?php endif; ?>

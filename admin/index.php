@@ -17,22 +17,22 @@ admin_header(__("dash_title"), 'dashboard');
   </div>
   <div class="page-body">
     <div class="stats-grid">
-      <div class="stat-card">
+      <a href="<?= base_url() ?>/admin/articles.php" class="stat-card interactive-stat">
         <div class="stat-label">Total Articles</div>
         <div class="stat-value accent"><?= $articles['total'] ?></div>
-      </div>
-      <div class="stat-card">
+      </a>
+      <a href="<?= base_url() ?>/admin/articles.php?status=published" class="stat-card interactive-stat">
         <div class="stat-label">Published</div>
         <div class="stat-value" style="color:var(--green)"><?= count($published_articles) ?></div>
-      </div>
-      <div class="stat-card">
+      </a>
+      <a href="<?= base_url() ?>/admin/articles.php?status=draft" class="stat-card interactive-stat">
         <div class="stat-label">Drafts</div>
         <div class="stat-value" style="color:var(--yellow)"><?= $articles['total'] - count($published_articles) ?></div>
-      </div>
-      <div class="stat-card">
+      </a>
+      <a href="<?= base_url() ?>/admin/pages.php" class="stat-card interactive-stat">
         <div class="stat-label">Pages</div>
         <div class="stat-value"><?= $pages['total'] ?></div>
-      </div>
+      </a>
     </div>
 
     <div class="card">
@@ -73,4 +73,19 @@ admin_header(__("dash_title"), 'dashboard');
     </div>
   </div>
 </div>
+<style>
+.interactive-stat {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.interactive-stat:hover {
+  background: var(--surface2);
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+</style>
 </body></html>
