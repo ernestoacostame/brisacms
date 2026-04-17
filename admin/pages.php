@@ -6,7 +6,11 @@ require_once dirname(__DIR__) . '/core/theme.php';
 require_once __DIR__ . '/layout.php';
 require_login();
 
-$result = list_content('pages', false, 1, 100);
+// Add pagination
+$page = max(1, (int)($_GET['page'] ?? 1));
+$per_page = 5;
+$result = list_content('pages', false, $page, $per_page);
+
 admin_header(__("nav_pages"), 'pages');
 ?>
       <a href="<?= base_url() ?>/admin/editor.php?type=pages" class="btn btn-primary">
@@ -49,6 +53,40 @@ admin_header(__("nav_pages"), 'pages');
           <?php endforeach; ?>
         </tbody>
       </table>
+      <?php if ($result['pages'] > 1): ?>
+      <div style="padding:1rem;display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;border-top:1px solid var(--border)">
+          <?php
+          // Show First button if not on first page
+          if ($page > 1): ?>
+          <a href="?page=1" class="page-btn">«</a>
+          <a href="?page=<?= $page - 1 ?>" class="page-btn">‹</a>
+          <?php endif; ?>
+          
+          <?php
+          // Show only 5 page numbers around current page
+          $start_page = max(1, min($page - 2, $result['pages'] - 4));
+          $end_page = min($result['pages'], $start_page + 4);
+          
+          if ($start_page > 1) {
+              echo '<span style="color:var(--muted);padding:0 0.25rem">…</span>';
+          }
+          
+          for ($i = $start_page; $i <= $end_page; $i++): ?>
+          <a href="?page=<?= $i ?>" class="page-btn <?= $i === $page ? 'active' : '' ?>"><?= $i ?></a>
+          <?php endfor; ?>
+          
+          <?php if ($end_page < $result['pages']): ?>
+          <span style="color:var(--muted);padding:0 0.25rem">…</span>
+          <?php endif; ?>
+          
+          <?php
+          // Show Last and Next buttons if not on last page
+          if ($page < $result['pages']): ?>
+          <a href="?page=<?= $page + 1 ?>" class="page-btn">›</a>
+          <a href="?page=<?= $result['pages'] ?>" class="page-btn">»</a>
+          <?php endif; ?>
+      </div>
+      <?php endif; ?>
       <?php endif; ?>
     </div>
   </div>

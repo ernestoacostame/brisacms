@@ -23,7 +23,7 @@ if ($status_filter === 'published') {
     $filtered_items = array_filter($filtered_items, fn($p) => $p['status'] === 'draft');
 }
 // Paginación manual
-$per_page = 15;
+$per_page = 5;
 $total = count($filtered_items);
 $pages = (int)ceil($total / $per_page);
 $offset = ($page - 1) * $per_page;
@@ -88,16 +88,36 @@ admin_header(__("nav_articles"), 'articles');
       </table>
       <?php if ($result['pages'] > 1): ?>
       <div style="padding:1rem;display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;border-top:1px solid var(--border)">
-        <?php
-        $show = min(10, $result['pages']);
-        for ($i = 1; $i <= $show; $i++):
-        ?>
-        <a href="?page=<?= $i ?><?= $status_filter ? '&status=' . htmlspecialchars($status_filter) : '' ?>" class="page-btn <?= $i === $page ? 'active' : '' ?>"><?= $i ?></a>
-        <?php endfor; ?>
-        <?php if ($result['pages'] > 10 && $page < $result['pages']): ?>
-        <a href="?page=<?= $page + 1 ?><?= $status_filter ? '&status=' . htmlspecialchars($status_filter) : '' ?>" class="page-btn">›</a>
-        <a href="?page=<?= $result['pages'] ?><?= $status_filter ? '&status=' . htmlspecialchars($status_filter) : '' ?>" class="page-btn">»</a>
-        <?php endif; ?>
+          <?php
+          // Show First button if not on first page
+          if ($page > 1): ?>
+          <a href="?page=1<?= $status_filter ? '&status=' . htmlspecialchars($status_filter) : '' ?>" class="page-btn">«</a>
+          <a href="?page=<?= $page - 1 ?><?= $status_filter ? '&status=' . htmlspecialchars($status_filter) : '' ?>" class="page-btn">‹</a>
+          <?php endif; ?>
+          
+          <?php
+          // Show only 5 page numbers around current page
+          $start_page = max(1, min($page - 2, $result['pages'] - 4));
+          $end_page = min($result['pages'], $start_page + 4);
+          
+          if ($start_page > 1) {
+              echo '<span style="color:var(--muted);padding:0 0.25rem">…</span>';
+          }
+          
+          for ($i = $start_page; $i <= $end_page; $i++): ?>
+          <a href="?page=<?= $i ?><?= $status_filter ? '&status=' . htmlspecialchars($status_filter) : '' ?>" class="page-btn <?= $i === $page ? 'active' : '' ?>"><?= $i ?></a>
+          <?php endfor; ?>
+          
+          <?php if ($end_page < $result['pages']): ?>
+          <span style="color:var(--muted);padding:0 0.25rem">…</span>
+          <?php endif; ?>
+          
+          <?php
+          // Show Last and Next buttons if not on last page
+          if ($page < $result['pages']): ?>
+          <a href="?page=<?= $page + 1 ?><?= $status_filter ? '&status=' . htmlspecialchars($status_filter) : '' ?>" class="page-btn">›</a>
+          <a href="?page=<?= $result['pages'] ?><?= $status_filter ? '&status=' . htmlspecialchars($status_filter) : '' ?>" class="page-btn">»</a>
+          <?php endif; ?>
       </div>
       <?php endif; ?>
       <?php endif; ?>

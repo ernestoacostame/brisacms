@@ -51,19 +51,45 @@ $heading = isset($category) ? 'Category: ' . ucfirst($category) :
 <?php if ($posts['pages'] > 1):
   $current_page = $posts['page'] ?? 1;
   $total_pages  = $posts['pages'];
-  $show_up_to   = min(10, $total_pages);
+  $max_links    = 5; // Show only 5 page links
+  
+  // Calculate the start and end of the page range
+  $start = max(1, $current_page - 2);
+  $end = min($total_pages, $current_page + 2);
+  
+  // Adjust if we're near the beginning
+  if ($current_page <= 3) {
+    $start = 1;
+    $end = min($max_links, $total_pages);
+  }
+  
+  // Adjust if we're near the end
+  if ($current_page >= $total_pages - 2) {
+    $start = max(1, $total_pages - $max_links + 1);
+    $end = $total_pages;
+  }
 ?>
 <div class="pagination">
-  <?php for ($i = 1; $i <= $show_up_to; $i++): ?>
-  <a href="?page=<?= $i ?>" class="page-link <?= $i === $current_page ? 'active' : '' ?>"><?= $i ?></a>
+  <?php if ($current_page > 1): ?>
+    <a href="?page=1" class="page-link" title="First">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="11 18 5 12 11 6"/><polyline points="18 18 12 12 18 6"/></svg>
+    </a>
+    <a href="?page=<?= $current_page - 1 ?>" class="page-link" title="Previous">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+    </a>
+  <?php endif; ?>
+  
+  <?php for ($i = $start; $i <= $end; $i++): ?>
+    <a href="?page=<?= $i ?>" class="page-link <?= $i === $current_page ? 'active' : '' ?>"><?= $i ?></a>
   <?php endfor; ?>
-  <?php if ($total_pages > 10 && $current_page < $total_pages): ?>
-  <a href="?page=<?= $current_page + 1 ?>" class="page-link" title="Siguiente">
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-  </a>
-  <a href="?page=<?= $total_pages ?>" class="page-link" title="Última">
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="13 18 19 12 13 6"/><polyline points="6 18 12 12 6 6"/></svg>
-  </a>
+  
+  <?php if ($current_page < $total_pages): ?>
+    <a href="?page=<?= $current_page + 1 ?>" class="page-link" title="Next">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+    </a>
+    <a href="?page=<?= $total_pages ?>" class="page-link" title="Last">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="13 18 19 12 13 6"/><polyline points="6 18 12 12 6 6"/></svg>
+    </a>
   <?php endif; ?>
 </div>
 <?php endif; ?>

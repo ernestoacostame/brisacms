@@ -18,7 +18,7 @@ $path     = $base ? substr($uri, strlen(parse_url($base, PHP_URL_PATH))) : $uri;
 $path     = trim($path, '/');
 $segments = $path ? explode('/', $path) : [];
 $config   = cms_config();
-$per_page = (int)($config['posts_per_page'] ?? 8);
+$per_page = (int)($config['posts_per_page'] ?? 5);
 
 $type = $segments[0] ?? '';
 $slug = $segments[1] ?? ($segments[0] ?? '');
