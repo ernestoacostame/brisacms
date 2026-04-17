@@ -1015,63 +1015,236 @@ body.focus-mode .floating-buttons-container { display: none !important; }
 
 /* ── RESPONSIVE ── */
 @media (max-width: 768px) {
-  /* Prevent ANY horizontal scroll on the editor page */
-  html, body { overflow-x: hidden !important; }
-  .main       { overflow-x: hidden !important; }
-  .page-body  { overflow-x: hidden !important; padding: 0.75rem !important; }
-
-  .editor-layout {
-    grid-template-columns: 1fr;
-    width: 100%;
-    max-width: 100%;
-    gap: 1rem;
+  /* Prevenir scroll horizontal en todo */
+  html, body {
+    overflow-x: hidden !important;
+    position: relative;
+    height: 100%;
   }
-  .editor-sidebar { order: 2; }
+  
+  /* Corregir el page-body principal */
+  .page-body {
+    display: block !important;
+    height: auto !important;
+    min-height: 100vh !important;
+    overflow-y: visible !important;
+    padding: 0.75rem !important;
+    position: relative;
+  }
+  
+  /* Cambiar completamente el layout del editor en móvil */
+  .editor-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+    min-height: 100vh !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    position: relative;
+  }
+  
+  /* Ajustar el editor principal */
   .editor-main {
     order: 1;
+    width: 100% !important;
+    max-width: 100% !important;
     height: auto !important;
-    min-height: 60vh;
-    position: static !important;
+    min-height: 50vh !important;
+    max-height: none !important;
+    position: relative !important;
+    margin: 0 !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius) !important;
+    box-sizing: border-box;
+    overflow: visible !important;
+  }
+  
+  /* Ajustar el wrapper del editor */
+  .editor-wrap {
+    height: auto !important;
+    min-height: 300px !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding: 1rem 0.75rem !important;
+    position: relative;
+  }
+  
+  /* Ajustar el título */
+  .title-area {
+    padding: 1rem 0.75rem 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    box-sizing: border-box;
+  }
+  
+  /* IMPORTANTE: Arreglar el sidebar */
+  .editor-sidebar {
+    order: 2;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 1rem 0 120px !important; /* Más espacio para botones flotantes */
+    display: block !important;
+    position: relative !important;
+    overflow: visible !important;
+    z-index: 10;
+    box-sizing: border-box;
+  }
+  
+  /* Ajustar los paneles del sidebar */
+  .editor-sidebar .panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 0 1rem 0 !important;
+    padding: 1.25rem !important;
+    box-sizing: border-box;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    position: relative;
     overflow: visible;
-    width: 100%;
+    left: 0 !important;
+    right: 0 !important;
+  }
+  
+  /* Asegurar que el último panel tenga espacio extra */
+  .editor-sidebar .panel:last-child {
+    margin-bottom: 2rem !important;
+  }
+  
+  /* Ajustar inputs dentro de paneles */
+  .panel input[type="text"],
+  .panel input[type="url"],
+  .panel textarea,
+  .panel select {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
+    font-size: 16px !important;
+    padding: 12px !important;
+    border-radius: 8px;
+    border: 1px solid var(--border2);
+    background: var(--surface2);
+    color: var(--text);
+    margin-top: 0.5rem;
+  }
+  
+  /* Fix para el área de categorías y tags */
+  .tag-input-wrap {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 46px;
+    padding: 8px !important;
+    box-sizing: border-box;
+    overflow: visible !important;
+  }
+  
+  .tag-chips {
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    flex-wrap: wrap !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  
+  /* Ajustar botones flotantes */
+  .floating-buttons-container {
+    position: fixed !important;
+    bottom: 20px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    width: 90% !important;
+    max-width: 400px !important;
+    z-index: 10050 !important;
+    background: var(--surface) !important;
+    border: 1px solid var(--border) !important;
+    box-shadow: 0 -2px 20px rgba(0,0,0,0.2) !important;
+    border-radius: 50px !important;
+    padding: 6px !important;
+  }
+  
+  /* Asegurar que el formulario se pueda scroll */
+  #editor-form {
+    min-height: 100vh !important;
+    height: auto !important;
+    overflow: visible !important;
+    position: relative;
+  }
+  
+  /* Arreglar cualquier problema de overflow */
+  .prose-editor, #editor, .md-editor {
+    max-width: 100% !important;
+    overflow-wrap: break-word !important;
+    word-wrap: break-word !important;
+  }
+  
+  /* Asegurar que todos los paneles sean visibles */
+  .editor-sidebar .panel {
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: block !important;
+  }
+  
+  /* Asegurar que los botones dentro de los paneles sean tocables */
+  .panel .btn {
+    min-height: 44px;
+    padding: 12px 20px;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  /* Asegurar que las imágenes destacadas se vean bien */
+  #featured-preview {
     max-width: 100%;
-    box-sizing: border-box;
-    margin: 0;
-    border-left: 0;
-    border-right: 0;
-    border-radius: 0;
+    overflow: hidden;
   }
-  .editor-wrap { 
-    overflow-y: visible !important; 
-    overflow-x: hidden !important; 
-    padding: 0 0.75rem;
+  
+  #featured-img {
+    max-width: 100%;
+    height: auto;
+    max-height: 150px;
   }
-  .prose-editor { 
-    padding: 1rem 0.75rem; 
-    overflow-x: hidden; 
-    word-break: break-word; 
-    margin: 0;
+  
+  /* Arreglar el área de sugerencias de tags */
+  .tag-suggestions {
+    margin-top: 8px;
+    flex-wrap: wrap;
   }
-  #editor, .md-editor { 
-    padding: 1rem 0.75rem; 
-    width: 100%;
-    box-sizing: border-box;
+  
+  .tag-sug {
+    font-size: 13px;
+    padding: 5px 10px;
+    margin: 3px;
   }
-
-  .title-area { 
-    padding: 1rem 0.75rem 0; 
+  
+  .tag-chip {
+    font-size: 14px;
+    padding: 6px 10px;
+    margin: 2px;
   }
-  .title-area input { 
-    font-size: 1.2rem; 
-    padding: 0;
+  
+  /* Asegurar que los botones de upload sean fácilmente tocables */
+  label[for="feat-upload"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    min-width: 44px;
+    padding: 10px 15px;
+    margin: 5px 0;
   }
-
-  .editor-sidebar .panel { 
-    padding: 0.75rem; 
-    margin: 0 0.75rem;
+  
+  /* Arreglar el spacing en el panel de imagen destacada */
+  #feat-upload-progress {
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.4;
   }
+  
   .topbar-actions .btn span { display: none; }
-
+  
   /* Ensure toolbar has proper spacing */
   .toolbar {
     padding: 0.4rem 0.75rem;
@@ -1080,6 +1253,7 @@ body.focus-mode .floating-buttons-container { display: none !important; }
     width: 100%;
     box-sizing: border-box;
   }
+  
   .tb-primary {
     padding-left: 0;
     padding-right: 0;
@@ -1087,26 +1261,106 @@ body.focus-mode .floating-buttons-container { display: none !important; }
 }
 
 @media (max-width: 480px) {
+  .page-body {
+    padding: 0.5rem !important;
+  }
+  
+  .editor-sidebar {
+    margin: 1rem 0 110px !important;
+  }
+  
+  .editor-sidebar .panel {
+    padding: 1rem !important;
+  }
+  
+  .panel-title {
+    font-size: 13px !important;
+    margin-bottom: 0.75rem !important;
+  }
+  
+  .panel-hint {
+    font-size: 12px !important;
+    line-height: 1.4 !important;
+  }
+  
+  /* Ajustar botones flotantes en pantallas muy pequeñas */
+  .floating-buttons-container {
+    width: 95% !important;
+    bottom: 10px !important;
+    padding: 5px !important;
+  }
+  
+  .floating-draft-btn,
+  .floating-focus-btn,
+  .floating-preview-btn,
+  .floating-publish-btn {
+    padding: 10px 12px !important;
+    font-size: 0.9rem !important;
+    min-height: 44px !important;
+  }
+  
+  .floating-draft-btn span,
+  .floating-focus-btn span,
+  .floating-preview-btn span,
+  .floating-publish-btn span {
+    display: inline !important; /* Mostrar texto siempre */
+  }
+  
+  /* Asegurar que los tag inputs sean compactos */
+  .tag-input-wrap {
+    min-height: 42px !important;
+    padding: 6px !important;
+  }
+  
+  .tag-chip {
+    font-size: 13px !important;
+    padding: 5px 8px !important;
+    margin: 2px !important;
+  }
+  
+  .tag-chip button {
+    width: 18px;
+    height: 18px;
+    font-size: 16px;
+  }
+  
+  /* Asegurar que el dropdown de tags se vea bien */
+  .tag-dropdown {
+    width: 100% !important;
+    left: 0 !important;
+    right: 0 !important;
+    max-width: none !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* Ajustar el textarea del excerpt */
+  .panel textarea[name="excerpt"] {
+    min-height: 80px;
+    font-size: 14px;
+  }
+  
   .prose-editor { 
     padding: 1rem 0.75rem; 
     margin: 0;
   }
-  .page-body { 
-    padding: 0.75rem !important; 
-  }
+  
   .editor-main {
     border-left: 0;
     border-right: 0;
   }
+  
   .editor-wrap {
     padding: 0 0.5rem;
   }
+  
   #editor, .md-editor {
     padding: 1rem 0.5rem;
   }
+  
   .title-area {
     padding: 1rem 0.5rem 0;
   }
+  
   .toolbar {
     padding: 0.4rem 0.5rem;
   }
@@ -1309,6 +1563,19 @@ body.focus-mode .floating-buttons-container { display: none !important; }
       width: 100%;
       height: 100%;
     }
+
+    .editor-sidebar .panel {
+      -webkit-overflow-scrolling: touch;
+      overflow: visible;
+    }
+    
+    .panel input[type="text"],
+    .panel input[type="url"],
+    .panel textarea,
+    .panel select {
+      font-size: 16px;
+      line-height: 1.5;
+    }
   }
 }
 
@@ -1337,6 +1604,52 @@ body.focus-mode .floating-buttons-container { display: none !important; }
 /* Fix for Safari textarea/editor z-index */
 #editor, #md-editor {
   isolation: isolate;
+}
+
+/* Añadir un indicador visual de que hay más contenido abajo */
+@media (max-width: 768px) {
+  .editor-sidebar::after {
+    content: "↓ Hay más contenido abajo";
+    display: block;
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+    padding: 10px 0 20px 0;
+    opacity: 0.7;
+    border-top: 1px solid var(--border2);
+    margin-top: 1rem;
+  }
+  
+  /* Ocultar en pantallas muy pequeñas */
+  @media (max-width: 480px) {
+    .editor-sidebar::after {
+      display: none;
+    }
+  }
+}
+
+/* Asegurar que no haya contenido oculto */
+@media (max-width: 768px) {
+  .editor-sidebar > *:not(.panel) {
+    display: none !important;
+  }
+}
+
+/* Fix para el height del contenedor en iOS */
+@media (max-width: 768px) {
+  html, body {
+    height: 100%;
+  }
+  
+  body {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .main {
+    flex: 1;
+    overflow-y: auto;
+  }
 }
 
 </style>
@@ -2526,6 +2839,129 @@ document.addEventListener('keydown', e => {
   if (e.key === 'F11' && !e.altKey) { e.preventDefault(); toggleFocus(); }
 });
 
+// Añadir al final del script existente, después de la función adjustMobileLayout()
+function fixSidebarLayout() {
+  if (window.innerWidth <= 768) {
+    const sidebar = document.querySelector('.editor-sidebar');
+    const panels = sidebar?.querySelectorAll('.panel');
+    
+    if (panels) {
+      panels.forEach(panel => {
+        // Asegurar que cada panel tenga suficiente espacio
+        panel.style.maxHeight = 'none';
+        panel.style.overflow = 'visible';
+        
+        // Arreglar cualquier input dentro del panel
+        const inputs = panel.querySelectorAll('input, textarea, select');
+        inputs.forEach(input => {
+          input.style.maxWidth = '100%';
+          input.style.boxSizing = 'border-box';
+        });
+      });
+    }
+  }
+}
+
+// Ejecutar cuando se cargue y cuando cambie el tamaño
+window.addEventListener('load', fixSidebarLayout);
+window.addEventListener('resize', fixSidebarLayout);
+
+// También ejecutar cuando se modifiquen los tags o categorías
+const observer = new MutationObserver(function(mutations) {
+  mutations.forEach(function(mutation) {
+    if (mutation.type === 'childList' || mutation.type === 'characterData') {
+      setTimeout(fixSidebarLayout, 100);
+    }
+  });
+});
+
+// Observar cambios en el sidebar
+const sidebar = document.querySelector('.editor-sidebar');
+if (sidebar) {
+  observer.observe(sidebar, { 
+    childList: true, 
+    subtree: true,
+    characterData: true 
+  });
+}
+
+// Añadir al final del script existente
+function fixIOSLayout() {
+  if (window.innerWidth <= 768 && /iPhone|iPad|iPod/.test(navigator.userAgent)) {
+    // Forzar el redibujado para iOS
+    document.body.style.overflow = 'auto';
+    document.body.style.height = 'auto';
+    
+    // Ajustar el height del viewport
+    const viewportHeight = window.innerHeight;
+    document.documentElement.style.height = viewportHeight + 'px';
+    
+    // Asegurar que el sidebar sea scrollable
+    const sidebar = document.querySelector('.editor-sidebar');
+    if (sidebar) {
+      sidebar.style.height = 'auto';
+      sidebar.style.maxHeight = 'none';
+      sidebar.style.overflow = 'visible';
+      sidebar.style.position = 'relative';
+    }
+    
+    // Ajustar el formulario
+    const form = document.getElementById('editor-form');
+    if (form) {
+      form.style.minHeight = '100vh';
+      form.style.overflow = 'visible';
+    }
+    
+    // Ajustar el page-body
+    const pageBody = document.querySelector('.page-body');
+    if (pageBody) {
+      pageBody.style.height = 'auto';
+      pageBody.style.minHeight = '100vh';
+      pageBody.style.overflowY = 'scroll';
+      pageBody.style.webkitOverflowScrolling = 'touch';
+    }
+  }
+}
+
+// Ejecutar cuando se cargue
+window.addEventListener('load', fixIOSLayout);
+window.addEventListener('DOMContentLoaded', fixIOSLayout);
+
+// También ejecutar en resize y orientation change
+window.addEventListener('resize', fixIOSLayout);
+window.addEventListener('orientationchange', function() {
+  setTimeout(fixIOSLayout, 300);
+});
+
+// Añadir un listener para cuando el teclado aparezca/desaparezca
+let originalViewportHeight = window.innerHeight;
+window.addEventListener('resize', function() {
+  if (window.innerHeight < originalViewportHeight) {
+    // Teclado visible
+    document.body.style.paddingBottom = '300px';
+  } else {
+    // Teclado oculto
+    document.body.style.paddingBottom = '0';
+  }
+});
+
+// Prevenir comportamiento por defecto de iOS
+document.addEventListener('touchmove', function(e) {
+  // Permitir scroll solo en elementos scrollables
+  if (e.target.classList.contains('editor-wrap') || 
+      e.target.classList.contains('editor-sidebar') ||
+      e.target.classList.contains('tag-chips') ||
+      e.target.tagName === 'TEXTAREA') {
+    return;
+  }
+  
+  // Prevenir scroll en otros lugares si es necesario
+  const scrollable = e.target.closest('.editor-sidebar');
+  if (!scrollable && e.target.closest('.editor-main')) {
+    e.preventDefault();
+  }
+}, { passive: false });
+
 </script>
 <!-- focus hint -->
 <div class="focus-exit-hint">
@@ -2540,11 +2976,9 @@ document.addEventListener('keydown', e => {
     </button>
     <button id="floating-focus-btn" class="floating-focus-btn" type="button" title="Modo sin distracción">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
-        <span>Focus</span>
     </button>
     <button id="floating-preview-btn" class="floating-preview-btn" type="button" title="Vista previa">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-        <span>Preview</span>
     </button>
     <button id="floating-publish-btn" class="floating-publish-btn" type="button">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -2710,7 +3144,6 @@ document.addEventListener('keydown', e => {
     }
     @media (max-width: 480px) {
         .floating-buttons-container {
-            gap: 8px;
             padding: 5px;
         }
         .floating-draft-btn,
