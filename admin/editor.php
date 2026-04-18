@@ -186,7 +186,15 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path></svg>
               </button>
               <div class="fmt-sep"></div>
-              <button type="button" class="fmt-btn tb-mode" id="md-preview-btn"><?= __("tb_preview") ?></button>
+              <button type="button" class="fmt-btn tb-mode" id="md-preview-btn" title="Vista previa de Markdown" style="min-width:36px;width:36px;height:34px;padding:8px;display:flex;align-items:center;justify-content:center;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:block;margin:0 auto;">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                  <polyline points="10 9 9 9 8 9"/>
+                </svg>
+              </button>
             </div>
             
             <!-- Mode switcher and other controls -->
@@ -469,6 +477,31 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
   color: var(--text);
 }
 
+/* Fix for markdown preview button */
+#md-preview-btn {
+  min-width: 36px !important;
+  width: 36px !important;
+  height: 34px !important;
+  padding: 8px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+#md-preview-btn svg {
+  width: 16px !important;
+  height: 16px !important;
+  stroke: currentColor !important;
+  fill: none !important;
+  display: block !important;
+}
+
+/* Ensure SVG icons are properly centered in buttons */
+.fmt-btn svg {
+  display: block;
+  margin: 0 auto;
+}
+
 /* Ajustar para responsive */
 @media (max-width: 768px) {
   .fmt-btn {
@@ -480,6 +513,18 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
   
   .fmt-btn.active {
     padding: 1px 16px !important;
+  }
+  
+  #md-preview-btn {
+    min-width: 32px !important;
+    width: 32px !important;
+    height: 30px !important;
+    padding: 6px !important;
+  }
+  
+  #md-preview-btn svg {
+    width: 14px !important;
+    height: 14px !important;
   }
 }
 
@@ -493,6 +538,18 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
   
   .fmt-btn.active {
     padding: 1px 12px !important;
+  }
+  
+  #md-preview-btn {
+    min-width: 30px !important;
+    width: 30px !important;
+    height: 28px !important;
+    padding: 5px !important;
+  }
+  
+  #md-preview-btn svg {
+    width: 12px !important;
+    height: 12px !important;
   }
 }
 
@@ -1748,6 +1805,55 @@ let mode       = <?= json_encode($content_format) ?>;  // 'html' | 'markdown'
 let mdPreviewing = false;
 let slugManuallySet = <?= $is_new ? 'false' : 'true' ?>;
 
+// ── Markdown to HTML converter (client‑side) ──────────────────────────────
+function markdownToHtml(md) {
+  if (!md) return '';
+  
+  // Basic Markdown to HTML conversion
+  let html = md
+    // Headers
+    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+    // Bold
+    .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
+    .replace(/__(.*?)__/gim, '<strong>$1</strong>')
+    // Italic
+    .replace(/\*(.*?)\*/gim, '<em>$1</em>')
+    .replace(/_(.*?)_/gim, '<em>$1</em>')
+    // Strikethrough
+    .replace(/~~(.*?)~~/gim, '<del>$1</del>')
+    // Code blocks
+    .replace(/```([\s\S]*?)```/gim, '<pre><code>$1</code></pre>')
+    // Inline code
+    .replace(/`(.*?)`/gim, '<code>$1</code>')
+    // Blockquotes
+    .replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>')
+    // Lists
+    .replace(/^\d+\. (.*$)/gim, '<ol><li>$1</li></ol>')
+    .replace(/^\- (.*$)/gim, '<ul><li>$1</li></ul>')
+    // Fix nested lists
+    .replace(/<\/ul>\s*<ul>/gim, '')
+    .replace(/<\/ol>\s*<ol>/gim, '')
+    // Links
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a href="$2">$1</a>')
+    // Images
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/gim, '<img src="$2" alt="$1">')
+    // Horizontal rule
+    .replace(/^\-\-\-$/gim, '<hr>')
+    // Paragraphs (handle multiple lines)
+    .split('\n\n')
+    .map(para => {
+      para = para.trim();
+      if (!para) return '';
+      if (para.startsWith('<') && para.endsWith('>')) return para;
+      return `<p>${para.replace(/\n/g, '<br>')}</p>`;
+    })
+    .join('');
+  
+  return html;
+}
+
 // ── Submit sync ────────────────────────────────────────────────────────────
 document.getElementById('editor-form').addEventListener('submit', () => {
   if (mode === 'markdown') {
@@ -1920,26 +2026,34 @@ function switchMode(newMode) {
     document.getElementById('html-toolbar').style.display = 'none';
     document.getElementById('md-toolbar').style.display = 'flex';
     mdPreviewing = false;
-    document.getElementById('md-preview-btn').textContent = '👁 Preview';
+    document.getElementById('md-preview-btn').innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>';
   } else {
-    // Convert markdown content to HTML using server-side conversion
+    // Convert markdown content to HTML
     const mdEditor = document.getElementById('md-editor');
     const htmlEditor = document.getElementById('editor');
-      
+    
     if (mdEditor.value.trim()) {
-      // Use the same endpoint as preview for Markdown to HTML conversion
+      // First try server-side conversion
       const formData = new FormData();
       formData.append('md', mdEditor.value);
       formData.append('csrf', '<?= $csrf ?>');
-        
+      
       fetch('<?= base_url() ?>/admin/markdown_preview.php', {
         method: 'POST',
         body: formData
       })
-      .then(response => response.text())
+      .then(response => {
+        if (!response.ok) throw new Error('Server error');
+        return response.text();
+      })
       .then(html => {
-        htmlEditor.innerHTML = html;
-          
+        if (html && html.trim()) {
+          htmlEditor.innerHTML = html;
+        } else {
+          // Fallback to client-side conversion
+          htmlEditor.innerHTML = markdownToHtml(mdEditor.value);
+        }
+        
         // Switch to HTML
         mdEditor.style.display = 'none';
         document.getElementById('md-preview').style.display = 'none';
@@ -1949,8 +2063,10 @@ function switchMode(newMode) {
       })
       .catch(error => {
         console.error('Error converting Markdown:', error);
-        // Fallback: just set the markdown as plain text
-        htmlEditor.innerHTML = mdEditor.value;
+        // Fallback to client-side conversion
+        htmlEditor.innerHTML = markdownToHtml(mdEditor.value);
+        
+        // Switch to HTML
         mdEditor.style.display = 'none';
         document.getElementById('md-preview').style.display = 'none';
         htmlEditor.style.display = '';
@@ -2082,6 +2198,9 @@ function htmlToMarkdown(element) {
         case 'span':
           // Just pass through the inner content
           markdown += innerMarkdown;
+          break;
+        case 'br':
+          markdown += '\n';
           break;
         default:
           markdown += innerMarkdown;
@@ -2281,22 +2400,53 @@ document.getElementById('md-preview-btn').addEventListener('click', () => {
     updateMdPreview();
     mdEditor.style.display = 'none';
     mdPreview.style.display = '';
-    document.getElementById('md-preview-btn').textContent = '✏ Edit';
+    document.getElementById('md-preview-btn').innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+    document.getElementById('md-preview-btn').title = 'Editar Markdown';
   } else {
     mdPreview.style.display = 'none';
     mdEditor.style.display = '';
-    document.getElementById('md-preview-btn').textContent = '👁 Preview';
+    document.getElementById('md-preview-btn').innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>';
+    document.getElementById('md-preview-btn').title = 'Vista previa de Markdown';
   }
 });
 
-mdEditor.addEventListener('input', () => { if (mdPreviewing) updateMdPreview(); });
+mdEditor.addEventListener('input', () => { 
+  if (mdPreviewing) {
+    // Debounce the preview update to avoid too many requests
+    clearTimeout(mdEditor._previewTimer);
+    mdEditor._previewTimer = setTimeout(updateMdPreview, 300);
+  }
+});
 
 function updateMdPreview() {
+  // First try server-side conversion
+  const formData = new FormData();
+  formData.append('md', mdEditor.value);
+  formData.append('csrf', '<?= $csrf ?>');
+  
   fetch('<?= base_url() ?>/admin/markdown_preview.php', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'md=' + encodeURIComponent(mdEditor.value) + '&csrf=<?= $csrf ?>'
-  }).then(r => r.text()).then(html => { mdPreview.innerHTML = html; });
+    body: formData
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Server error: ' + response.status);
+    }
+    return response.text();
+  })
+  .then(html => {
+    if (html && html.trim()) {
+      mdPreview.innerHTML = html;
+    } else {
+      // Fallback to client-side conversion
+      mdPreview.innerHTML = markdownToHtml(mdEditor.value);
+    }
+  })
+  .catch(error => {
+    console.error('Error fetching Markdown preview:', error);
+    // Fallback to client-side conversion
+    mdPreview.innerHTML = markdownToHtml(mdEditor.value);
+  });
 }
 
 function insertAtCursor(ta, text, start, end) {
