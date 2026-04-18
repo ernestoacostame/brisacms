@@ -222,7 +222,7 @@ body.sidebar-open .sidebar { transform: translateX(0) !important; }
   .table, .table tbody, .table tr, .table td { display: block; width: 100%; }
   .table tr { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 0.75rem; padding: 0.5rem; }
   .table td { border: none; padding: 0.35rem 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
-  .table td::before { content: attr(data-label); font-size: 0.7rem; font-weight: 600; text-transform: uppercase; color: var(--muted); min-width: 80px; flex-shrink: 0; }
+  .table td::before { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; color: var(--muted); min-width: 80px; flex-shrink: 0; }
 }
 
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
