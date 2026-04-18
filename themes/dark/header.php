@@ -5,6 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= isset($post) ? htmlspecialchars($post['title']) . ' — ' : '' ?><?= htmlspecialchars($site_title) ?></title>
 <meta name="description" content="<?= isset($post) ? htmlspecialchars(strip_tags($post['excerpt'] ?? substr(strip_tags($post['content'] ?? ''), 0, 160))) : htmlspecialchars($config['tagline'] ?? $site_title) ?>">
+<link rel="alternate" type="application/rss+xml" title="<?= htmlspecialchars($site_title) ?> RSS" href="<?= $base ?>/rss.xml">
+<link rel="canonical" href="<?= $base . '/' . ltrim($_SERVER['REQUEST_URI'] ?? '', '/') ?>">
+<?php if (isset($post)): ?>
+<meta property="og:title"       content="<?= htmlspecialchars($post['title'] ?? '') ?>">
+<meta property="og:type"        content="article">
+<meta property="og:url"         content="<?= $base ?>/article/<?= htmlspecialchars($post['slug'] ?? '') ?>">
+<?php if (!empty($post['featured_image'])): ?>
+<meta property="og:image"       content="<?= htmlspecialchars($post['featured_image']) ?>">
+<?php endif; ?>
+<meta property="og:description" content="<?= htmlspecialchars(strip_tags($post['excerpt'] ?? substr(strip_tags($post['content'] ?? ''), 0, 200))) ?>">
+<?php endif; ?>
+<?php
+$mastodon_url    = $config['mastodon_url'] ?? '';
+$mastodon_handle = $config['mastodon_handle'] ?? '';
+if ($mastodon_url): ?>
+<link rel="me" href="<?= htmlspecialchars($mastodon_url) ?>">
+<?php endif; ?>
+<?php if ($mastodon_handle): ?>
+<meta name="fediverse:creator" content="<?= htmlspecialchars($mastodon_handle) ?>">
+<?php endif; ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:ital,wght@0,300;0,400;0,700;1,400&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
 <style>

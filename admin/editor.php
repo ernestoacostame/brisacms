@@ -97,21 +97,45 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
                 <option value="blockquote">Cita</option>
               </select>
               <div class="fmt-sep"></div>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('bold')" title="<?= __raw("tb_bold") ?>"><b>B</b></button>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('italic')" title="<?= __raw("tb_italic") ?>"><i>I</i></button>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('underline')" title="<?= __raw("tb_underline") ?>"><u>U</u></button>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('strikeThrough')" title="<?= __raw("tb_strike") ?>"><s>S</s></button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('bold')" title="<?= __raw("tb_bold") ?>">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path></svg>
+              </button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('italic')" title="<?= __raw("tb_italic") ?>">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="4" x2="10" y2="4"></line><line x1="14" y1="20" x2="5" y2="20"></line><line x1="15" y1="4" x2="9" y2="20"></line></svg>
+              </button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('underline')" title="<?= __raw("tb_underline") ?>">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"></path><line x1="4" y1="21" x2="20" y2="21"></line></svg>
+              </button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('strikeThrough')" title="<?= __raw("tb_strike") ?>">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              </button>
               <div class="fmt-sep"></div>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('insertUnorderedList')" title="<?= __raw("tb_ul") ?>">≡</button>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('insertOrderedList')" title="<?= __raw("tb_ol") ?>">1.</button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('insertUnorderedList')" title="<?= __raw("tb_ul") ?>">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3" y2="6"></line><line x1="3" y1="12" x2="3" y2="12"></line><line x1="3" y1="18" x2="3" y2="18"></line></svg>
+              </button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('insertOrderedList')" title="<?= __raw("tb_ol") ?>">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="6" x2="21" y2="6"></line><line x1="10" y1="12" x2="21" y2="12"></line><line x1="10" y1="18" x2="21" y2="18"></line><path d="M4 6h1v4"></path><path d="M4 10h2"></path><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"></path></svg>
+              </button>
               <div class="fmt-sep"></div>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); insertLink()" title="<?= __raw("tb_link") ?>">🔗</button>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); insertImage()" title="<?= __raw("tb_image") ?>">🖼</button>
-              <button type="button" class="fmt-btn tb-upload" id="upload-img-html" title="Subir imagen">📤</button>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); insertVideo()" title="URL de video">📹</button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); insertLink()" title="<?= __raw("tb_link") ?>">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+              </button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); insertImage()" title="<?= __raw("tb_image") ?>">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+              </button>
+              <button type="button" class="fmt-btn tb-upload" id="upload-img-html" title="Subir imagen">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+              </button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); insertVideo()" title="URL de video">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+              </button>
               <div class="fmt-sep"></div>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('undo')" title="<?= __raw("tb_undo") ?>">↩</button>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('redo')" title="<?= __raw("tb_redo") ?>">↪</button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('undo')" title="<?= __raw("tb_undo") ?>">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
+              </button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('redo')" title="<?= __raw("tb_redo") ?>">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path></svg>
+              </button>
             </div>
             
             <!-- Markdown mode toolbar -->
@@ -125,20 +149,42 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
                 <option value="blockquote">> Cita</option>
               </select>
               <div class="fmt-sep"></div>
-              <button type="button" class="fmt-btn md-btn" data-wrap="**" title="<?= __raw("tb_bold") ?>"><b>B</b></button>
-              <button type="button" class="fmt-btn md-btn" data-wrap="*" title="<?= __raw("tb_italic") ?>"><i>I</i></button>
-              <button type="button" class="fmt-btn md-btn" data-wrap="~~" title="<?= __raw("tb_strike") ?>"><s>S</s></button>
-              <button type="button" class="fmt-btn md-btn" data-wrap="`" title="Inline code"><code>`</code></button>
+              <button type="button" class="fmt-btn md-btn" data-wrap="**" title="<?= __raw("tb_bold") ?>">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path></svg>
+              </button>
+              <button type="button" class="fmt-btn md-btn" data-wrap="*" title="<?= __raw("tb_italic") ?>">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="4" x2="10" y2="4"></line><line x1="14" y1="20" x2="5" y2="20"></line><line x1="15" y1="4" x2="9" y2="20"></line></svg>
+              </button>
+              <button type="button" class="fmt-btn md-btn" data-wrap="~~" title="<?= __raw("tb_strike") ?>">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              </button>
+              <button type="button" class="fmt-btn md-btn" data-wrap="`" title="Inline code">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+              </button>
               <div class="fmt-sep"></div>
-              <button type="button" class="fmt-btn md-btn" data-md="- " title="<?= __raw("tb_ul") ?>">≡</button>
-              <button type="button" class="fmt-btn md-btn" data-md="1. " title="<?= __raw("tb_ol") ?>">1.</button>
+              <button type="button" class="fmt-btn md-btn" data-md="- " title="<?= __raw("tb_ul") ?>">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3" y2="6"></line><line x1="3" y1="12" x2="3" y2="12"></line><line x1="3" y1="18" x2="3" y2="18"></line></svg>
+              </button>
+              <button type="button" class="fmt-btn md-btn" data-md="1. " title="<?= __raw("tb_ol") ?>">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="6" x2="21" y2="6"></line><line x1="10" y1="12" x2="21" y2="12"></line><line x1="10" y1="18" x2="21" y2="18"></line><path d="M4 6h1v4"></path><path d="M4 10h2"></path><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"></path></svg>
+              </button>
               <div class="fmt-sep"></div>
-              <button type="button" class="fmt-btn" id="md-link-btn" title="<?= __raw("tb_link") ?>">🔗</button>
-              <button type="button" class="fmt-btn" id="md-img-btn" title="<?= __raw("tb_image") ?>">🖼</button>
-              <button type="button" class="fmt-btn tb-upload" id="upload-img-md" title="Subir imagen">📤</button>
+              <button type="button" class="fmt-btn" id="md-link-btn" title="<?= __raw("tb_link") ?>">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+              </button>
+              <button type="button" class="fmt-btn" id="md-img-btn" title="<?= __raw("tb_image") ?>">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+              </button>
+              <button type="button" class="fmt-btn tb-upload" id="upload-img-md" title="Subir imagen">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+              </button>
               <div class="fmt-sep"></div>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('undo')" title="<?= __raw("tb_undo") ?>">↩</button>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('redo')" title="<?= __raw("tb_redo") ?>">↪</button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('undo')" title="<?= __raw("tb_undo") ?>">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
+              </button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('redo')" title="<?= __raw("tb_redo") ?>">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path></svg>
+              </button>
               <div class="fmt-sep"></div>
               <button type="button" class="fmt-btn tb-mode" id="md-preview-btn"><?= __("tb_preview") ?></button>
             </div>
@@ -1606,6 +1652,38 @@ body.focus-mode .floating-buttons-container { display: none !important; }
   isolation: isolate;
 }
 
+/* SVG icon styles for toolbar */
+.fmt-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  vertical-align: middle;
+}
+
+/* Ensure buttons with SVG maintain proper spacing */
+.fmt-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+}
+
+/* Adjust for smaller screens */
+@media (max-width: 768px) {
+  .fmt-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .fmt-btn svg {
+    width: 12px;
+    height: 12px;
+  }
+}
+
 /* Añadir un indicador visual de que hay más contenido abajo */
 @media (max-width: 768px) {
   .editor-sidebar::after {
@@ -1844,20 +1922,50 @@ function switchMode(newMode) {
     mdPreviewing = false;
     document.getElementById('md-preview-btn').textContent = '👁 Preview';
   } else {
-    // Convert markdown content to HTML
+    // Convert markdown content to HTML using server-side conversion
     const mdEditor = document.getElementById('md-editor');
     const htmlEditor = document.getElementById('editor');
-    
-    // For now, just set the markdown as plain text in HTML editor
-    // TODO: Implement proper markdown to HTML conversion
-    htmlEditor.innerHTML = mdEditor.value;
-    
-    // Switch to HTML
-    mdEditor.style.display = 'none';
-    document.getElementById('md-preview').style.display = 'none';
-    htmlEditor.style.display = '';
-    document.getElementById('html-toolbar').style.display = 'flex';
-    document.getElementById('md-toolbar').style.display = 'none';
+      
+    if (mdEditor.value.trim()) {
+      // Use the same endpoint as preview for Markdown to HTML conversion
+      const formData = new FormData();
+      formData.append('md', mdEditor.value);
+      formData.append('csrf', '<?= $csrf ?>');
+        
+      fetch('<?= base_url() ?>/admin/markdown_preview.php', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => response.text())
+      .then(html => {
+        htmlEditor.innerHTML = html;
+          
+        // Switch to HTML
+        mdEditor.style.display = 'none';
+        document.getElementById('md-preview').style.display = 'none';
+        htmlEditor.style.display = '';
+        document.getElementById('html-toolbar').style.display = 'flex';
+        document.getElementById('md-toolbar').style.display = 'none';
+      })
+      .catch(error => {
+        console.error('Error converting Markdown:', error);
+        // Fallback: just set the markdown as plain text
+        htmlEditor.innerHTML = mdEditor.value;
+        mdEditor.style.display = 'none';
+        document.getElementById('md-preview').style.display = 'none';
+        htmlEditor.style.display = '';
+        document.getElementById('html-toolbar').style.display = 'flex';
+        document.getElementById('md-toolbar').style.display = 'none';
+      });
+    } else {
+      // Empty content
+      htmlEditor.innerHTML = '';
+      mdEditor.style.display = 'none';
+      document.getElementById('md-preview').style.display = 'none';
+      htmlEditor.style.display = '';
+      document.getElementById('html-toolbar').style.display = 'flex';
+      document.getElementById('md-toolbar').style.display = 'none';
+    }
   }
 
   mode = newMode;
@@ -1875,61 +1983,108 @@ function htmlToMarkdown(element) {
       markdown += node.textContent;
     } else if (node.nodeType === Node.ELEMENT_NODE) {
       const tagName = node.tagName.toLowerCase();
-      const text = node.textContent;
+      const innerMarkdown = htmlToMarkdown(node);
       
       switch(tagName) {
         case 'b':
         case 'strong':
-          markdown += '**' + text + '**';
+          markdown += '**' + innerMarkdown + '**';
           break;
         case 'i':
         case 'em':
-          markdown += '*' + text + '*';
+          markdown += '*' + innerMarkdown + '*';
           break;
         case 'u':
-          markdown += '__' + text + '__';
+          markdown += '__' + innerMarkdown + '__';
           break;
         case 's':
         case 'del':
-          markdown += '~~' + text + '~~';
+          markdown += '~~' + innerMarkdown + '~~';
           break;
         case 'code':
-          if (node.parentNode.tagName === 'PRE') {
-            markdown += '```\n' + text + '\n```';
+          // Check if parent is pre for code blocks
+          if (node.parentNode.tagName.toLowerCase() === 'pre') {
+            const lang = node.className?.replace('language-', '') || '';
+            markdown += '```' + (lang ? lang + '\n' : '') + node.textContent + '\n```\n\n';
           } else {
-            markdown += '`' + text + '`';
+            markdown += '`' + innerMarkdown + '`';
           }
           break;
         case 'blockquote':
-          const lines = text.split('\n');
+          const lines = innerMarkdown.split('\n');
           markdown += lines.map(line => '> ' + line).join('\n') + '\n\n';
           break;
         case 'h1':
-          markdown += '# ' + text + '\n\n';
+          markdown += '# ' + innerMarkdown + '\n\n';
           break;
         case 'h2':
-          markdown += '## ' + text + '\n\n';
+          markdown += '## ' + innerMarkdown + '\n\n';
           break;
         case 'h3':
-          markdown += '### ' + text + '\n\n';
+          markdown += '### ' + innerMarkdown + '\n\n';
+          break;
+        case 'h4':
+          markdown += '#### ' + innerMarkdown + '\n\n';
           break;
         case 'ul':
-        case 'ol':
-          const lis = node.querySelectorAll('li');
-          lis.forEach((li, index) => {
-            if (tagName === 'ul') {
-              markdown += '- ' + li.textContent + '\n';
-            } else {
-              markdown += (index + 1) + '. ' + li.textContent + '\n';
-            }
+          const ulItems = node.querySelectorAll('li');
+          ulItems.forEach(li => {
+            markdown += '- ' + htmlToMarkdown(li) + '\n';
           });
           markdown += '\n';
           break;
+        case 'ol':
+          const olItems = node.querySelectorAll('li');
+          olItems.forEach((li, index) => {
+            markdown += (index + 1) + '. ' + htmlToMarkdown(li) + '\n';
+          });
+          markdown += '\n';
+          break;
+        case 'li':
+          // Remove list markers if present and get content
+          let liContent = '';
+          for (let child of node.childNodes) {
+            if (child.nodeType === Node.TEXT_NODE) {
+              liContent += child.textContent;
+            } else if (child.nodeType === Node.ELEMENT_NODE && child.tagName.toLowerCase() !== 'ul' && child.tagName.toLowerCase() !== 'ol') {
+              liContent += htmlToMarkdown(child);
+            }
+          }
+          markdown += liContent.trim();
+          // Handle nested lists
+          const nestedUl = node.querySelector('ul');
+          const nestedOl = node.querySelector('ol');
+          if (nestedUl || nestedOl) {
+            markdown += '\n' + htmlToMarkdown(nestedUl || nestedOl);
+          }
+          break;
         case 'p':
-          markdown += text + '\n\n';
+          markdown += innerMarkdown + '\n\n';
+          break;
+        case 'a':
+          const href = node.getAttribute('href') || '';
+          const text = innerMarkdown;
+          markdown += '[' + text + '](' + href + ')';
+          break;
+        case 'img':
+          const src = node.getAttribute('src') || '';
+          const alt = node.getAttribute('alt') || '';
+          markdown += '![' + alt + '](' + src + ')';
+          break;
+        case 'hr':
+          markdown += '---\n\n';
+          break;
+        case 'pre':
+          // Already handled by code tag
+          markdown += innerMarkdown;
+          break;
+        case 'div':
+        case 'span':
+          // Just pass through the inner content
+          markdown += innerMarkdown;
           break;
         default:
-          markdown += text;
+          markdown += innerMarkdown;
           break;
       }
     }
