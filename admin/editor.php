@@ -60,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $label = $type === 'articles' ? __raw('nav_articles') : __raw('nav_pages');
-$content_format = $post['content_format'] ?? 'html';
+$content_format = 'html'; // Always HTML format now
 admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article')), $type);
 ?>
       <?php if ($post && $post['status'] === 'published'): ?>
@@ -78,8 +78,8 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 
     <form id="editor-form" method="POST">
       <input type="hidden" name="csrf" value="<?= $csrf ?>">
-      <input type="hidden" name="content" id="content-input">
-      <input type="hidden" name="content_format" id="content-format-input" value="<?= $content_format ?>">
+      <input type="hidden" name="content" id="content-input" value="<?= htmlspecialchars($post['content'] ?? '') ?>">
+      <input type="hidden" name="content_format" id="content-format-input" value="html">
 
       <div class="editor-layout">
         <!-- Main editor area -->
@@ -87,7 +87,7 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
           <!-- Format Bar -->
           <div class="format-bar" id="toolbar">
             <!-- HTML mode toolbar -->
-            <div id="html-toolbar" style="display: <?= $content_format === 'html' ? 'flex' : 'none' ?>; align-items: center; gap: 2px; flex-shrink: 0; overflow-x: auto;">
+            <div id="html-toolbar" style="display: flex; align-items: center; gap: 2px; flex-shrink: 0; overflow-x: auto;">
               <select class="fmt-select" onchange="formatBlock(this.value); this.value='p'" title="Formato de bloque">
                 <option value="p">Párrafo</option>
                 <option value="h1">Encabezado 1</option>
@@ -106,8 +106,11 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
               <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('underline')" title="<?= __raw("tb_underline") ?>">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"></path><line x1="4" y1="21" x2="20" y2="21"></line></svg>
               </button>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('strikeThrough')" title="<?= __raw("tb_strike") ?>">
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); execStrikeThrough()" title="<?= __raw("tb_strike") ?>">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              </button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('insertHorizontalRule')" title="Separador horizontal">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line></svg>
               </button>
               <div class="fmt-sep"></div>
               <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('insertUnorderedList')" title="<?= __raw("tb_ul") ?>">
@@ -129,54 +132,16 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
               <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); insertVideo()" title="URL de video">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
               </button>
+              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); insertAudio()" title="URL de audio">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+              </button>
               <div class="fmt-sep"></div>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('undo')" title="<?= __raw("tb_undo") ?>">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
-              </button>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('redo')" title="<?= __raw("tb_redo") ?>">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path></svg>
-              </button>
-            </div>
-            
-            <!-- Markdown mode toolbar -->
-            <div id="md-toolbar" style="display: <?= $content_format === 'markdown' ? 'flex' : 'none' ?>; align-items: center; gap: 2px; flex-shrink: 0; overflow-x: auto;">
-              <select class="fmt-select" id="md-format-select" title="Formato de bloque">
-                <option value="p">Párrafo</option>
-                <option value="h1"># Encabezado 1</option>
-                <option value="h2">## Encabezado 2</option>
-                <option value="h3">### Encabezado 3</option>
-                <option value="code">``` Código ```</option>
-                <option value="blockquote">> Cita</option>
-              </select>
-              <div class="fmt-sep"></div>
-              <button type="button" class="fmt-btn md-btn" data-wrap="**" title="<?= __raw("tb_bold") ?>">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path></svg>
-              </button>
-              <button type="button" class="fmt-btn md-btn" data-wrap="*" title="<?= __raw("tb_italic") ?>">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="4" x2="10" y2="4"></line><line x1="14" y1="20" x2="5" y2="20"></line><line x1="15" y1="4" x2="9" y2="20"></line></svg>
-              </button>
-              <button type="button" class="fmt-btn md-btn" data-wrap="~~" title="<?= __raw("tb_strike") ?>">
+              <button type="button" class="fmt-btn" id="font-size-down" title="Disminuir tamaño de fuente">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
               </button>
-              <button type="button" class="fmt-btn md-btn" data-wrap="`" title="Inline code">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
-              </button>
-              <div class="fmt-sep"></div>
-              <button type="button" class="fmt-btn md-btn" data-md="- " title="<?= __raw("tb_ul") ?>">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3" y2="6"></line><line x1="3" y1="12" x2="3" y2="12"></line><line x1="3" y1="18" x2="3" y2="18"></line></svg>
-              </button>
-              <button type="button" class="fmt-btn md-btn" data-md="1. " title="<?= __raw("tb_ol") ?>">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="6" x2="21" y2="6"></line><line x1="10" y1="12" x2="21" y2="12"></line><line x1="10" y1="18" x2="21" y2="18"></line><path d="M4 6h1v4"></path><path d="M4 10h2"></path><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"></path></svg>
-              </button>
-              <div class="fmt-sep"></div>
-              <button type="button" class="fmt-btn" id="md-link-btn" title="<?= __raw("tb_link") ?>">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-              </button>
-              <button type="button" class="fmt-btn" id="md-img-btn" title="<?= __raw("tb_image") ?>">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-              </button>
-              <button type="button" class="fmt-btn tb-upload" id="upload-img-md" title="Subir imagen">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+              <span id="font-size-label" class="font-size-label">16</span>
+              <button type="button" class="fmt-btn" id="font-size-up" title="Aumentar tamaño de fuente">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
               </button>
               <div class="fmt-sep"></div>
               <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('undo')" title="<?= __raw("tb_undo") ?>">
@@ -184,23 +149,13 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
               </button>
               <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('redo')" title="<?= __raw("tb_redo") ?>">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path></svg>
-              </button>
-              <div class="fmt-sep"></div>
-              <button type="button" class="fmt-btn tb-mode" id="md-preview-btn" title="Vista previa de Markdown" style="min-width:36px;width:36px;height:34px;padding:8px;display:flex;align-items:center;justify-content:center;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:block;margin:0 auto;">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                  <polyline points="14 2 14 8 20 8"/>
-                  <line x1="16" y1="13" x2="8" y2="13"/>
-                  <line x1="16" y1="17" x2="8" y2="17"/>
-                  <polyline points="10 9 9 9 8 9"/>
-                </svg>
               </button>
             </div>
             
             <!-- Mode switcher and other controls -->
             <div id="toolbar-right" style="margin-left: auto; display: flex; align-items: center; gap: 8px; position: relative;">
-              <button type="button" class="fmt-btn mode-switch <?= $content_format === 'html' ? 'active' : '' ?>" id="switch-html" title="<?= __raw("tb_html_mode") ?>">HTML</button>
-              <button type="button" class="fmt-btn mode-switch <?= $content_format === 'markdown' ? 'active' : '' ?>" id="switch-md" title="<?= __raw("tb_md_mode") ?>">MD</button>
+              <button type="button" class="fmt-btn mode-switch active" id="switch-visual" title="Editor visual HTML">Visual</button>
+              <button type="button" class="fmt-btn mode-switch" id="switch-raw" title="Editor HTML RAW">RAW</button>
               <button type="button" class="fmt-btn" id="preview-btn" title="<?= __raw("tb_preview_article") ?>"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
               <button type="button" class="fmt-btn" id="focus-btn" title="<?= __raw("tb_focus") ?>" onclick='if(window.toggleFocus)window.toggleFocus()'><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
             </div>
@@ -213,16 +168,12 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
           
           <!-- Editor panes -->
           <div class="editor-wrap">
-            <!-- HTML editor (contentEditable div) -->
-            <div id="editor" class="prose-editor" contenteditable="true" 
-                 style="<?= $content_format === 'markdown' ? 'display:none' : '' ?>"><?= $content_format !== 'markdown' ? ($post['content'] ?? '') : '' ?></div>
+            <!-- HTML visual editor (contentEditable div) -->
+            <div id="editor" class="prose-editor" contenteditable="true"><?= $post['content'] ?? '' ?></div>
             <!-- Hidden textarea to store content for form submission -->
-            <textarea id="editor-hidden" name="content" style="display:none"></textarea>
-            <!-- Markdown textarea -->
-            <textarea id="md-editor" class="md-editor"
-              style="<?= $content_format === 'markdown' ? '' : 'display:none' ?>"><?= $content_format === 'markdown' ? htmlspecialchars($post['content'] ?? '') : '' ?></textarea>
-            <!-- Markdown preview -->
-            <div id="md-preview" class="prose-editor md-preview-pane" style="display:none"></div>
+            <textarea id="editor-hidden" name="content" style="display:none"><?= htmlspecialchars($post['content'] ?? '') ?></textarea>
+            <!-- RAW HTML textarea -->
+            <textarea id="raw-editor" class="raw-editor" style="display:none"><?= htmlspecialchars($post['content'] ?? '') ?></textarea>
           </div>
           
         </div>
@@ -310,6 +261,31 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
               value="<?= htmlspecialchars($post['mastodon_url'] ?? '') ?>">
             <div class="panel-hint"><?= __("panel_mastodon_hint") ?></div>
           </div>
+
+          <?php if ($post && function_exists('get_content_backups')): 
+              $backups = get_content_backups($type, $slug);
+              if (!empty($backups)): ?>
+          <div class="panel">
+            <div class="panel-title" style="color:var(--accent)">Version History</div>
+            <div style="font-size:0.8rem; color:var(--muted); margin-bottom:0.5rem">
+              Last 10 backups are kept. Click to preview.
+            </div>
+            <div style="max-height:200px; overflow-y:auto; border:1px solid var(--border); border-radius:4px; padding:0.5rem;">
+              <?php foreach ($backups as $backup): ?>
+              <div style="padding:0.5rem; border-bottom:1px solid var(--border2); font-size:0.8rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span><?= htmlspecialchars($backup['date']) ?></span>
+                  <button type="button" class="btn btn-secondary btn-sm" 
+                          onclick="previewBackup('<?= htmlspecialchars($backup['timestamp']) ?>', '<?= htmlspecialchars($type) ?>', '<?= htmlspecialchars($slug) ?>')"
+                          style="padding:0.1rem 0.5rem; font-size:0.7rem;">
+                    Preview
+                  </button>
+                </div>
+              </div>
+              <?php endforeach; ?>
+            </div>
+          </div>
+          <?php endif; endif; ?>
 
           <?php if ($post): ?>
           <div class="panel">
@@ -553,11 +529,37 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
   }
 }
 
+/* Font size controls */
+.font-size-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    min-width: 24px;
+    text-align: center;
+    font-family: 'DM Sans', sans-serif;
+    user-select: none;
+}
+
 /* Asegurar que los botones con texto tengan suficiente espacio */
 .fmt-btn[title*="Cita"],
 .fmt-btn[title*="Código"],
 .fmt-btn[title*="Lista"] {
   min-width: 40px;
+}
+
+/* Responsive adjustments for font size controls */
+@media (max-width: 768px) {
+    .font-size-label {
+        font-size: 12px;
+        min-width: 22px;
+    }
+}
+
+@media (max-width: 480px) {
+    .font-size-label {
+        font-size: 11px;
+        min-width: 20px;
+    }
 }
 
 /* Ajustar iconos específicos */
@@ -744,8 +746,8 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 .page-body {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 57px); /* Ajustar según la altura del header principal */
-  overflow: hidden;
+  min-height: calc(100vh - 57px);
+  overflow: visible;
 }
 
 .editor-layout {
@@ -755,7 +757,7 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
   align-items: start;
   flex: 1;
   min-height: 0;
-  height: 100%;
+  height: auto;
 }
 
 .editor-main {
@@ -764,9 +766,9 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
   background: var(--surface); 
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  height: 100%;
+  height: auto;
   min-height: 500px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 /* Ajustar el área del editor */
@@ -777,6 +779,7 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
   min-height: 0; 
   display: flex;
   flex-direction: column;
+  max-height: 70vh; /* Limit height for editor area */
 }
 
 /* Asegurar que las toolbars internas funcionen correctamente */
@@ -952,12 +955,11 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 
 /* ── Editor panes ── */
 .editor-wrap { 
-  flex: 1; 
-  overflow-y: auto; 
-  position: relative; 
-  min-height: 0; 
+  flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  position: relative;
 }
 .prose-editor {
   min-height: 100%;
@@ -1019,7 +1021,7 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 .prose-editor em { font-style: italic; }
 .prose-editor del { text-decoration: line-through; color: var(--muted); }
 
-.html-editor, .md-editor {
+.html-editor {
   width: 100%; min-height: 100%; padding: 1.5rem;
   background: #1a1a24; color: #a8e6cf;
   font-family: 'Fira Code', 'Cascadia Code', 'Courier New', monospace;
@@ -1027,7 +1029,39 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
   tab-size: 2;
 }
 .html-editor:focus, .md-editor:focus { outline: none; }
-.md-preview-pane { background: var(--surface); border-top: 2px solid var(--accent); }
+
+/* RAW HTML editor styling */
+.raw-editor {
+  width: 100%;
+  min-height: 100%;
+  padding: 1.5rem;
+  background: #1a1a24;
+  color: #a8e6cf;
+  font-family: 'Fira Code', 'Cascadia Code', 'Courier New', monospace;
+  font-size: 1rem;
+  border: none;
+  resize: none;
+  line-height: 1.7;
+  tab-size: 2;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  flex: 1;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.raw-editor:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* Syntax highlighting for RAW editor */
+.raw-editor .tag { color: #ff79c6; }
+.raw-editor .attr { color: #50fa7b; }
+.raw-editor .value { color: #f1fa8c; }
+.raw-editor .comment { color: #6272a4; }
+
 
 /* ── Focus mode ── */
 body.focus-mode .sidebar,
@@ -1110,7 +1144,40 @@ body.focus-mode .floating-buttons-container { display: none !important; }
 }
 
 /* ── Sidebar panels ── */
-.editor-sidebar { display: flex; flex-direction: column; gap: 0.75rem; }
+.editor-sidebar { 
+  display: flex; 
+  flex-direction: column; 
+  gap: 0.75rem; 
+  max-height: calc(100vh - 150px); /* Limit sidebar height */
+  overflow-y: auto; /* Enable scrolling */
+  position: sticky;
+  top: 20px; /* Stick to top with some offset */
+}
+
+/* Custom scrollbar for sidebar */
+.editor-sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.editor-sidebar::-webkit-scrollbar-track {
+  background: var(--surface2);
+  border-radius: 3px;
+}
+
+.editor-sidebar::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.editor-sidebar::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+/* For Firefox */
+.editor-sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) var(--surface2);
+}
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; }
 .panel-title { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 0.65rem; }
 .panel-hint { font-size: 0.75rem; color: var(--muted); margin-top: 0.4rem; }
@@ -1122,7 +1189,8 @@ body.focus-mode .floating-buttons-container { display: none !important; }
   html, body {
     overflow-x: hidden !important;
     position: relative;
-    height: 100%;
+    height: auto;
+    min-height: 100vh;
   }
   
   /* Corregir el page-body principal */
@@ -1194,6 +1262,9 @@ body.focus-mode .floating-buttons-container { display: none !important; }
     overflow: visible !important;
     z-index: 10;
     box-sizing: border-box;
+    max-height: none !important; /* Remove height limit on mobile */
+    overflow-y: visible !important; /* Allow content to flow naturally */
+    position: static !important; /* Remove sticky on mobile */
   }
   
   /* Ajustar los paneles del sidebar */
@@ -1214,6 +1285,27 @@ body.focus-mode .floating-buttons-container { display: none !important; }
   /* Asegurar que el último panel tenga espacio extra */
   .editor-sidebar .panel:last-child {
     margin-bottom: 2rem !important;
+  }
+  
+  /* Ensure Danger Zone is visible */
+  .editor-sidebar .panel[style*="color:var(--red)"] {
+    margin-top: 2rem !important;
+    border: 1px solid var(--red) !important;
+    background: rgba(255, 0, 0, 0.05) !important;
+  }
+  
+  /* Add a visual indicator for scrollable content */
+  .editor-sidebar::before {
+    content: "↓ Desplázate para ver más opciones ↓";
+    display: block;
+    text-align: center;
+    font-size: 12px;
+    color: var(--accent);
+    padding: 10px;
+    margin: 10px 0;
+    background: var(--surface2);
+    border-radius: 8px;
+    border: 1px dashed var(--border);
   }
   
   /* Ajustar inputs dentro de paneles */
@@ -1787,81 +1879,189 @@ body.focus-mode .floating-buttons-container { display: none !important; }
   }
 }
 
+/* Fix strikethrough styling */
+.prose-editor del {
+  text-decoration: line-through !important;
+  color: var(--text);
+  background: rgba(255, 0, 0, 0.1);
+  padding: 0.1rem 0.2rem;
+  border-radius: 3px;
+  text-decoration-color: var(--red);
+  text-decoration-thickness: 2px;
+}
+
+/* Ensure strikethrough works properly in headers */
+.prose-editor h1 del,
+.prose-editor h2 del,
+.prose-editor h3 del,
+.prose-editor h4 del {
+  text-decoration: line-through !important;
+  text-decoration-color: var(--red);
+  text-decoration-thickness: 3px;
+  background: rgba(255, 0, 0, 0.15);
+}
+
+/* Fix for inline strikethrough */
+.prose-editor del,
+#editor del,
+[contenteditable] del {
+  text-decoration: line-through !important;
+  text-decoration-color: var(--red) !important;
+  text-decoration-thickness: 2px !important;
+  position: relative;
+  display: inline;
+}
+
+/* Fix text decoration inheritance */
+.prose-editor * {
+  text-decoration: none !important;
+}
+
+.prose-editor del {
+  text-decoration: line-through !important;
+}
+
+/* Audio player styling */
+.media-audio {
+  margin: 1.5rem 0;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.media-audio::before {
+  content: "🎵";
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.media-audio audio {
+  width: 100%;
+  height: 36px;
+  flex: 1;
+}
+
+/* Audio player in preview */
+.md-preview-pane .media-audio {
+  margin: 1.5rem 0;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.md-preview-pane .media-audio::before {
+  content: "🎵";
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.md-preview-pane .media-audio audio {
+  width: 100%;
+  height: 36px;
+  flex: 1;
+}
+
+/* Fix for contenteditable areas */
+#editor del,
+[contenteditable] del {
+  text-decoration: line-through !important;
+}
+
+/* Ensure strikethrough is visible in all contexts */
+del, s, strike {
+  text-decoration: line-through !important;
+  position: relative;
+}
+
+/* Fix for Safari strikethrough rendering */
+@supports (-webkit-touch-callout: none) {
+  .prose-editor del {
+    -webkit-text-decoration-line: line-through;
+    -webkit-text-decoration-color: var(--red);
+    -webkit-text-decoration-thickness: 2px;
+  }
+}
+
+/* Style for horizontal rule button */
+.fmt-btn[title="Separador horizontal"] svg {
+  /* No rotation needed for HR icon */
+  transform: none;
+}
+
+/* Markdown preview strikethrough */
+.md-preview-pane del {
+  text-decoration: line-through !important;
+  color: var(--text);
+  background: rgba(255, 0, 0, 0.1);
+  padding: 0.1rem 0.2rem;
+  border-radius: 3px;
+  text-decoration-color: var(--red);
+  text-decoration-thickness: 2px;
+}
+
+.md-preview-pane s {
+  text-decoration: line-through !important;
+}
+
+/* Ensure markdown strikethrough ~~text~~ is rendered properly */
+.md-preview-pane s,
+.md-preview-pane del {
+  text-decoration: line-through !important;
+}
+
 </style>
 <input type="file" id="editor-image-upload" accept="image/*" multiple style="display:none">
 
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
-const mdEditor     = document.getElementById('md-editor');
-const mdPreview    = document.getElementById('md-preview');
+const rawEditor    = document.getElementById('raw-editor');
 const contentInput = document.getElementById('content-input');
 const fmtInput     = document.getElementById('content-format-input');
 const titleInput   = document.getElementById('post-title');
 const slugInput    = document.getElementById('custom-slug');
 const htmlToolbar  = document.getElementById('html-toolbar');
-const mdToolbar    = document.getElementById('md-toolbar');
 
-let mode       = <?= json_encode($content_format) ?>;  // 'html' | 'markdown'
-let mdPreviewing = false;
+let mode       = 'visual';  // 'visual' | 'raw'
 let slugManuallySet = <?= $is_new ? 'false' : 'true' ?>;
 
-// ── Markdown to HTML converter (client‑side) ──────────────────────────────
-function markdownToHtml(md) {
-  if (!md) return '';
-  
-  // Basic Markdown to HTML conversion
-  let html = md
-    // Headers
-    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-    // Bold
-    .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
-    .replace(/__(.*?)__/gim, '<strong>$1</strong>')
-    // Italic
-    .replace(/\*(.*?)\*/gim, '<em>$1</em>')
-    .replace(/_(.*?)_/gim, '<em>$1</em>')
-    // Strikethrough
-    .replace(/~~(.*?)~~/gim, '<del>$1</del>')
-    // Code blocks
-    .replace(/```([\s\S]*?)```/gim, '<pre><code>$1</code></pre>')
-    // Inline code
-    .replace(/`(.*?)`/gim, '<code>$1</code>')
-    // Blockquotes
-    .replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>')
-    // Lists
-    .replace(/^\d+\. (.*$)/gim, '<ol><li>$1</li></ol>')
-    .replace(/^\- (.*$)/gim, '<ul><li>$1</li></ul>')
-    // Fix nested lists
-    .replace(/<\/ul>\s*<ul>/gim, '')
-    .replace(/<\/ol>\s*<ol>/gim, '')
-    // Links
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a href="$2">$1</a>')
-    // Images
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/gim, '<img src="$2" alt="$1">')
-    // Horizontal rule
-    .replace(/^\-\-\-$/gim, '<hr>')
-    // Paragraphs (handle multiple lines)
-    .split('\n\n')
-    .map(para => {
-      para = para.trim();
-      if (!para) return '';
-      if (para.startsWith('<') && para.endsWith('>')) return para;
-      return `<p>${para.replace(/\n/g, '<br>')}</p>`;
-    })
-    .join('');
-  
-  return html;
-}
 
 // ── Submit sync ────────────────────────────────────────────────────────────
-document.getElementById('editor-form').addEventListener('submit', () => {
-  if (mode === 'markdown') {
-    contentInput.value = mdEditor.value;
-  } else {
-    contentInput.value = document.getElementById('editor').value;
+document.getElementById('editor-form').addEventListener('submit', function(e) {
+  console.log('Form submission started, mode:', mode);
+  
+  // Prevent double submission
+  if (this.classList.contains('submitting')) {
+    e.preventDefault();
+    console.log('Prevented double submission');
+    return;
   }
-  fmtInput.value = mode;
+  
+  // Always sync content before submission
+  syncContentBeforeSave();
+  
+  // Verify content was captured
+  const capturedContent = contentInput.value;
+  console.log('Captured content length:', capturedContent.length);
+  
+  if (capturedContent.length === 0) {
+    console.warn('Warning: Empty content captured!');
+  }
+  
+  // Add a small delay to ensure content is captured
+  setTimeout(() => {
+    this.classList.add('submitting');
+    console.log('Form marked as submitting');
+  }, 100);
 });
 
 // ── Autosave ──────────────────────────────────────────────────────────────
@@ -1893,8 +2093,14 @@ function showAutosaveMsg(msg, color) {
 }
 
 function getCurrentContent() {
-  if (mode === 'markdown') return mdEditor.value;
-  return document.getElementById('editor').innerHTML;
+  if (mode === 'raw') {
+    // Get content from raw HTML editor
+    return rawEditor ? rawEditor.value : '';
+  } else {
+    // For visual editor, get the innerHTML
+    const editor = document.getElementById('editor');
+    return editor ? editor.innerHTML : '';
+  }
 }
 
 function getFormData() {
@@ -1966,13 +2172,22 @@ async function syncToServer() {
       }
       showAutosaveMsg('✓ Borrador guardado automáticamente', 'var(--green)');
       try { localStorage.removeItem(AUTOSAVE_KEY); } catch(e) {}
+      
+      // Also update the hidden form fields to keep them in sync
+      contentInput.value = data.content;
+      document.getElementById('editor-hidden').value = data.content;
+      fmtInput.value = data.content_format;
+      
+      console.log('Autosave completed, content synced');
     }
-  } catch(e) {}
+  } catch(e) {
+    console.error('Autosave error:', e);
+  }
 }
 
 serverSyncTimer = setInterval(syncToServer, 60000);
 
-[mdEditor, document.getElementById('editor')].forEach(el => {
+[rawEditor, document.getElementById('editor')].forEach(el => {
   el?.addEventListener('input', scheduleLocalSave);
 });
 document.getElementById('post-title')?.addEventListener('input', scheduleLocalSave);
@@ -1983,233 +2198,106 @@ document.getElementById('editor-form').addEventListener('submit', () => {
   lastSavedHash = null;
 }, true);
 
-// ── Mode switch HTML ↔ MD ─────────────────────────────────────────────────
-document.getElementById('switch-html').addEventListener('click', function(e) {
+// Function to sync content before save
+function syncContentBeforeSave() {
+  console.log('Syncing content before save, mode:', mode);
+  
+  if (mode === 'raw') {
+    const rawContent = rawEditor ? rawEditor.value : '';
+    console.log('Raw HTML content length:', rawContent.length);
+    
+    // Update both hidden fields
+    contentInput.value = rawContent;
+    document.getElementById('editor-hidden').value = rawContent;
+  } else {
+    const editor = document.getElementById('editor');
+    const htmlContent = editor ? editor.innerHTML : '';
+    console.log('Visual HTML content length:', htmlContent.length);
+    
+    // Update both hidden fields
+    contentInput.value = htmlContent;
+    document.getElementById('editor-hidden').value = htmlContent;
+  }
+  
+  fmtInput.value = 'html'; // Always HTML format
+  console.log('Content format set to: html');
+  
+  // Force a DOM update
+  contentInput.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+// ── Mode switch Visual ↔ RAW ───────────────────────────────────────────────
+document.getElementById('switch-visual').addEventListener('click', function(e) {
   e.preventDefault();
-  switchMode('html');
+  switchMode('visual');
   this.classList.add('active');
-  document.getElementById('switch-md').classList.remove('active');
+  document.getElementById('switch-raw').classList.remove('active');
 });
 
-document.getElementById('switch-md').addEventListener('click', function(e) {
+document.getElementById('switch-raw').addEventListener('click', function(e) {
   e.preventDefault();
-  switchMode('markdown');
+  switchMode('raw');
   this.classList.add('active');
-  document.getElementById('switch-html').classList.remove('active');
+  document.getElementById('switch-visual').classList.remove('active');
 });
 
 function switchMode(newMode) {
   if (newMode === mode) return;
 
-  if (newMode === 'markdown') {
-    // Convert HTML content to plain text for markdown
-    const htmlEditor = document.getElementById('editor');
-    const mdEditor = document.getElementById('md-editor');
+  if (newMode === 'raw') {
+    // Convert visual HTML to raw HTML text
+    const visualEditor = document.getElementById('editor');
+    const rawEditor = document.getElementById('raw-editor');
     
-    // Get HTML content and convert to plain text (basic conversion)
-    let htmlContent = htmlEditor.innerHTML;
+    // Get HTML content and escape it for the textarea
+    let htmlContent = visualEditor.innerHTML;
     
-    // Simple HTML to text conversion
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = htmlContent;
+    // Clean up the HTML for better readability
+    htmlContent = htmlContent
+      .replace(/&nbsp;/g, ' ')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '</p>\n')
+      .replace(/<\/div>/gi, '</div>\n')
+      .replace(/<\/h[1-6]>/gi, '</h$1>\n')
+      .replace(/<\/li>/gi, '</li>\n')
+      .replace(/<\/ul>/gi, '</ul>\n')
+      .replace(/<\/ol>/gi, '</ol>\n')
+      .replace(/<\/blockquote>/gi, '</blockquote>\n')
+      .replace(/<\/pre>/gi, '</pre>\n');
     
-    // Basic conversions for common formatting
-    let markdownContent = htmlToMarkdown(tempDiv);
+    // Set raw editor content
+    rawEditor.value = htmlContent;
     
-    // Set markdown editor content
-    mdEditor.value = markdownContent;
-    
-    // Switch to markdown
-    htmlEditor.style.display = 'none';
-    mdEditor.style.display = '';
-    document.getElementById('md-preview').style.display = 'none';
-    document.getElementById('html-toolbar').style.display = 'none';
-    document.getElementById('md-toolbar').style.display = 'flex';
-    mdPreviewing = false;
-    document.getElementById('md-preview-btn').innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>';
+    // Switch to raw mode
+    visualEditor.style.display = 'none';
+    rawEditor.style.display = '';
+    htmlToolbar.style.display = 'none';
   } else {
-    // Convert markdown content to HTML
-    const mdEditor = document.getElementById('md-editor');
-    const htmlEditor = document.getElementById('editor');
+    // Convert raw HTML text to visual editor
+    const rawEditor = document.getElementById('raw-editor');
+    const visualEditor = document.getElementById('editor');
     
-    if (mdEditor.value.trim()) {
-      // First try server-side conversion
-      const formData = new FormData();
-      formData.append('md', mdEditor.value);
-      formData.append('csrf', '<?= $csrf ?>');
-      
-      fetch('<?= base_url() ?>/admin/markdown_preview.php', {
-        method: 'POST',
-        body: formData
-      })
-      .then(response => {
-        if (!response.ok) throw new Error('Server error');
-        return response.text();
-      })
-      .then(html => {
-        if (html && html.trim()) {
-          htmlEditor.innerHTML = html;
-        } else {
-          // Fallback to client-side conversion
-          htmlEditor.innerHTML = markdownToHtml(mdEditor.value);
-        }
-        
-        // Switch to HTML
-        mdEditor.style.display = 'none';
-        document.getElementById('md-preview').style.display = 'none';
-        htmlEditor.style.display = '';
-        document.getElementById('html-toolbar').style.display = 'flex';
-        document.getElementById('md-toolbar').style.display = 'none';
-      })
-      .catch(error => {
-        console.error('Error converting Markdown:', error);
-        // Fallback to client-side conversion
-        htmlEditor.innerHTML = markdownToHtml(mdEditor.value);
-        
-        // Switch to HTML
-        mdEditor.style.display = 'none';
-        document.getElementById('md-preview').style.display = 'none';
-        htmlEditor.style.display = '';
-        document.getElementById('html-toolbar').style.display = 'flex';
-        document.getElementById('md-toolbar').style.display = 'none';
-      });
-    } else {
-      // Empty content
-      htmlEditor.innerHTML = '';
-      mdEditor.style.display = 'none';
-      document.getElementById('md-preview').style.display = 'none';
-      htmlEditor.style.display = '';
-      document.getElementById('html-toolbar').style.display = 'flex';
-      document.getElementById('md-toolbar').style.display = 'none';
-    }
+    // Get raw HTML content
+    let rawContent = rawEditor.value;
+    
+    // Clean up line breaks and whitespace
+    rawContent = rawContent
+      .replace(/\n\s*\n/g, '\n')
+      .trim();
+    
+    // Set visual editor content
+    visualEditor.innerHTML = rawContent;
+    
+    // Switch to visual mode
+    rawEditor.style.display = 'none';
+    visualEditor.style.display = '';
+    htmlToolbar.style.display = 'flex';
   }
 
   mode = newMode;
-  fmtInput.value = mode;
-  document.getElementById('switch-html').classList.toggle('active', mode === 'html');
-  document.getElementById('switch-md').classList.toggle('active', mode === 'markdown');
-}
-
-// Helper function for basic HTML to Markdown conversion
-function htmlToMarkdown(element) {
-  let markdown = '';
-  
-  for (let node of element.childNodes) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      markdown += node.textContent;
-    } else if (node.nodeType === Node.ELEMENT_NODE) {
-      const tagName = node.tagName.toLowerCase();
-      const innerMarkdown = htmlToMarkdown(node);
-      
-      switch(tagName) {
-        case 'b':
-        case 'strong':
-          markdown += '**' + innerMarkdown + '**';
-          break;
-        case 'i':
-        case 'em':
-          markdown += '*' + innerMarkdown + '*';
-          break;
-        case 'u':
-          markdown += '__' + innerMarkdown + '__';
-          break;
-        case 's':
-        case 'del':
-          markdown += '~~' + innerMarkdown + '~~';
-          break;
-        case 'code':
-          // Check if parent is pre for code blocks
-          if (node.parentNode.tagName.toLowerCase() === 'pre') {
-            const lang = node.className?.replace('language-', '') || '';
-            markdown += '```' + (lang ? lang + '\n' : '') + node.textContent + '\n```\n\n';
-          } else {
-            markdown += '`' + innerMarkdown + '`';
-          }
-          break;
-        case 'blockquote':
-          const lines = innerMarkdown.split('\n');
-          markdown += lines.map(line => '> ' + line).join('\n') + '\n\n';
-          break;
-        case 'h1':
-          markdown += '# ' + innerMarkdown + '\n\n';
-          break;
-        case 'h2':
-          markdown += '## ' + innerMarkdown + '\n\n';
-          break;
-        case 'h3':
-          markdown += '### ' + innerMarkdown + '\n\n';
-          break;
-        case 'h4':
-          markdown += '#### ' + innerMarkdown + '\n\n';
-          break;
-        case 'ul':
-          const ulItems = node.querySelectorAll('li');
-          ulItems.forEach(li => {
-            markdown += '- ' + htmlToMarkdown(li) + '\n';
-          });
-          markdown += '\n';
-          break;
-        case 'ol':
-          const olItems = node.querySelectorAll('li');
-          olItems.forEach((li, index) => {
-            markdown += (index + 1) + '. ' + htmlToMarkdown(li) + '\n';
-          });
-          markdown += '\n';
-          break;
-        case 'li':
-          // Remove list markers if present and get content
-          let liContent = '';
-          for (let child of node.childNodes) {
-            if (child.nodeType === Node.TEXT_NODE) {
-              liContent += child.textContent;
-            } else if (child.nodeType === Node.ELEMENT_NODE && child.tagName.toLowerCase() !== 'ul' && child.tagName.toLowerCase() !== 'ol') {
-              liContent += htmlToMarkdown(child);
-            }
-          }
-          markdown += liContent.trim();
-          // Handle nested lists
-          const nestedUl = node.querySelector('ul');
-          const nestedOl = node.querySelector('ol');
-          if (nestedUl || nestedOl) {
-            markdown += '\n' + htmlToMarkdown(nestedUl || nestedOl);
-          }
-          break;
-        case 'p':
-          markdown += innerMarkdown + '\n\n';
-          break;
-        case 'a':
-          const href = node.getAttribute('href') || '';
-          const text = innerMarkdown;
-          markdown += '[' + text + '](' + href + ')';
-          break;
-        case 'img':
-          const src = node.getAttribute('src') || '';
-          const alt = node.getAttribute('alt') || '';
-          markdown += '![' + alt + '](' + src + ')';
-          break;
-        case 'hr':
-          markdown += '---\n\n';
-          break;
-        case 'pre':
-          // Already handled by code tag
-          markdown += innerMarkdown;
-          break;
-        case 'div':
-        case 'span':
-          // Just pass through the inner content
-          markdown += innerMarkdown;
-          break;
-        case 'br':
-          markdown += '\n';
-          break;
-        default:
-          markdown += innerMarkdown;
-          break;
-      }
-    }
-  }
-  
-  return markdown.trim();
+  fmtInput.value = 'html'; // Always HTML format now
+  document.getElementById('switch-visual').classList.toggle('active', mode === 'visual');
+  document.getElementById('switch-raw').classList.toggle('active', mode === 'raw');
 }
 
 // ── HTML Editor Toolbar ──────────────────────────────────────────────────
@@ -2226,7 +2314,99 @@ function exec(cmd, val = null) {
   if (mode !== 'html') return;
   const editor = document.getElementById('editor');
   editor.focus();
+  
+  // Special handling for strikethrough to ensure it works properly
+  if (cmd === 'strikeThrough') {
+    execStrikeThrough();
+    return;
+  }
+  
+  // Special handling for horizontal rule
+  if (cmd === 'insertHorizontalRule') {
+    document.execCommand('insertHTML', false, '<hr>');
+    return;
+  }
+  
+  // Use normal execCommand for other commands
   document.execCommand(cmd, false, val);
+}
+
+function execStrikeThrough() {
+  if (mode !== 'html') return;
+  const editor = document.getElementById('editor');
+  editor.focus();
+  
+  // Check if we're in a strikethrough already
+  const selection = window.getSelection();
+  if (selection.rangeCount === 0) return;
+  
+  const range = selection.getRangeAt(0);
+  const ancestor = range.commonAncestorContainer;
+  
+  // Check if the selection is already inside a <del> element
+  let delElement = ancestor.nodeType === 3 ? ancestor.parentElement : ancestor;
+  let foundDel = null;
+  
+  // Find the nearest <del>, <s>, or <strike> element
+  while (delElement && delElement !== editor) {
+    if (delElement.tagName === 'DEL' || delElement.tagName === 'S' || delElement.tagName === 'STRIKE') {
+      foundDel = delElement;
+      break;
+    }
+    delElement = delElement.parentElement;
+  }
+  
+  if (foundDel) {
+    // Remove strikethrough - unwrap the element
+    const parent = foundDel.parentNode;
+    
+    // Create a document fragment to hold the children
+    const fragment = document.createDocumentFragment();
+    while (foundDel.firstChild) {
+      fragment.appendChild(foundDel.firstChild);
+    }
+    
+    // Replace the del element with its children
+    parent.replaceChild(fragment, foundDel);
+    
+    // Restore selection
+    const newRange = document.createRange();
+    newRange.setStart(fragment.firstChild || parent, 0);
+    newRange.setEnd(fragment.lastChild || parent, fragment.lastChild ? fragment.lastChild.length || 0 : 0);
+    selection.removeAllRanges();
+    selection.addRange(newRange);
+  } else {
+    // Apply strikethrough
+    const selectedText = range.toString();
+    if (selectedText) {
+      // Wrap selected text with <del> tag
+      const del = document.createElement('del');
+      del.textContent = selectedText;
+      range.deleteContents();
+      range.insertNode(del);
+      
+      // Move cursor after the inserted element
+      const newRange = document.createRange();
+      newRange.setStartAfter(del);
+      newRange.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+    } else {
+      // If no text selected, insert a <del> element with placeholder
+      const del = document.createElement('del');
+      del.textContent = 'texto tachado';
+      range.insertNode(del);
+      
+      // Select the inserted text
+      const newRange = document.createRange();
+      newRange.selectNodeContents(del);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+    }
+  }
+  
+  // Force update
+  editor.dispatchEvent(new Event('input'));
 }
 
 function insertLink() {
@@ -2247,12 +2427,24 @@ function insertImage() {
   }
 }
 
+
 function insertAudio() {
-  const url = prompt('URL del audio:');
+  const url = prompt('URL del audio (MP3, OGG, WAV, etc.):');
   if (url) {
-    const editor = document.getElementById('editor');
-    editor.focus();
-    document.execCommand('insertHTML', false, `<audio controls src="${url}" style="width:100%;"></audio>`);
+    if (mode === 'html') {
+      const editor = document.getElementById('editor');
+      editor.focus();
+      document.execCommand('insertHTML', false, `<div class="media-audio"><audio controls src="${url}" style="width:100%;"></audio></div>`);
+    } else {
+      // For markdown mode, we'll use HTML since markdown doesn't have native audio support
+      const ta = mdEditor;
+      const start = ta.selectionStart, end = ta.selectionEnd;
+      const audioHtml = `<div class="media-audio"><audio controls src="${url}" style="width:100%;"></audio></div>`;
+      ta.value = ta.value.substring(0, start) + audioHtml + ta.value.substring(end);
+      ta.setSelectionRange(start + audioHtml.length, start + audioHtml.length);
+      ta.focus();
+      if (mdPreviewing) updateMdPreview();
+    }
   }
 }
 
@@ -2308,152 +2500,35 @@ document.addEventListener('DOMContentLoaded', function() {
   setupToolbarButtons();
   
   // Also set up mode switchers
-  document.getElementById('switch-html').addEventListener('click', () => switchMode('html'));
-  document.getElementById('switch-md').addEventListener('click', () => switchMode('markdown'));
+  document.getElementById('switch-visual').addEventListener('click', () => switchMode('visual'));
+  document.getElementById('switch-raw').addEventListener('click', () => switchMode('raw'));
   
-  // Update hidden textarea before form submission
-  document.getElementById('editor-form').addEventListener('submit', function() {
-    if (mode === 'html') {
-      document.getElementById('editor-hidden').value = document.getElementById('editor').innerHTML;
-    }
+  // Update hidden textarea before form submission for all buttons
+  const form = document.getElementById('editor-form');
+  const draftBtn = form.querySelector('button[name="status"][value="draft"]');
+  const publishBtn = document.getElementById('publish-btn');
+  
+  if (draftBtn) {
+    draftBtn.addEventListener('click', function(e) {
+      // Sync content before saving
+      syncContentBeforeSave();
+    });
+  }
+  
+  if (publishBtn) {
+    publishBtn.addEventListener('click', function(e) {
+      // Sync content before saving
+      syncContentBeforeSave();
+    });
+  }
+  
+  // Also update the form submit handler to be more robust
+  form.addEventListener('submit', function(e) {
+    // Sync content one more time before submission
+    syncContentBeforeSave();
   });
 });
 
-// ── Markdown toolbar ───────────────────────────────────────────────────────
-document.querySelectorAll('.md-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const ta = mdEditor;
-    const start = ta.selectionStart, end = ta.selectionEnd;
-    const sel = ta.value.substring(start, end);
-
-    if (btn.dataset.wrap) {
-      const w = btn.dataset.wrap;
-      const replacement = sel ? `${w}${sel}${w}` : `${w}text${w}`;
-      insertAtCursor(ta, replacement, start, end);
-    } else if (btn.dataset.md) {
-      const prefix = btn.dataset.md;
-      const lineStart = ta.value.lastIndexOf('\n', start - 1) + 1;
-      ta.focus();
-      ta.setSelectionRange(lineStart, lineStart);
-      insertAtCursor(ta, prefix, lineStart, lineStart);
-    } else if (btn.dataset.block) {
-      insertAtCursor(ta, '\n' + btn.dataset.block + '\n', start, end);
-    }
-    updateMdPreview();
-  });
-});
-
-document.getElementById('md-link-btn').addEventListener('click', () => {
-  const url   = prompt(<?= json_encode(__raw('prompt_link_url')) ?>) || 'https://';
-  const label = prompt('Label:') || 'link';
-  insertAtCursor(mdEditor, `[${label}](${url})`, mdEditor.selectionStart, mdEditor.selectionEnd);
-});
-document.getElementById('md-img-btn').addEventListener('click', () => {
-  const url = prompt('Image URL:') || '';
-  const alt = prompt('Alt text:') || '';
-  insertAtCursor(mdEditor, `![${alt}](${url})`, mdEditor.selectionStart, mdEditor.selectionEnd);
-});
-
-// Función para manejar el dropdown de formatos (Markdown mode)
-document.getElementById('md-format-select')?.addEventListener('change', function() {
-  const value = this.value;
-  const ta = mdEditor;
-  const start = ta.selectionStart;
-  const end = ta.selectionEnd;
-  
-  let text = '';
-  switch(value) {
-    case 'p':
-      text = '';
-      break;
-    case 'h1':
-      text = '# ';
-      break;
-    case 'h2':
-      text = '## ';
-      break;
-    case 'h3':
-      text = '### ';
-      break;
-    case 'code':
-      text = '```\n\n```';
-      break;
-    case 'blockquote':
-      text = '> ';
-      break;
-  }
-  
-  if (text) {
-    ta.focus();
-    ta.setSelectionRange(start, end);
-    insertAtCursor(ta, text, start, end);
-  }
-  
-  // Reset al valor por defecto
-  this.value = 'p';
-});
-
-// Markdown preview toggle
-document.getElementById('md-preview-btn').addEventListener('click', () => {
-  mdPreviewing = !mdPreviewing;
-  if (mdPreviewing) {
-    updateMdPreview();
-    mdEditor.style.display = 'none';
-    mdPreview.style.display = '';
-    document.getElementById('md-preview-btn').innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
-    document.getElementById('md-preview-btn').title = 'Editar Markdown';
-  } else {
-    mdPreview.style.display = 'none';
-    mdEditor.style.display = '';
-    document.getElementById('md-preview-btn').innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>';
-    document.getElementById('md-preview-btn').title = 'Vista previa de Markdown';
-  }
-});
-
-mdEditor.addEventListener('input', () => { 
-  if (mdPreviewing) {
-    // Debounce the preview update to avoid too many requests
-    clearTimeout(mdEditor._previewTimer);
-    mdEditor._previewTimer = setTimeout(updateMdPreview, 300);
-  }
-});
-
-function updateMdPreview() {
-  // First try server-side conversion
-  const formData = new FormData();
-  formData.append('md', mdEditor.value);
-  formData.append('csrf', '<?= $csrf ?>');
-  
-  fetch('<?= base_url() ?>/admin/markdown_preview.php', {
-    method: 'POST',
-    body: formData
-  })
-  .then(response => {
-    if (!response.ok) {
-      throw new Error('Server error: ' + response.status);
-    }
-    return response.text();
-  })
-  .then(html => {
-    if (html && html.trim()) {
-      mdPreview.innerHTML = html;
-    } else {
-      // Fallback to client-side conversion
-      mdPreview.innerHTML = markdownToHtml(mdEditor.value);
-    }
-  })
-  .catch(error => {
-    console.error('Error fetching Markdown preview:', error);
-    // Fallback to client-side conversion
-    mdPreview.innerHTML = markdownToHtml(mdEditor.value);
-  });
-}
-
-function insertAtCursor(ta, text, start, end) {
-  ta.focus();
-  ta.value = ta.value.substring(0, start) + text + ta.value.substring(end);
-  ta.setSelectionRange(start + text.length, start + text.length);
-}
 
 // ── Slug from title ────────────────────────────────────────────────────────
 titleInput.addEventListener('input', () => {
@@ -2715,20 +2790,27 @@ let editorFontSize = parseInt(localStorage.getItem(FONT_SIZE_KEY) || '16', 10);
 
 function applyEditorFontSize(size) {
   editorFontSize = Math.min(FONT_MAX, Math.max(FONT_MIN, size));
-  const targets = [
-    document.getElementById('editor'),
-    document.getElementById('md-editor'),
-  ];
-  targets.forEach(el => { if (el) el.style.fontSize = editorFontSize + 'px'; });
+  
+  // Apply to both editors
+  const visualEditor = document.getElementById('editor');
+  const rawEditor = document.getElementById('raw-editor');
+  
+  if (visualEditor) visualEditor.style.fontSize = editorFontSize + 'px';
+  if (rawEditor) rawEditor.style.fontSize = editorFontSize + 'px';
+  
+  // Update the label
   const label = document.getElementById('font-size-label');
   if (label) label.textContent = editorFontSize;
+  
   localStorage.setItem(FONT_SIZE_KEY, editorFontSize);
 }
 
-applyEditorFontSize(editorFontSize);
-
+// Update event listeners to handle both sets of buttons
 document.getElementById('font-size-up')?.addEventListener('click', () => applyEditorFontSize(editorFontSize + FONT_STEP));
 document.getElementById('font-size-down')?.addEventListener('click', () => applyEditorFontSize(editorFontSize - FONT_STEP));
+
+// Initialize font size on page load
+applyEditorFontSize(editorFontSize);
 
 // ── Article Preview ───────────────────────────────────────────────────────
 const previewBtn   = document.getElementById('preview-btn');
@@ -2740,7 +2822,20 @@ previewBtn?.addEventListener('click', openPreview);
 
 function openPreview() {
   const adminBase = siteBase + '/admin';
-
+  
+  // Get current content
+  let content = '';
+  if (mode === 'raw') {
+    content = rawEditor.value;
+  } else {
+    content = document.getElementById('editor').innerHTML;
+  }
+  
+  const title   = document.getElementById('post-title').value || '(Sin título)';
+  const excerpt = document.querySelector('[name="excerpt"]')?.value || '';
+  const status  = document.getElementById('status-select')?.value || 'draft';
+  
+  // If we have a saved post, use the proper preview URL
   if (postSlug) {
     const url = adminBase + '/preview.php?type=' + encodeURIComponent(postType)
               + '&slug=' + encodeURIComponent(postSlug)
@@ -2748,21 +2843,10 @@ function openPreview() {
     window.open(url, '_blank');
     return;
   }
-
-  let content = '';
-  if (mode === 'markdown') {
-    content = '<p style="color:#888;font-style:italic">Contenido Markdown — guarda primero para ver la vista previa completa con el tema activo.</p>'
-            + '<pre style="background:#1a1a24;color:#a8e6cf;padding:1rem;border-radius:6px;font-size:0.875rem;line-height:1.6;overflow-x:auto;margin-top:1rem">'
-            + (mdEditor.value || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-            + '</pre>';
-  } else {
-    content = document.getElementById('editor').innerHTML;
-  }
-
-  const title   = document.getElementById('post-title').value || '(Sin título)';
-  const excerpt = document.querySelector('[name="excerpt"]')?.value || '';
+  
+  // For unsaved posts, create a temporary preview
   const accent  = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#e05c1a';
-
+  
   const html = `<!DOCTYPE html><html lang="es"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Vista previa — ${title.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</title>
@@ -2796,7 +2880,7 @@ h1{font-family:'Roboto Condensed',sans-serif;font-size:clamp(1.5rem,4vw,2.2rem);
 .media-video{margin:1.5rem 0;border-radius:8px;overflow:hidden;background:#000;line-height:0}
 .media-video video{width:100%;display:block}
 </style></head><body>
-<div class="banner">👁 VISTA PREVIA — AÚN NO GUARDADO — guarda el artículo para ver la vista previa con el tema activo del sitio</div>
+<div class="banner">👁 VISTA PREVIA — ${status === 'draft' ? 'BORRADOR' : 'PUBLICADO'} — guarda el artículo para ver la vista previa con el tema activo del sitio</div>
 <div class="wrap">
   <h1>${title.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</h1>
   ${excerpt ? '<p class="excerpt">' + excerpt.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</p>' : ''}
@@ -3238,6 +3322,64 @@ window.addEventListener('orientationchange', function() {
   setTimeout(fixIOSLayout, 300);
 });
 
+// ── Backup Preview ────────────────────────────────────────────────────────
+function previewBackup(timestamp, type, slug) {
+    if (!confirm('Preview this backup version? You can copy content from the preview.')) {
+        return;
+    }
+    
+    fetch(`<?= base_url() ?>/admin/backup_preview.php?type=${encodeURIComponent(type)}&slug=${encodeURIComponent(slug)}&timestamp=${encodeURIComponent(timestamp)}&csrf=<?= $csrf ?>`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.content) {
+                // Open preview in a new window
+                const previewWindow = window.open('', '_blank');
+                const html = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Backup Preview - ${timestamp}</title>
+                        <style>
+                            body { font-family: sans-serif; padding: 2rem; max-width: 800px; margin: 0 auto; }
+                            .header { background: #f0f0f0; padding: 1rem; border-radius: 4px; margin-bottom: 2rem; }
+                            .content { line-height: 1.6; }
+                            .actions { margin-top: 2rem; padding: 1rem; background: #f9f9f9; border-radius: 4px; }
+                            button { padding: 0.5rem 1rem; margin-right: 0.5rem; cursor: pointer; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="header">
+                            <h2>Backup Preview</h2>
+                            <p><strong>Timestamp:</strong> ${timestamp}</p>
+                            <p><strong>Article:</strong> ${slug}</p>
+                        </div>
+                        <div class="content">${data.content}</div>
+                        <div class="actions">
+                            <button onclick="window.close()">Close</button>
+                            <button onclick="copyToClipboard('${data.content.replace(/'/g, "\\'")}')">Copy Content</button>
+                        </div>
+                        <script>
+                            function copyToClipboard(text) {
+                                navigator.clipboard.writeText(text).then(() => {
+                                    alert('Content copied to clipboard!');
+                                });
+                            }
+                        <\/script>
+                    </body>
+                    </html>
+                `;
+                previewWindow.document.write(html);
+                previewWindow.document.close();
+            } else {
+                alert('Error loading backup: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error loading backup');
+        });
+}
+
 // Añadir un listener para cuando el teclado aparezca/desaparezca
 let originalViewportHeight = window.innerHeight;
 window.addEventListener('resize', function() {
@@ -3312,6 +3454,10 @@ document.addEventListener('touchmove', function(e) {
     }
 
     floatingDraftBtn.addEventListener('click', function() {
+        console.log('Floating draft button clicked');
+        // Sync content before saving
+        syncContentBeforeSave();
+        
         if (statusSelect && statusSelect.value !== 'draft') {
             statusSelect.value = 'draft';
         }
@@ -3336,6 +3482,10 @@ document.addEventListener('touchmove', function(e) {
     });
 
     floatingPublishBtn.addEventListener('click', function() {
+        console.log('Floating publish button clicked');
+        // Sync content before saving
+        syncContentBeforeSave();
+        
         if (statusSelect && statusSelect.value !== 'published') {
             statusSelect.value = 'published';
         }
