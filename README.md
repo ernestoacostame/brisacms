@@ -218,7 +218,6 @@ El editor tiene tres modos seleccionables con los botones **HTML** / **MD** en l
 
 - **HTML (WYSIWYG)** — editor visual con formato en tiempo real
 - **HTML raw** — código HTML directo (botón `</> HTML` en la toolbar)
-- **Markdown** — escritura en Markdown con preview en vivo
 
 ### Toolbar
 
@@ -263,10 +262,6 @@ Las imágenes subidas se guardan en `/media/YYYY/MM/nombre.jpg`.
 - **Guardar borrador** — guarda sin publicar
 - **🚀 Publicar** — publica inmediatamente
 - **✓ Actualizar** — actualiza un artículo publicado
-
-### Markdown soportado
-
-Encabezados, negrita, cursiva, tachado, listas, listas numeradas, código inline y bloques, tablas con alineación, citas, imágenes, enlaces, reglas horizontales, HTML inline.
 
 ---
 
