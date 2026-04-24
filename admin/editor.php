@@ -305,16 +305,6 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 
 
 <style>
-:root {
-  --surface2-rgb: 40, 40, 50;
-  /* Añadir si no existen */
-  --surface2: #2d2d3d;
-  --border-soft: #3a3a4a;
-  --text-muted: #a0a0b0;
-  --text-faint: #6a6a7a;
-  --accent-light: #4a8bf5;
-  --accent-bg: rgba(74, 139, 245, 0.15);
-}
 .editor-layout {
   display: grid;
   grid-template-columns: 1fr 260px;
@@ -732,16 +722,6 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 }
 .fmt-select:hover { background: var(--surface2); color: var(--text); }
 
-/* Actualizar variables CSS para mantener el estilo actual */
-:root {
-  --surface2: #2d2d3d;
-  --border-soft: #3a3a4a;
-  --text-muted: #a0a0b0;
-  --text-faint: #6a6a7a;
-  --accent-light: #4a8bf5;
-  --accent-bg: rgba(74, 139, 245, 0.15);
-}
-
 /* Ajustar el layout principal */
 .page-body {
   display: flex;
@@ -959,7 +939,10 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
   display: flex;
   flex-direction: column;
   min-height: 0;
+  height: 100%;
+  overflow: hidden;
   position: relative;
+  -webkit-overflow-scrolling: touch;
 }
 .prose-editor {
   min-height: 100%;
@@ -1034,9 +1017,11 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 .raw-editor {
   width: 100%;
   min-height: 100%;
+  height: 100%;
+  max-height: none;
   padding: 1.5rem;
-  background: #1a1a24;
-  color: #a8e6cf;
+  background: var(--surface2);
+  color: var(--text);
   font-family: 'Fira Code', 'Cascadia Code', 'Courier New', monospace;
   font-size: 1rem;
   border: none;
@@ -1049,6 +1034,8 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
   flex: 1;
   white-space: pre-wrap;
   word-wrap: break-word;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .raw-editor:focus {
@@ -1188,6 +1175,7 @@ body.focus-mode .floating-buttons-container { display: none !important; }
   /* Prevenir scroll horizontal en todo */
   html, body {
     overflow-x: hidden !important;
+    overflow-y: auto !important;
     position: relative;
     height: auto;
     min-height: 100vh;
@@ -1209,7 +1197,7 @@ body.focus-mode .floating-buttons-container { display: none !important; }
     flex-direction: column !important;
     grid-template-columns: 1fr !important;
     gap: 1rem !important;
-    min-height: 100vh !important;
+    min-height: auto !important; /* Changed from 100vh */
     width: 100% !important;
     max-width: 100% !important;
     position: relative;
@@ -1240,6 +1228,8 @@ body.focus-mode .floating-buttons-container { display: none !important; }
     overflow-x: hidden !important;
     padding: 1rem 0.75rem !important;
     position: relative;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain !important;
   }
   
   /* Ajustar el título */
@@ -1262,9 +1252,9 @@ body.focus-mode .floating-buttons-container { display: none !important; }
     overflow: visible !important;
     z-index: 10;
     box-sizing: border-box;
-    max-height: none !important; /* Remove height limit on mobile */
-    overflow-y: visible !important; /* Allow content to flow naturally */
-    position: static !important; /* Remove sticky on mobile */
+    max-height: none !important;
+    overflow-y: visible !important;
+    position: static !important;
   }
   
   /* Ajustar los paneles del sidebar */
@@ -1292,20 +1282,6 @@ body.focus-mode .floating-buttons-container { display: none !important; }
     margin-top: 2rem !important;
     border: 1px solid var(--red) !important;
     background: rgba(255, 0, 0, 0.05) !important;
-  }
-  
-  /* Add a visual indicator for scrollable content */
-  .editor-sidebar::before {
-    content: "↓ Desplázate para ver más opciones ↓";
-    display: block;
-    text-align: center;
-    font-size: 12px;
-    color: var(--accent);
-    padding: 10px;
-    margin: 10px 0;
-    background: var(--surface2);
-    border-radius: 8px;
-    border: 1px dashed var(--border);
   }
   
   /* Ajustar inputs dentro de paneles */
@@ -1360,7 +1336,7 @@ body.focus-mode .floating-buttons-container { display: none !important; }
   
   /* Asegurar que el formulario se pueda scroll */
   #editor-form {
-    min-height: 100vh !important;
+    min-height: auto !important; /* Changed from 100vh */
     height: auto !important;
     overflow: visible !important;
     position: relative;
@@ -1534,6 +1510,14 @@ body.focus-mode .floating-buttons-container { display: none !important; }
     font-size: 14px;
   }
   
+  .raw-editor {
+    height: auto !important;
+    min-height: 250px !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain !important;
+  }
   .prose-editor { 
     padding: 1rem 0.75rem; 
     margin: 0;
@@ -1550,6 +1534,8 @@ body.focus-mode .floating-buttons-container { display: none !important; }
   
   #editor, .md-editor {
     padding: 1rem 0.5rem;
+    -webkit-overflow-scrolling: touch !important;
+    overflow-y: auto !important;
   }
   
   .title-area {
@@ -1770,6 +1756,20 @@ body.focus-mode .floating-buttons-container { display: none !important; }
     .panel select {
       font-size: 16px;
       line-height: 1.5;
+    }
+
+    /* Safari iOS specific scroll fix */
+    .editor-wrap {
+      -webkit-overflow-scrolling: touch !important;
+      overflow-y: auto !important;
+    }
+    .raw-editor {
+      -webkit-overflow-scrolling: touch !important;
+      overflow-y: auto !important;
+    }
+    .prose-editor {
+      -webkit-overflow-scrolling: touch !important;
+      overflow-y: auto !important;
     }
   }
 }
@@ -2304,14 +2304,14 @@ function switchMode(newMode) {
 // Función para manejar el dropdown de formatos (HTML mode)
 function formatBlock(tag) {
   const editor = document.getElementById('editor');
-  if (mode !== 'html' || !editor) return;
+  if (mode !== 'visual' || !editor) return;
   
   editor.focus();
   document.execCommand('formatBlock', false, tag);
 }
 
 function exec(cmd, val = null) {
-  if (mode !== 'html') return;
+  if (mode !== 'visual') return;
   const editor = document.getElementById('editor');
   editor.focus();
   
@@ -2332,7 +2332,7 @@ function exec(cmd, val = null) {
 }
 
 function execStrikeThrough() {
-  if (mode !== 'html') return;
+  if (mode !== 'visual') return;
   const editor = document.getElementById('editor');
   editor.focus();
   
@@ -2431,20 +2431,9 @@ function insertImage() {
 function insertAudio() {
   const url = prompt('URL del audio (MP3, OGG, WAV, etc.):');
   if (url) {
-    if (mode === 'html') {
-      const editor = document.getElementById('editor');
-      editor.focus();
-      document.execCommand('insertHTML', false, `<div class="media-audio"><audio controls src="${url}" style="width:100%;"></audio></div>`);
-    } else {
-      // For markdown mode, we'll use HTML since markdown doesn't have native audio support
-      const ta = mdEditor;
-      const start = ta.selectionStart, end = ta.selectionEnd;
-      const audioHtml = `<div class="media-audio"><audio controls src="${url}" style="width:100%;"></audio></div>`;
-      ta.value = ta.value.substring(0, start) + audioHtml + ta.value.substring(end);
-      ta.setSelectionRange(start + audioHtml.length, start + audioHtml.length);
-      ta.focus();
-      if (mdPreviewing) updateMdPreview();
-    }
+    const editor = document.getElementById('editor');
+    editor.focus();
+    document.execCommand('insertHTML', false, `<div class="media-audio"><audio controls src="${url}" style="width:100%;"></audio></div>`);
   }
 }
 
@@ -2973,20 +2962,9 @@ function setupImageUpload() {
   }
 
   async function insertImageUrl(url, alt = '') {
-    if (mode === 'html') {
-      const editor = document.getElementById('editor');
-      editor.focus();
-      document.execCommand('insertHTML', false, `<img src="${url}" alt="${alt}" style="max-width:100%;">`);
-    } else {
-      const ta = mdEditor;
-      const start = ta.selectionStart;
-      const end = ta.selectionEnd;
-      const md = `![${alt}](${url})`;
-      ta.value = ta.value.substring(0, start) + md + ta.value.substring(end);
-      ta.setSelectionRange(start + md.length, start + md.length);
-      ta.focus();
-      if (mdPreviewing) updateMdPreview();
-    }
+    const editor = document.getElementById('editor');
+    editor.focus();
+    document.execCommand('insertHTML', false, `<img src="${url}" alt="${alt}" style="max-width:100%;">`);
   }
 
   fileInput.addEventListener('change', async (e) => {
@@ -3001,7 +2979,7 @@ function setupImageUpload() {
   });
 
   // Drag & drop
-  const dropZones = [document.getElementById('editor'), mdEditor];
+  const dropZones = [document.getElementById('editor')];
   dropZones.forEach(zone => {
     if (!zone) return;
     zone.addEventListener('dragover', (e) => {
@@ -3126,7 +3104,7 @@ function setupMobileDropdown() {
 
 // ── Mobile toolbar helpers ────────────────────────────────────────────────
 window.execMobile = function(cmd, val) {
-  if (mode !== 'html') return;
+  if (mode !== 'visual') return;
   exec(cmd, val);
 };
 window.execMobileLink = function() {
@@ -3274,53 +3252,7 @@ if (sidebar) {
   });
 }
 
-// Añadir al final del script existente
-function fixIOSLayout() {
-  if (window.innerWidth <= 768 && /iPhone|iPad|iPod/.test(navigator.userAgent)) {
-    // Forzar el redibujado para iOS
-    document.body.style.overflow = 'auto';
-    document.body.style.height = 'auto';
-    
-    // Ajustar el height del viewport
-    const viewportHeight = window.innerHeight;
-    document.documentElement.style.height = viewportHeight + 'px';
-    
-    // Asegurar que el sidebar sea scrollable
-    const sidebar = document.querySelector('.editor-sidebar');
-    if (sidebar) {
-      sidebar.style.height = 'auto';
-      sidebar.style.maxHeight = 'none';
-      sidebar.style.overflow = 'visible';
-      sidebar.style.position = 'relative';
-    }
-    
-    // Ajustar el formulario
-    const form = document.getElementById('editor-form');
-    if (form) {
-      form.style.minHeight = '100vh';
-      form.style.overflow = 'visible';
-    }
-    
-    // Ajustar el page-body
-    const pageBody = document.querySelector('.page-body');
-    if (pageBody) {
-      pageBody.style.height = 'auto';
-      pageBody.style.minHeight = '100vh';
-      pageBody.style.overflowY = 'scroll';
-      pageBody.style.webkitOverflowScrolling = 'touch';
-    }
-  }
-}
-
-// Ejecutar cuando se cargue
-window.addEventListener('load', fixIOSLayout);
-window.addEventListener('DOMContentLoaded', fixIOSLayout);
-
-// También ejecutar en resize y orientation change
-window.addEventListener('resize', fixIOSLayout);
-window.addEventListener('orientationchange', function() {
-  setTimeout(fixIOSLayout, 300);
-});
+// fixIOSLayout removed – default layout works on iOS now.
 
 // ── Backup Preview ────────────────────────────────────────────────────────
 function previewBackup(timestamp, type, slug) {
@@ -3380,34 +3312,9 @@ function previewBackup(timestamp, type, slug) {
         });
 }
 
-// Añadir un listener para cuando el teclado aparezca/desaparezca
-let originalViewportHeight = window.innerHeight;
-window.addEventListener('resize', function() {
-  if (window.innerHeight < originalViewportHeight) {
-    // Teclado visible
-    document.body.style.paddingBottom = '300px';
-  } else {
-    // Teclado oculto
-    document.body.style.paddingBottom = '0';
-  }
-});
+// Keyboard resize listener removed – no longer needed.
 
-// Prevenir comportamiento por defecto de iOS
-document.addEventListener('touchmove', function(e) {
-  // Permitir scroll solo en elementos scrollables
-  if (e.target.classList.contains('editor-wrap') || 
-      e.target.classList.contains('editor-sidebar') ||
-      e.target.classList.contains('tag-chips') ||
-      e.target.tagName === 'TEXTAREA') {
-    return;
-  }
-  
-  // Prevenir scroll en otros lugares si es necesario
-  const scrollable = e.target.closest('.editor-sidebar');
-  if (!scrollable && e.target.closest('.editor-main')) {
-    e.preventDefault();
-  }
-}, { passive: false });
+// No longer needed – default touch behavior is now allowed.
 
 </script>
 <!-- focus hint -->
@@ -3617,6 +3524,29 @@ document.addEventListener('touchmove', function(e) {
             height: 16px;
         }
     }
+}
+
+/* Light scheme overrides for floating buttons */
+body.scheme-light .floating-buttons-container {
+    background: #ffffff;
+    border-color: #d0d0ca;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.1);
+}
+body.scheme-light .floating-draft-btn,
+body.scheme-light .floating-focus-btn,
+body.scheme-light .floating-preview-btn {
+    background: #f0f0ec;
+    color: #1a1a1a;
+    border-color: #d0d0ca;
+}
+body.scheme-light .floating-draft-btn:hover,
+body.scheme-light .floating-focus-btn:hover,
+body.scheme-light .floating-preview-btn:hover {
+    background: #e0e0da;
+}
+body.scheme-light .floating-publish-btn {
+    background: var(--accent);
+    color: #ffffff;
 }
 </style>
 </body></html>

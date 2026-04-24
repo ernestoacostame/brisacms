@@ -272,6 +272,27 @@ body.scheme-light .alert-error   { background: #fef2f2; border-color: #fca5a5; c
 body.scheme-light .badge-green { background: #d1fae5; color: #065f46; }
 body.scheme-light .badge-yellow { background: #fef3c7; color: #92400e; }
 body.scheme-light .badge-gray  { background: #f3f4f6; color: #6b7280; }
+body.scheme-light .floating-buttons-container {
+  background: #ffffff !important;
+  border-color: #d0d0ca !important;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.1) !important;
+}
+body.scheme-light .floating-draft-btn,
+body.scheme-light .floating-focus-btn,
+body.scheme-light .floating-preview-btn {
+  background: #f0f0ec !important;
+  color: #1a1a1a !important;
+  border-color: #d0d0ca !important;
+}
+body.scheme-light .floating-draft-btn:hover,
+body.scheme-light .floating-focus-btn:hover,
+body.scheme-light .floating-preview-btn:hover {
+  background: #e0e0da !important;
+}
+body.scheme-light .floating-publish-btn {
+  background: var(--accent) !important;
+  color: #ffffff !important;
+}
 
 /* ── RESPONSIVE ── */
 @media (max-width: 768px) {
