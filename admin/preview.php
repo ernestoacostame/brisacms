@@ -31,11 +31,11 @@ if (($post['content_format'] ?? 'html') === 'markdown' && function_exists('flux_
 // Auto-embed YouTube URLs
 $post['content'] = preg_replace_callback(
     '#(?:<p>)?\s*(https?://(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)([\w\-]{11})[^\s<]*)\s*(?:</p>)?#i',
-    function ($m) {
-        return '<div class="yt-embed"><iframe src="https://www.youtube-nocookie.com/embed/' . $m[2]
-             . '" title="YouTube video" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>';
-    },
-    $post['content'] ?? ''
+                                         function ($m) {
+                                             return '<div class="yt-embed"><iframe src="https://www.youtube-nocookie.com/embed/' . $m[2]
+                                             . '" title="YouTube video" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>';
+                                         },
+                                         $post['content'] ?? ''
 );
 
 // Add a draft banner if the article is not published
@@ -71,15 +71,15 @@ $head_css = <<<CSS
 header.site-header,
 [class*="site-header"],
 [id*="site-header"] {
-  top: {$banner_h}px !important;
-  margin-top: 0 !important;
+    top: {$banner_h}px !important;
+    margin-top: 0 !important;
 }
 /* Make sure body doesn't hide under the fixed banner */
 body { padding-top: {$banner_h}px !important; }
 /* Nav dropdowns that are fixed need to move too */
 .nav-dropdown,
 [id="nav-dropdown"] {
-  top: calc({$banner_h}px + 56px) !important;
+    top: calc({$banner_h}px + 56px) !important;
 }
 </style>
 CSS;
@@ -87,17 +87,17 @@ CSS;
 // Banner HTML fixed at top
 $banner_html = <<<HTML
 <div id="brisa-preview-bar" style="
-  position:fixed;top:0;left:0;right:0;z-index:999999;height:{$banner_h}px;
-  background:{$status_color};color:{$status_text};
-  font-family:system-ui,sans-serif;font-size:0.78rem;font-weight:700;
-  display:flex;align-items:center;justify-content:center;gap:1rem;
-  padding:0 1rem;letter-spacing:0.03em;box-shadow:0 2px 6px rgba(0,0,0,0.2);">
-  <span>👁 VISTA PREVIA &nbsp;·&nbsp; {$status_label} &nbsp;—&nbsp; {$post_title}</span>
-  <a href="{$editor_url}" style="
-    background:rgba(0,0,0,0.18);color:inherit;text-decoration:none;
-    padding:0.2rem 0.65rem;border-radius:4px;font-size:0.73rem;white-space:nowrap;">
-    ← Volver al editor
-  </a>
+position:fixed;top:0;left:0;right:0;z-index:999999;height:{$banner_h}px;
+background:{$status_color};color:{$status_text};
+font-family:system-ui,sans-serif;font-size:0.78rem;font-weight:700;
+display:flex;align-items:center;justify-content:center;gap:1rem;
+padding:0 1rem;letter-spacing:0.03em;box-shadow:0 2px 6px rgba(0,0,0,0.2);">
+<span>👁 VISTA PREVIA &nbsp;·&nbsp; {$status_label} &nbsp;—&nbsp; {$post_title}</span>
+<a href="{$editor_url}" style="
+background:rgba(0,0,0,0.18);color:inherit;text-decoration:none;
+padding:0.2rem 0.65rem;border-radius:4px;font-size:0.73rem;white-space:nowrap;">
+← Volver al editor
+</a>
 </div>
 HTML;
 

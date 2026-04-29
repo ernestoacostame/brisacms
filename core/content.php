@@ -13,6 +13,67 @@ function slug_from_title(string $title): string {
     return trim($slug, '-');
 }
 
+function save_content_backup(string $type, array $data): void {
+    $dir = content_path($type);
+    $slug = $data['slug'] ?? 'unknown';
+    
+    // Create backup directory if it doesn't exist
+    $backup_dir = CACHE_PATH . '/content_backups/' . $type;
+    if (!is_dir($backup_dir)) {
+        mkdir($backup_dir, 0755, true);
+    }
+    
+    // Create a backup with timestamp
+    $timestamp = date('Y-m-d_H-i-s');
+    $backup_file = $backup_dir . '/' . $slug . '_' . $timestamp . '.json';
+    
+    // Save the backup
+    file_put_contents($backup_file, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    
+    // Keep only the last 10 backups for each slug
+    $backups = glob($backup_dir . '/' . $slug . '_*.json');
+    if (count($backups) > 10) {
+        // Sort by creation time (oldest first)
+        usort($backups, function($a, $b) {
+            return filemtime($a) - filemtime($b);
+        });
+        
+        // Remove oldest backups beyond limit
+        for ($i = 0; $i < count($backups) - 10; $i++) {
+            unlink($backups[$i]);
+        }
+    }
+}
+
+function get_content_backups(string $type, string $slug): array {
+    $backup_dir = CACHE_PATH . '/content_backups/' . $type;
+    if (!is_dir($backup_dir)) {
+        return [];
+    }
+    
+    $backups = glob($backup_dir . '/' . $slug . '_*.json');
+    $result = [];
+    
+    foreach ($backups as $backup_file) {
+        $timestamp = basename($backup_file, '.json');
+        $timestamp = substr($timestamp, strlen($slug) + 1); // Remove slug prefix
+        
+        $result[] = [
+            'file' => $backup_file,
+            'timestamp' => $timestamp,
+            'date' => date('Y-m-d H:i:s', filemtime($backup_file)),
+            'data' => json_decode(file_get_contents($backup_file), true)
+        ];
+    }
+    
+    // Sort by timestamp (newest first)
+    usort($result, function($a, $b) {
+        return strtotime($b['timestamp']) - strtotime($a['timestamp']);
+    });
+    
+    return $result;
+}
+
 function save_content(string $type, array $data): string {
     $dir = content_path($type);
     if (!is_dir($dir)) mkdir($dir, 0755, true);
@@ -39,6 +100,9 @@ function save_content(string $type, array $data): string {
     $data['slug'] = $slug;
     $data['updated_at'] = date('c');
     if (empty($data['created_at'])) $data['created_at'] = date('c');
+    
+    // Create a backup before saving
+    save_content_backup($type, $data);
     
     file_put_contents("$dir/$slug.json", json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     
