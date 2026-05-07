@@ -119,6 +119,7 @@ function sanitize(string $input): string {
 }
 
 function sanitize_filename(string $name): string {
+    $name = str_replace('..', '', $name); // Prevent path traversal
     $name = strtolower(preg_replace('/[^a-zA-Z0-9._-]/', '-', $name));
     return preg_replace('/-+/', '-', trim($name, '-'));
 }
