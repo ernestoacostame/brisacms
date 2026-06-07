@@ -263,12 +263,14 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
             <div id="feat-upload-progress" style="display:none;font-size:0.78rem;color:var(--muted);margin-top:0.35rem"></div>
           </div>
 
+          <?php if (!cms_plugin_is_active('fediverse')): ?>
           <div class="panel">
             <div class="panel-title">URL de Mastodon</div>
             <input type="text" name="mastodon_url" placeholder="<?= __raw("panel_mastodon_ph") ?>"
               value="<?= htmlspecialchars($post['mastodon_url'] ?? '') ?>">
             <div class="panel-hint"><?= __("panel_mastodon_hint") ?></div>
           </div>
+          <?php endif; ?>
 
           <?php if (cms_plugin_is_active('fediverse') && $post && $post['status'] === 'published'): 
               require_once dirname(__DIR__) . '/plugins/fediverse/activitypub.php';
