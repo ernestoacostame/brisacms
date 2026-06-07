@@ -37,14 +37,14 @@ admin_header(__('update_title', 'Actualizaciones'), 'update');
     </div>
 
     <!-- Estado actual -->
-    <div class="stats-grid" style="margin-bottom: 2rem;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
       <div class="stat-card">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-          <div>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
+          <div style="flex: 1; min-width: 0;">
             <div class="stat-label"><?= __('update_installed_version', 'Versión instalada') ?></div>
-            <div class="stat-value accent">v<?= CMS_VERSION ?></div>
+            <div class="stat-value accent" style="font-size: 1.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">v<?= CMS_VERSION ?></div>
           </div>
-          <div style="background: rgba(var(--accent-rgb), 0.1); color: var(--accent); padding: 0.5rem; border-radius: 8px; display: flex;">
+          <div style="background: rgba(var(--accent-rgb), 0.1); color: var(--accent); padding: 0.5rem; border-radius: 8px; display: flex; flex-shrink: 0;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
           </div>
         </div>
@@ -52,14 +52,14 @@ admin_header(__('update_title', 'Actualizaciones'), 'update');
       </div>
 
       <div class="stat-card">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-          <div>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
+          <div style="flex: 1; min-width: 0;">
             <div class="stat-label"><?= __('update_github_token', 'Token GitHub') ?></div>
-            <div class="stat-value" style="color: <?= $hasToken ? 'var(--green)' : 'var(--red)' ?>">
+            <div class="stat-value" style="color: <?= $hasToken ? 'var(--green)' : 'var(--red)' ?>; font-size: 1.3rem; line-height: 1.25; margin-top: 0.4rem; font-weight: 700; word-wrap: break-word;">
               <?= $hasToken ? __('update_token_configured', 'Configurado') : __('update_token_not_configured', 'No configurado') ?>
             </div>
           </div>
-          <div style="background: <?= $hasToken ? 'rgba(52, 211, 153, 0.1)' : 'rgba(248, 113, 113, 0.1)' ?>; color: <?= $hasToken ? 'var(--green)' : 'var(--red)' ?>; padding: 0.5rem; border-radius: 8px; display: flex;">
+          <div style="background: <?= $hasToken ? 'rgba(52, 211, 153, 0.1)' : 'rgba(248, 113, 113, 0.1)' ?>; color: <?= $hasToken ? 'var(--green)' : 'var(--red)' ?>; padding: 0.5rem; border-radius: 8px; display: flex; flex-shrink: 0;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
           </div>
         </div>
@@ -69,14 +69,14 @@ admin_header(__('update_title', 'Actualizaciones'), 'update');
       </div>
 
       <div class="stat-card">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-          <div>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
+          <div style="flex: 1; min-width: 0;">
             <div class="stat-label"><?= __('update_rollback', 'Rollback') ?></div>
-            <div class="stat-value" style="color: <?= $hasRollback ? 'var(--yellow)' : 'var(--muted)' ?>">
+            <div class="stat-value" style="color: <?= $hasRollback ? 'var(--yellow)' : 'var(--muted)' ?>; font-size: 1.3rem; line-height: 1.25; margin-top: 0.4rem; font-weight: 700; word-wrap: break-word;">
               <?= $hasRollback ? 'v' . $rollbackVersion : __('update_rollback_not_available', 'No disponible') ?>
             </div>
           </div>
-          <div style="background: rgba(251, 191, 36, 0.1); color: var(--yellow); padding: 0.5rem; border-radius: 8px; display: flex;">
+          <div style="background: rgba(251, 191, 36, 0.1); color: var(--yellow); padding: 0.5rem; border-radius: 8px; display: flex; flex-shrink: 0;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
           </div>
         </div>
@@ -86,12 +86,12 @@ admin_header(__('update_title', 'Actualizaciones'), 'update');
       </div>
 
       <div class="stat-card">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-          <div>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
+          <div style="flex: 1; min-width: 0;">
             <div class="stat-label"><?= __('update_applied_total_title', 'Actualizaciones') ?></div>
-            <div class="stat-value"><?= count($history) ?></div>
+            <div class="stat-value" style="font-size: 1.8rem;"><?= count($history) ?></div>
           </div>
-          <div style="background: rgba(var(--accent-rgb), 0.1); color: var(--accent); padding: 0.5rem; border-radius: 8px; display: flex;">
+          <div style="background: rgba(var(--accent-rgb), 0.1); color: var(--accent); padding: 0.5rem; border-radius: 8px; display: flex; flex-shrink: 0;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
           </div>
         </div>
