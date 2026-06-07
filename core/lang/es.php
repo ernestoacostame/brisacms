@@ -291,4 +291,5 @@ return [
     'update_status_applied'        => 'Aplicada',
     'update_status_reverted'       => 'Revertida',
     'update_backup_saved'          => '✓ guardado',
+    'update_delete_backup_btn'     => 'Eliminar respaldo',
 ];

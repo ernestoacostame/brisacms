@@ -796,6 +796,7 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
     font-size: 11px;
   }
 }
+.tb {
   background: none;
   border: none;
   color: var(--text2);
@@ -2335,77 +2336,7 @@ function execStrikeThrough() {
   if (mode !== 'visual') return;
   const editor = document.getElementById('editor');
   editor.focus();
-  
-  // Check if we're in a strikethrough already
-  const selection = window.getSelection();
-  if (selection.rangeCount === 0) return;
-  
-  const range = selection.getRangeAt(0);
-  const ancestor = range.commonAncestorContainer;
-  
-  // Check if the selection is already inside a <del> element
-  let delElement = ancestor.nodeType === 3 ? ancestor.parentElement : ancestor;
-  let foundDel = null;
-  
-  // Find the nearest <del>, <s>, or <strike> element
-  while (delElement && delElement !== editor) {
-    if (delElement.tagName === 'DEL' || delElement.tagName === 'S' || delElement.tagName === 'STRIKE') {
-      foundDel = delElement;
-      break;
-    }
-    delElement = delElement.parentElement;
-  }
-  
-  if (foundDel) {
-    // Remove strikethrough - unwrap the element
-    const parent = foundDel.parentNode;
-    
-    // Create a document fragment to hold the children
-    const fragment = document.createDocumentFragment();
-    while (foundDel.firstChild) {
-      fragment.appendChild(foundDel.firstChild);
-    }
-    
-    // Replace the del element with its children
-    parent.replaceChild(fragment, foundDel);
-    
-    // Restore selection
-    const newRange = document.createRange();
-    newRange.setStart(fragment.firstChild || parent, 0);
-    newRange.setEnd(fragment.lastChild || parent, fragment.lastChild ? fragment.lastChild.length || 0 : 0);
-    selection.removeAllRanges();
-    selection.addRange(newRange);
-  } else {
-    // Apply strikethrough
-    const selectedText = range.toString();
-    if (selectedText) {
-      // Wrap selected text with <del> tag
-      const del = document.createElement('del');
-      del.textContent = selectedText;
-      range.deleteContents();
-      range.insertNode(del);
-      
-      // Move cursor after the inserted element
-      const newRange = document.createRange();
-      newRange.setStartAfter(del);
-      newRange.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
-    } else {
-      // If no text selected, insert a <del> element with placeholder
-      const del = document.createElement('del');
-      del.textContent = 'texto tachado';
-      range.insertNode(del);
-      
-      // Select the inserted text
-      const newRange = document.createRange();
-      newRange.selectNodeContents(del);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
-    }
-  }
-  
-  // Force update
+  document.execCommand('strikeThrough', false, null);
   editor.dispatchEvent(new Event('input'));
 }
 

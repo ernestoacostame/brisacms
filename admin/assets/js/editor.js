@@ -281,67 +281,7 @@
   window.execStrikeThrough = function () {
     if (mode !== 'visual') return;
     editorEl.focus();
-
-    const selection = window.getSelection();
-    if (selection.rangeCount === 0) return;
-
-    const range = selection.getRangeAt(0);
-    const ancestor = range.commonAncestorContainer;
-
-    // Find the nearest <del>, <s>, or <strike> element
-    let delElement = ancestor.nodeType === 3 ? ancestor.parentElement : ancestor;
-    let foundDel = null;
-
-    while (delElement && delElement !== editorEl) {
-      if (['DEL', 'S', 'STRIKE'].includes(delElement.tagName)) {
-        foundDel = delElement;
-        break;
-      }
-      delElement = delElement.parentElement;
-    }
-
-    if (foundDel) {
-      // Remove strikethrough — unwrap
-      const parent = foundDel.parentNode;
-      const fragment = document.createDocumentFragment();
-      while (foundDel.firstChild) {
-        fragment.appendChild(foundDel.firstChild);
-      }
-      parent.replaceChild(fragment, foundDel);
-
-      const newRange = document.createRange();
-      newRange.setStart(fragment.firstChild || parent, 0);
-      newRange.setEnd(
-        fragment.lastChild || parent,
-        fragment.lastChild ? fragment.lastChild.length || 0 : 0
-      );
-      selection.removeAllRanges();
-      selection.addRange(newRange);
-    } else {
-      const selectedText = range.toString();
-      if (selectedText) {
-        const del = document.createElement('del');
-        del.textContent = selectedText;
-        range.deleteContents();
-        range.insertNode(del);
-
-        const newRange = document.createRange();
-        newRange.setStartAfter(del);
-        newRange.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(newRange);
-      } else {
-        const del = document.createElement('del');
-        del.textContent = 'texto tachado';
-        range.insertNode(del);
-
-        const newRange = document.createRange();
-        newRange.selectNodeContents(del);
-        selection.removeAllRanges();
-        selection.addRange(newRange);
-      }
-    }
-
+    document.execCommand('strikeThrough', false, null);
     editorEl.dispatchEvent(new Event('input'));
   };
 

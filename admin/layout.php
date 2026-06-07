@@ -295,7 +295,7 @@ body.scheme-light .floating-publish-btn {
 }
 
 /* ── RESPONSIVE ── */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .sidebar { transform: translateX(-100%); width: var(--sidebar-w) !important; }
   body.sidebar-open .sidebar { transform: translateX(0); }
   .main { margin-left: 0 !important; }
@@ -324,7 +324,7 @@ body.scheme-light .floating-publish-btn {
   /* Settings sections: full width */
   .settings-grid { grid-template-columns: 1fr !important; }
 }
-@media (min-width: 769px) {
+@media (min-width: 1025px) {
   .sidebar-overlay { display: none !important; }
 }
 </style>

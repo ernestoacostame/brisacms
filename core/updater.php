@@ -489,3 +489,22 @@ function cms_update_cleanup_tmp(string $dir): void {
   }
   @rmdir($dir);
 }
+
+function cms_update_delete_backup(string $filename): array {
+  if (!preg_match('/^rollback-(.*?)-(\d{8}_\d{6})\.tar\.gz$/', $filename)) {
+    return ['error' => 'Nombre de archivo de respaldo inválido.'];
+  }
+  $filePath = cms_update_dir() . '/' . $filename;
+  if (!file_exists($filePath)) {
+    return ['error' => 'El archivo de respaldo no existe.'];
+  }
+  if (@unlink($filePath)) {
+    $defaultBackupPath = cms_setting('update_rollback_path', '');
+    if (basename($defaultBackupPath) === $filename) {
+      cms_set_setting('update_rollback_path', '');
+      cms_set_setting('update_rollback_version', '');
+    }
+    return ['success' => true];
+  }
+  return ['error' => 'No se pudo eliminar el archivo de respaldo.'];
+}

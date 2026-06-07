@@ -1107,8 +1107,8 @@ body.scheme-light .floating-publish-btn {
    RESPONSIVE — Consolidated (was scattered ~8 times)
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Tablet (≤ 768px) ──────────────────────────────────────────────────── */
-@media (max-width: 768px) {
+/* ── Tablet (≤ 1024px) ──────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
   /* Prevent horizontal overflow */
   html, body {
     overflow-x: hidden;
@@ -1466,8 +1466,8 @@ body.scheme-light .floating-publish-btn {
   }
 }
 
-/* ── Desktop (≥ 769px) ─────────────────────────────────────────────────── */
-@media (min-width: 769px) {
+/* ── Desktop (≥ 1025px) ─────────────────────────────────────────────────── */
+@media (min-width: 1025px) {
   .mobile-dropdown-menu {
     display: none;
   }
@@ -1490,8 +1490,8 @@ body.scheme-light .floating-publish-btn {
   }
 }
 
-/* ── Between tablet and small mobile (481–768px) ──────────────────────── */
-@media (min-width: 481px) and (max-width: 768px) {
+/* ── Between tablet and small mobile (481–1024px) ──────────────────────── */
+@media (min-width: 481px) and (max-width: 1024px) {
   .mobile-hidden-tools {
     display: flex;
     align-items: center;

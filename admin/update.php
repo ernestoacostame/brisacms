@@ -213,10 +213,16 @@ admin_header(__('update_title', 'Actualizaciones'), 'update');
               </select>
             </div>
           </div>
-          <button class="btn btn-secondary" id="btn-rollback" onclick="cmsUpdateRollback()" style="color: var(--yellow); border-color: rgba(251, 191, 36, 0.3);">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: middle;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-            <?= __('update_revert_btn', 'Revertir a la versión seleccionada') ?>
-          </button>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button class="btn btn-secondary" id="btn-rollback" onclick="cmsUpdateRollback()" style="color: var(--yellow); border-color: rgba(251, 191, 36, 0.3);">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: middle;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+              <?= __('update_revert_btn', 'Revertir a la versión seleccionada') ?>
+            </button>
+            <button class="btn btn-danger" id="btn-delete-backup" onclick="cmsDeleteBackup()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: middle;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              <?= __('update_delete_backup_btn', 'Eliminar respaldo') ?>
+            </button>
+          </div>
         </div>
         <div id="rollback-status" style="display: none; margin-top: 1rem; padding: 0.75rem 1rem; border-radius: 6px; font-size: 13.5px;"></div>
       </div>
@@ -493,6 +499,50 @@ function cmsUpdateRollback() {
         status.style.background = 'rgba(52, 211, 153, 0.1)';
         status.style.color = 'var(--green)';
         status.innerHTML = '✅ Rollback completado. Restaurada versión <strong>v' + data.restored_version + '</strong>.<br><br><a href="<?= base_url() ?>/admin/update.php" class="btn btn-primary" style="margin-top:8px">Recargar página</a>';
+      }
+    })
+    .catch(e => {
+      status.style.background = 'rgba(248, 113, 113, 0.1)';
+      status.style.color = 'var(--red)';
+      status.innerHTML = '❌ Error: ' + e.message;
+      btn.disabled = false;
+    });
+}
+
+function cmsDeleteBackup() {
+  const select = document.getElementById('rollback-select');
+  const backupFile = select ? select.value : '';
+  if (!backupFile) {
+    alert('Por favor, selecciona una copia de seguridad para eliminar.');
+    return;
+  }
+
+  if (!confirm('¿Eliminar la copia de seguridad seleccionada (' + backupFile + ')?\n\nEsta acción liberará espacio en disco pero no podrás revertir a esta versión.')) return;
+
+  const btn = document.getElementById('btn-delete-backup');
+  const status = document.getElementById('rollback-status');
+  btn.disabled = true;
+  status.style.display = 'block';
+  status.style.background = 'var(--surface2)';
+  status.style.color = 'var(--text2)';
+  status.textContent = 'Eliminando respaldo...';
+
+  fetch('<?= base_url() ?>/api/update.php', {
+    method: 'POST',
+    body: new URLSearchParams({ action: 'delete_backup', backup_file: backupFile })
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        status.style.background = 'rgba(248, 113, 113, 0.1)';
+        status.style.color = 'var(--red)';
+        status.innerHTML = '❌ ' + data.error;
+        btn.disabled = false;
+      } else if (data.success) {
+        status.style.background = 'rgba(52, 211, 153, 0.1)';
+        status.style.color = 'var(--green)';
+        status.innerHTML = '✅ Copia de seguridad eliminada con éxito. Recargando...';
+        setTimeout(() => window.location.reload(), 1000);
       }
     })
     .catch(e => {
