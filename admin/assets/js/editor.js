@@ -281,7 +281,41 @@
   window.execStrikeThrough = function () {
     if (mode !== 'visual') return;
     editorEl.focus();
-    document.execCommand('strikeThrough', false, null);
+
+    const selection = window.getSelection();
+    if (selection.rangeCount === 0) return;
+
+    const range = selection.getRangeAt(0);
+    const ancestor = range.commonAncestorContainer;
+
+    let delElement = ancestor.nodeType === 3 ? ancestor.parentElement : ancestor;
+    let foundDel = null;
+
+    while (delElement && delElement !== editorEl) {
+      if (['DEL', 'S', 'STRIKE'].includes(delElement.tagName)) {
+        foundDel = delElement;
+        break;
+      }
+      delElement = delElement.parentElement;
+    }
+
+    if (foundDel) {
+      const newRange = document.createRange();
+      newRange.selectNode(foundDel);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+      document.execCommand('insertHTML', false, foundDel.innerHTML);
+    } else {
+      const selectedText = range.toString();
+      if (selectedText) {
+        const div = document.createElement('div');
+        div.appendChild(range.cloneContents());
+        document.execCommand('insertHTML', false, `<del>${div.innerHTML}</del>`);
+      } else {
+        document.execCommand('insertHTML', false, '<del>texto tachado</del>');
+      }
+    }
+
     editorEl.dispatchEvent(new Event('input'));
   };
 
@@ -1045,7 +1079,7 @@ h1{font-family:'Roboto Condensed',sans-serif;font-size:clamp(1.5rem,4vw,2.2rem);
   // ═══════════════════════════════════════════════════════════════════════════
 
   function fixSidebarLayout() {
-    if (window.innerWidth > 768) return;
+    if (window.innerWidth > 1024) return;
 
     const sidebar = document.querySelector('.editor-sidebar');
     const panels  = sidebar?.querySelectorAll('.panel');
@@ -1208,7 +1242,7 @@ h1{font-family:'Roboto Condensed',sans-serif;font-size:clamp(1.5rem,4vw,2.2rem);
     updateFloatingLabel();
 
     function checkMobile() {
-      const isMobile = window.innerWidth <= 768;
+      const isMobile = window.innerWidth <= 1024;
       if (publishBtn) publishBtn.style.display = isMobile ? 'none' : '';
       floatingContainer.style.display = isMobile ? 'flex' : 'none';
     }
