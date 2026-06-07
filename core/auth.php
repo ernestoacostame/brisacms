@@ -1,5 +1,5 @@
 <?php
-// FluxCMS - Authentication & Security
+// BrisaCMS - Authentication & Security
 
 function session_start_secure(): void {
     if (session_status() === PHP_SESSION_NONE) {

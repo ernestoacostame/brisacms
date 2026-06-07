@@ -1,5 +1,5 @@
 <?php
-// FluxCMS - Content Manager (File-based, no DB)
+// BrisaCMS - Content Manager (File-based, no DB)
 require_once __DIR__ . '/markdown.php';
 
 function content_path(string $type): string {

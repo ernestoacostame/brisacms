@@ -2,7 +2,7 @@
 <footer class="site-footer">
   <div class="footer-inner">
     <span class="footer-text">
-      <?= htmlspecialchars($config['footer_text'] ?? ('© ' . date('Y') . ' ' . $site_title . '. Powered by FluxCMS.')) ?>
+      <?= htmlspecialchars($config['footer_text'] ?? ('© ' . date('Y') . ' ' . $site_title . '. Powered by BrisaCMS.')) ?>
     </span>
     <div class="footer-links">
       <a href="<?= $base ?>/">Home</a>

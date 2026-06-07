@@ -1,5 +1,5 @@
 <?php
-// FluxCMS - Markdown Parser (pure PHP, no dependencies)
+// BrisaCMS - Markdown Parser (pure PHP, no dependencies)
 // Supports: headings, bold, italic, code, links, images, lists, blockquotes,
 //           horizontal rules, tables, strikethrough, inline HTML passthrough
 

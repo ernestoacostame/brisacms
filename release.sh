@@ -9,7 +9,7 @@
 #   ./release.sh minor               → auto-bump minor (1.0.0 → 1.1.0)
 #   ./release.sh major               → auto-bump major (1.0.0 → 2.0.0)
 #
-# Requisitos: git, gh (GitHub CLI autenticado)
+# Requisitos: git, gh (GitHub CLI autenticado), python3
 # ============================================================================
 
 set -euo pipefail
@@ -63,21 +63,23 @@ ZIP_PATH="/tmp/$ZIP_NAME"
 STAGE_DIR=$(mktemp -d)
 cd "$CMS_DIR"
 
-# Copiar sólo ficheros tracked por git (excluyendo carpetas dinámicas del usuario)
+# Copiar sólo ficheros tracked por git (excluyendo carpetas dinámicas del usuario y la desactualizada cms/)
 git ls-files -z \
   | grep -zZv -e '^content/' -e '^media/' -e '^uploads/' -e '^cache/' -e '^config.json' \
-    -e '^\.installed' -e '^\.htaccess' -e '^release.\sh$' \
+    -e '^\.installed' -e '^\.htaccess' -e '^release.\sh$' -e '^cms/' \
   | xargs -0 -I{} install -D "{}" "${STAGE_DIR}/{}"
 
-# Crear ZIP
+# Crear ZIP usando python3 para máxima compatibilidad
 cd "$STAGE_DIR"
-if command -v bsdtar &> /dev/null; then
-  bsdtar -cf "$ZIP_PATH" --format=zip .
-elif command -v zip &> /dev/null; then
-  zip -r "$ZIP_PATH" .
-else
-  tar -cf - . | gzip > "$ZIP_PATH"
-fi
+python3 -c "
+import zipfile, os
+with zipfile.ZipFile('$ZIP_PATH', 'w', zipfile.ZIP_DEFLATED) as z:
+    for root, dirs, files in os.walk('.'):
+        for file in files:
+            filepath = os.path.join(root, file)
+            arcname = os.path.relpath(filepath, '.')
+            z.write(filepath, arcname)
+"
 rm -rf "$STAGE_DIR"
 
 ZIP_SIZE=$(du -h "$ZIP_PATH" | cut -f1)
@@ -106,9 +108,11 @@ git tag -a "v$NEW" -m "BrisaCMS v$NEW"
 echo "✅ Commit y tag v$NEW creados"
 
 # --- 4. Push ---
-git push origin master
+# Auto-detectar la rama actual
+BRANCH=$(git branch --show-current || git rev-parse --abbrev-ref HEAD || echo "master")
+git push origin "$BRANCH"
 git push origin "v$NEW"
-echo "✅ Pushed to GitHub"
+echo "✅ Pushed to GitHub (rama: $BRANCH)"
 
 # --- 5. Crear GitHub Release con el ZIP adjunto ---
 if [[ -z "$NOTES" ]]; then

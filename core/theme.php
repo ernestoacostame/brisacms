@@ -1,5 +1,5 @@
 <?php
-// FluxCMS - Theme Engine
+// BrisaCMS - Theme Engine
 
 function theme_path(string $theme = ''): string {
     return THEMES_PATH . '/' . ($theme ?: active_theme());

@@ -1,4 +1,4 @@
-# Creating a Custom FluxCMS Theme
+# Creating a Custom BrisaCMS Theme
 
 ## Quick Start
 
@@ -90,7 +90,7 @@ $post = [
 
 ## CSS Variables
 
-FluxCMS injects these CSS variables automatically based on the active accent color:
+BrisaCMS injects these CSS variables automatically based on the active accent color:
 
 ```css
 :root {
