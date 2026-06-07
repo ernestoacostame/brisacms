@@ -215,12 +215,24 @@ function ap_endpoint_webfinger(): void {
 // ---------------------------------------------------------------------------
 // 2. Actor
 // ---------------------------------------------------------------------------
+function ap_get_image_mime(string $url): string {
+    $ext = strtolower(pathinfo($url, PATHINFO_EXTENSION));
+    switch ($ext) {
+        case 'png': return 'image/png';
+        case 'gif': return 'image/gif';
+        case 'webp': return 'image/webp';
+        case 'svg': return 'image/svg+xml';
+        case 'avif': return 'image/avif';
+        default: return 'image/jpeg';
+    }
+}
+
 function ap_make_actor_array(string $username): array {
     $config = cms_config();
     $kp = ap_keypair();
     $url = ap_base_url() . "/users/$username";
     
-    return [
+    $actor = [
         '@context' => [
             'https://www.w3.org/ns/activitystreams',
             'https://w3id.org/security/v1'
@@ -228,8 +240,8 @@ function ap_make_actor_array(string $username): array {
         'id' => $url,
         'type' => 'Person',
         'preferredUsername' => $username,
-        'name' => $config['site_title'] ?? 'BrisaCMS',
-        'summary' => $config['tagline'] ?? '',
+        'name' => !empty($config['fediverse_name']) ? $config['fediverse_name'] : ($config['site_title'] ?? 'BrisaCMS'),
+        'summary' => !empty($config['fediverse_bio']) ? $config['fediverse_bio'] : ($config['tagline'] ?? ''),
         'manuallyApprovesFollowers' => false,
         'url' => ap_base_url(),
         'inbox' => "$url/inbox",
@@ -241,6 +253,23 @@ function ap_make_actor_array(string $username): array {
             'publicKeyPem' => $kp['public_key'],
         ],
     ];
+
+    if (!empty($config['fediverse_avatar'])) {
+        $actor['icon'] = [
+            'type' => 'Image',
+            'mediaType' => ap_get_image_mime($config['fediverse_avatar']),
+            'url' => $config['fediverse_avatar']
+        ];
+    }
+    if (!empty($config['fediverse_cover'])) {
+        $actor['image'] = [
+            'type' => 'Image',
+            'mediaType' => ap_get_image_mime($config['fediverse_cover']),
+            'url' => $config['fediverse_cover']
+        ];
+    }
+
+    return $actor;
 }
 
 function ap_endpoint_actor(string $username): void {
@@ -557,6 +586,42 @@ function ap_delete_article(string $slug): void {
     ap_trigger_delivery();
 }
 
+function ap_update_actor(): void {
+    if (!ap_is_enabled()) return;
+
+    $username = cms_config()['fediverse_username'] ?? 'blog';
+    $base = ap_base_url();
+    $actorUrl = "$base/users/$username";
+    
+    $actId = "$actorUrl/activities/update-" . time();
+    $actorObj = ap_make_actor_array($username);
+
+    $activity = [
+        '@context' => [
+            'https://www.w3.org/ns/activitystreams',
+            'https://w3id.org/security/v1'
+        ],
+        'id' => $actId,
+        'type' => 'Update',
+        'actor' => $actorUrl,
+        'to' => ['https://www.w3.org/ns/activitystreams#Public'],
+        'object' => $actorObj,
+    ];
+
+    $oid = ap_exec("INSERT INTO ap_outbox (activity_id, type, object_json) VALUES (?, ?, ?)",
+        [$actId, 'Update', json_encode($activity, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)]);
+
+    // Queue for all followers
+    $followers = ap_q("SELECT DISTINCT inbox FROM ap_followers WHERE inbox != ''");
+    $ins = ap_db()->prepare("INSERT INTO ap_delivery (outbox_id, inbox) VALUES (?, ?)");
+    foreach ($followers as $f) {
+        $ins->execute([$oid, $f['inbox']]);
+    }
+
+    ap_log("Outbox: Perfil de Fediverso actualizado. Actividad Update encolada.");
+    ap_trigger_delivery();
+}
+
 function ap_trigger_delivery(): void {
     $script = ROOT_PATH . '/cli/ap-deliver.php';
     if (file_exists($script)) {
@@ -860,6 +925,33 @@ function ap_get_note_stats(string $slug): array {
     $likes = (int)(ap_one("SELECT count(*) c FROM ap_interactions WHERE note_id = ? AND type = 'like'", [$noteId])['c'] ?? 0);
     $boosts = (int)(ap_one("SELECT count(*) c FROM ap_interactions WHERE note_id = ? AND type = 'announce'", [$noteId])['c'] ?? 0);
     return ['favourites' => $likes, 'reblogs' => $boosts];
+}
+
+function ap_get_post_delivery_status(string $slug): ?array {
+    if (!ap_is_enabled()) return null;
+    
+    // Find the latest outbox item related to this slug
+    $row = ap_one("SELECT id, activity_id, published FROM ap_outbox WHERE activity_id LIKE ? ORDER BY id DESC LIMIT 1", ["%/activities/{$slug}%"]);
+    if (!$row) return null;
+    
+    $outbox_id = $row['id'];
+    $stats = ap_one("
+        SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) as delivered,
+            SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+            SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending
+        FROM ap_delivery 
+        WHERE outbox_id = ?
+    ", [$outbox_id]);
+    
+    return [
+        'published' => $row['published'],
+        'total' => (int)($stats['total'] ?? 0),
+        'delivered' => (int)($stats['delivered'] ?? 0),
+        'failed' => (int)($stats['failed'] ?? 0),
+        'pending' => (int)($stats['pending'] ?? 0),
+    ];
 }
 
 function ap_update_slug(string $old_slug, string $new_slug): void {

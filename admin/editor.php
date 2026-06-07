@@ -59,7 +59,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($type === 'articles' && $post['status'] === 'published') {
                 if (cms_plugin_is_active('fediverse')) {
                     require_once dirname(__DIR__) . '/plugins/fediverse/activitypub.php';
-                    ap_publish_article($post);
+                    $resend = !empty($_POST['fediverse_resend']);
+                    ap_publish_article($post, $resend);
                 }
             }
         }
@@ -268,6 +269,52 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
               value="<?= htmlspecialchars($post['mastodon_url'] ?? '') ?>">
             <div class="panel-hint"><?= __("panel_mastodon_hint") ?></div>
           </div>
+
+          <?php if (cms_plugin_is_active('fediverse') && $post && $post['status'] === 'published'): 
+              require_once dirname(__DIR__) . '/plugins/fediverse/activitypub.php';
+              $status = ap_get_post_delivery_status($post['slug']);
+          ?>
+          <div class="panel">
+            <div class="panel-title">Fediverso (ActivityPub)</div>
+            
+            <div style="margin-bottom:0.75rem; border-bottom:1px solid var(--border2); padding-bottom:0.75rem">
+              <?php if (!$status): ?>
+                <div style="font-size:0.85rem; color:var(--muted)">Este artículo aún no ha sido federado.</div>
+              <?php else: ?>
+                <div style="display:flex; flex-direction:column; gap:0.4rem; font-size:0.85rem">
+                  <?php if ($status['total'] === 0): ?>
+                    <div style="color:var(--text); display:flex; align-items:center; gap:0.35rem">
+                      <span style="font-size:1.1rem">📢</span> Publicado en Outbox local (sin seguidores).
+                    </div>
+                  <?php elseif ($status['pending'] > 0): ?>
+                    <div style="color:var(--orange); display:flex; align-items:center; gap:0.35rem">
+                      <span style="font-size:1.1rem">⏳</span> Enviando: <strong><?= $status['delivered'] ?> / <?= $status['total'] ?></strong>
+                    </div>
+                  <?php elseif ($status['failed'] > 0 && $status['delivered'] === 0): ?>
+                    <div style="color:var(--red); display:flex; align-items:center; gap:0.35rem">
+                      <span style="font-size:1.1rem">⚠</span> Envío fallido.
+                    </div>
+                  <?php else: ?>
+                    <div style="color:var(--green); display:flex; align-items:center; gap:0.35rem">
+                      <span style="font-size:1.1rem">✓</span> Compartido con éxito en <strong><?= $status['delivered'] ?></strong> servidores.
+                    </div>
+                  <?php endif; ?>
+                  <div style="font-size:0.72rem; color:var(--muted)">
+                    Última federación: <?= date('d/m/Y H:i', strtotime($status['published'])) ?>
+                  </div>
+                </div>
+              <?php endif; ?>
+            </div>
+
+            <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.85rem; color:var(--text); margin-bottom:0.25rem">
+              <input type="checkbox" name="fediverse_resend" value="1" style="width:auto; margin:0">
+              <strong>Reenviar al Fediverso</strong>
+            </label>
+            <div class="panel-hint">
+              Vuelve a compartir este artículo con tus seguidores (generará una nueva publicación).
+            </div>
+          </div>
+          <?php endif; ?>
 
           <?php if ($post && function_exists('get_content_backups')): 
               $backups = get_content_backups($type, $slug);
