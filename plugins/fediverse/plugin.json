@@ -1,0 +1,7 @@
+{
+  "id": "fediverse",
+  "name": "Fediverso (ActivityPub)",
+  "description": "Permite que tu blog actúe como un nodo de ActivityPub. Los usuarios de Mastodon pueden seguir tu blog, recibir tus artículos y comentar de forma nativa.",
+  "version": "1.0",
+  "author": "Antigravity"
+}

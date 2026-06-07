@@ -22,6 +22,9 @@ $mastodon_handle = $config['mastodon_handle'] ?? '';
 if ($mastodon_url): ?>
 <link rel="me" href="<?= htmlspecialchars($mastodon_url) ?>">
 <?php endif; ?>
+<?php if (cms_plugin_is_active('fediverse')): ?>
+<link rel="alternate" type="application/activity+json" href="<?= htmlspecialchars(base_url() . '/users/' . ($config['fediverse_username'] ?? 'blog')) ?>">
+<?php endif; ?>
 <?php if ($mastodon_handle): ?>
 <meta name="fediverse:creator" content="<?= htmlspecialchars($mastodon_handle) ?>">
 <?php endif; ?>

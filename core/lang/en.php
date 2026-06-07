@@ -30,6 +30,7 @@ return [
     'nav_export'        => 'Export Content',
     'nav_settings'      => 'Settings',
     'nav_themes'        => 'Themes',
+    'nav_plugins'       => 'Plugins',
     'nav_view_site'     => 'View Site',
     'nav_sign_out'      => 'Sign Out',
     'nav_content'       => 'Content',

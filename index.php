@@ -47,6 +47,18 @@ if ($path === 'api/mastodon') {
     exit;
 }
 
+// ── ActivityPub Endpoints (Webfinger / Actor / Inbox / Outbox) ─────────────
+if ($path === '.well-known/webfinger' || ($segments[0] ?? '') === 'users') {
+    if (cms_plugin_is_active('fediverse')) {
+        require_once ROOT_PATH . '/plugins/fediverse/activitypub.php';
+        ap_route_request($path, $segments);
+    } else {
+        http_response_code(404);
+        exit('Fediverso desactivado.');
+    }
+    exit;
+}
+
 // ── Homepage / blog listing ───────────────────────────────────────────────
 if ($path === '' || $path === 'blog') {
     $page_num = max(1, (int)($_GET['page'] ?? 1));

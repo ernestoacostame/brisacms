@@ -94,6 +94,11 @@ function save_content(string $type, array $data): string {
     if (!empty($data['original_slug']) && $data['original_slug'] !== $slug) {
         $old = "$dir/{$data['original_slug']}.json";
         if (file_exists($old)) unlink($old);
+
+        if ($type === 'articles' && cms_plugin_is_active('fediverse')) {
+            require_once __DIR__ . '/../plugins/fediverse/activitypub.php';
+            ap_update_slug($data['original_slug'], $slug);
+        }
     }
     
     unset($data['original_slug']);
@@ -115,7 +120,16 @@ function save_content(string $type, array $data): string {
 function get_content(string $type, string $slug): ?array {
     $file = content_path($type) . "/$slug.json";
     if (!file_exists($file)) return null;
-    return json_decode(file_get_contents($file), true);
+    $data = json_decode(file_get_contents($file), true);
+
+    if ($data && $type === 'articles' && empty($data['mastodon_url'])) {
+        if (cms_plugin_is_active('fediverse')) {
+            $config = cms_config();
+            $username = $config['fediverse_username'] ?? 'blog';
+            $data['mastodon_url'] = base_url() . "/users/{$username}/notes/{$slug}";
+        }
+    }
+    return $data;
 }
 
 function delete_content(string $type, string $slug): bool {

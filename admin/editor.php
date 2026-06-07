@@ -55,6 +55,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $slug = $new_slug;
             $post = get_content($type, $new_slug);
             $is_new = false;
+
+            if ($type === 'articles' && $post['status'] === 'published') {
+                if (cms_plugin_is_active('fediverse')) {
+                    require_once dirname(__DIR__) . '/plugins/fediverse/activitypub.php';
+                    ap_publish_article($post);
+                }
+            }
         }
     }
 }

@@ -90,3 +90,24 @@ function __raw( string $key, string $fallback = '' ): string {
     }
     return $strings_raw[$key] ?? $fallback ?: $key;
 }
+
+function cms_plugin_is_active(string $id): bool {
+    $config = cms_config();
+    $active = $config['active_plugins'] ?? [];
+    return is_array($active) && in_array($id, $active, true);
+}
+
+function cms_load_plugins(): void {
+    $config = cms_config();
+    $active = $config['active_plugins'] ?? [];
+    if (is_array($active)) {
+        foreach ($active as $plugin) {
+            $file = ROOT_PATH . "/plugins/{$plugin}/{$plugin}.php";
+            if (file_exists($file)) {
+                require_once $file;
+            }
+        }
+    }
+}
+cms_load_plugins();
+
