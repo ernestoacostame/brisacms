@@ -36,7 +36,7 @@ if ($path === 'robots.txt') {
 }
 
 // ── RSS feed ──────────────────────────────────────────────────────────────
-if ($path === 'rss.xml' || $path === 'feed' || $path === 'feed/rss') {
+if ($path === 'rss.xml' || $path === 'feed.xml' || $path === 'feed' || $path === 'feed/rss') {
     require __DIR__ . '/rss.xml.php';
     exit;
 }
