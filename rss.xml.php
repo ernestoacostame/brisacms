@@ -8,7 +8,7 @@ $config   = cms_config();
 $base     = base_url();
 $title    = site_title();
 $tagline  = $config['tagline'] ?? '';
-$per_page = (int)($config['posts_per_page'] ?? 20);
+$per_page = (int)($config['rss_posts_limit'] ?? ($config['posts_per_page'] ?? 20));
 
 $result = list_content('articles', true, 1, $per_page);
 

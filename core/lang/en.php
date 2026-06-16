@@ -155,6 +155,7 @@ return [
     'field_tagline'     => 'Tagline',
     'field_base_url'    => 'Base URL',
     'field_posts_per_page'=> 'Articles Per Page',
+    'field_rss_posts_limit'=> 'RSS Articles Limit',
     'field_footer_text' => 'Footer Text',
     'field_theme'       => 'Theme',
     'field_accent'      => 'Accent Color',

@@ -155,6 +155,7 @@ return [
     'field_tagline'     => 'Descripción corta',
     'field_base_url'    => 'URL base',
     'field_posts_per_page'=> 'Artículos por página',
+    'field_rss_posts_limit'=> 'Límite de artículos en el RSS',
     'field_footer_text' => 'Texto del footer',
     'field_theme'       => 'Tema',
     'field_accent'      => 'Color de acento',

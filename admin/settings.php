@@ -20,6 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $config['tagline'] = trim($_POST['tagline'] ?? '');
             $config['base_url'] = rtrim(trim($_POST['base_url'] ?? ''), '/');
             $config['posts_per_page'] = max(1, (int)($_POST['posts_per_page'] ?? 8));
+            $config['rss_posts_limit'] = max(1, (int)($_POST['rss_posts_limit'] ?? 20));
             $config['footer_text'] = trim($_POST['footer_text'] ?? '');
             cms_save_config($config);
             $msg = __("saved_general");
@@ -99,6 +100,10 @@ admin_header(__("settings_title"), 'settings');
             <div class="form-group">
               <label class="form-label"><?= __("field_posts_per_page") ?></label>
               <input type="number" name="posts_per_page" value="<?= (int)($config['posts_per_page'] ?? 8) ?>" min="1" max="50">
+            </div>
+            <div class="form-group">
+              <label class="form-label"><?= __("field_rss_posts_limit") ?></label>
+              <input type="number" name="rss_posts_limit" value="<?= (int)($config['rss_posts_limit'] ?? 20) ?>" min="1" max="500">
             </div>
             <div class="form-group">
               <label class="form-label"><?= __("field_footer_text") ?></label>
