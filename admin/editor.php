@@ -55,6 +55,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $slug = $new_slug;
             $post = get_content($type, $new_slug);
             $is_new = false;
+
+            if ($type === 'articles' && $post['status'] === 'published') {
+                if (cms_plugin_is_active('fediverse')) {
+                    require_once dirname(__DIR__) . '/plugins/fediverse/activitypub.php';
+                    $resend = !empty($_POST['fediverse_resend']);
+                    ap_publish_article($post, $resend);
+                }
+            }
         }
     }
 }
@@ -255,12 +263,60 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
             <div id="feat-upload-progress" style="display:none;font-size:0.78rem;color:var(--muted);margin-top:0.35rem"></div>
           </div>
 
+          <?php if (!cms_plugin_is_active('fediverse')): ?>
           <div class="panel">
             <div class="panel-title">URL de Mastodon</div>
             <input type="text" name="mastodon_url" placeholder="<?= __raw("panel_mastodon_ph") ?>"
               value="<?= htmlspecialchars($post['mastodon_url'] ?? '') ?>">
             <div class="panel-hint"><?= __("panel_mastodon_hint") ?></div>
           </div>
+          <?php endif; ?>
+
+          <?php if (cms_plugin_is_active('fediverse') && $post && $post['status'] === 'published'): 
+              require_once dirname(__DIR__) . '/plugins/fediverse/activitypub.php';
+              $status = ap_get_post_delivery_status($post['slug']);
+          ?>
+          <div class="panel">
+            <div class="panel-title">Fediverso (ActivityPub)</div>
+            
+            <div style="margin-bottom:0.75rem; border-bottom:1px solid var(--border2); padding-bottom:0.75rem">
+              <?php if (!$status): ?>
+                <div style="font-size:0.85rem; color:var(--muted)">Este artículo aún no ha sido federado.</div>
+              <?php else: ?>
+                <div style="display:flex; flex-direction:column; gap:0.4rem; font-size:0.85rem">
+                  <?php if ($status['total'] === 0): ?>
+                    <div style="color:var(--text); display:flex; align-items:center; gap:0.35rem">
+                      <span style="font-size:1.1rem">📢</span> Publicado en Outbox local (sin seguidores).
+                    </div>
+                  <?php elseif ($status['pending'] > 0): ?>
+                    <div style="color:var(--orange); display:flex; align-items:center; gap:0.35rem">
+                      <span style="font-size:1.1rem">⏳</span> Enviando: <strong><?= $status['delivered'] ?> / <?= $status['total'] ?></strong>
+                    </div>
+                  <?php elseif ($status['failed'] > 0 && $status['delivered'] === 0): ?>
+                    <div style="color:var(--red); display:flex; align-items:center; gap:0.35rem">
+                      <span style="font-size:1.1rem">⚠</span> Envío fallido.
+                    </div>
+                  <?php else: ?>
+                    <div style="color:var(--green); display:flex; align-items:center; gap:0.35rem">
+                      <span style="font-size:1.1rem">✓</span> Compartido con éxito en <strong><?= $status['delivered'] ?></strong> servidores.
+                    </div>
+                  <?php endif; ?>
+                  <div style="font-size:0.72rem; color:var(--muted)">
+                    Última federación: <?= date('d/m/Y H:i', strtotime($status['published'])) ?>
+                  </div>
+                </div>
+              <?php endif; ?>
+            </div>
+
+            <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.85rem; color:var(--text); margin-bottom:0.25rem">
+              <input type="checkbox" name="fediverse_resend" value="1" style="width:auto; margin:0">
+              <strong>Reenviar al Fediverso</strong>
+            </label>
+            <div class="panel-hint">
+              Vuelve a compartir este artículo con tus seguidores (generará una nueva publicación).
+            </div>
+          </div>
+          <?php endif; ?>
 
           <?php if ($post && function_exists('get_content_backups')): 
               $backups = get_content_backups($type, $slug);
@@ -389,7 +445,7 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 }
 
 /* Ajustar para pantallas más pequeñas */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .fmt-select {
     max-width: 110px;
     font-size: 12px;
@@ -469,7 +525,7 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 }
 
 /* Ajustar para responsive */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .fmt-btn {
     padding: 8px;
     min-width: 32px;
@@ -538,7 +594,7 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 }
 
 /* Responsive adjustments for font size controls */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
     .font-size-label {
         font-size: 12px;
         min-width: 22px;
@@ -587,7 +643,7 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 }
 
 /* Responsive design para format-bar */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .format-bar {
     padding: 0 6px;
     gap: 2px;
@@ -772,7 +828,7 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 }
 
 /* Responsive */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   #titlebar {
     padding: 0 8px;
     gap: 4px;
@@ -796,6 +852,7 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
     font-size: 11px;
   }
 }
+.tb {
   background: none;
   border: none;
   color: var(--text2);
@@ -843,7 +900,7 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
   color: #fff !important;
   border-color: var(--accent) !important;
 }
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .toolbar {
     padding: 0.4rem 0.6rem;
     overflow-x: auto;
@@ -864,7 +921,7 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 }
 
 /* Mobile toolbar */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .toolbar {
     overflow-x: auto;
     padding: 0.4rem 0.5rem;
@@ -1171,7 +1228,7 @@ body.focus-mode .floating-buttons-container { display: none !important; }
 .panel input, .panel select, .panel textarea { margin-top: 0; font-size: 0.85rem; }
 
 /* ── RESPONSIVE ── */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   /* Prevenir scroll horizontal en todo */
   html, body {
     overflow-x: hidden !important;
@@ -1658,7 +1715,7 @@ body.focus-mode .floating-buttons-container { display: none !important; }
 }
 
 /* Desktop view - hide mobile dropdown elements */
-@media (min-width: 769px) {
+@media (min-width: 1025px) {
   .mobile-dropdown-menu {
     display: none !important;
   }
@@ -1672,8 +1729,8 @@ body.focus-mode .floating-buttons-container { display: none !important; }
   }
 }
 
-/* For screens between 481px and 768px, show all tools */
-@media (min-width: 481px) and (max-width: 768px) {
+/* For screens between 481px and 1024px, show all tools */
+@media (min-width: 481px) and (max-width: 1024px) {
   .mobile-hidden-tools {
     display: flex !important;
     align-items: center;
@@ -1774,7 +1831,7 @@ body.focus-mode .floating-buttons-container { display: none !important; }
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
     /* hide unwanted right toolbar items */
     #toolbar-right .mode-switch,
     #font-size-group,
@@ -1784,7 +1841,7 @@ body.focus-mode .floating-buttons-container { display: none !important; }
         display: none !important;
     }
 }
-@media (min-width: 769px) {
+@media (min-width: 1025px) {
     #more-tb-btn {
         display: none;
     }
@@ -1819,7 +1876,7 @@ body.focus-mode .floating-buttons-container { display: none !important; }
 }
 
 /* Adjust for smaller screens */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .fmt-btn svg {
     width: 14px;
     height: 14px;
@@ -1834,7 +1891,7 @@ body.focus-mode .floating-buttons-container { display: none !important; }
 }
 
 /* Añadir un indicador visual de que hay más contenido abajo */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .editor-sidebar::after {
     content: "↓ Hay más contenido abajo";
     display: block;
@@ -1856,14 +1913,14 @@ body.focus-mode .floating-buttons-container { display: none !important; }
 }
 
 /* Asegurar que no haya contenido oculto */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .editor-sidebar > *:not(.panel) {
     display: none !important;
   }
 }
 
 /* Fix para el height del contenedor en iOS */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   html, body {
     height: 100%;
   }
@@ -2335,19 +2392,16 @@ function execStrikeThrough() {
   if (mode !== 'visual') return;
   const editor = document.getElementById('editor');
   editor.focus();
-  
-  // Check if we're in a strikethrough already
+
   const selection = window.getSelection();
   if (selection.rangeCount === 0) return;
-  
+
   const range = selection.getRangeAt(0);
   const ancestor = range.commonAncestorContainer;
-  
-  // Check if the selection is already inside a <del> element
+
   let delElement = ancestor.nodeType === 3 ? ancestor.parentElement : ancestor;
   let foundDel = null;
-  
-  // Find the nearest <del>, <s>, or <strike> element
+
   while (delElement && delElement !== editor) {
     if (delElement.tagName === 'DEL' || delElement.tagName === 'S' || delElement.tagName === 'STRIKE') {
       foundDel = delElement;
@@ -2355,57 +2409,24 @@ function execStrikeThrough() {
     }
     delElement = delElement.parentElement;
   }
-  
+
   if (foundDel) {
-    // Remove strikethrough - unwrap the element
-    const parent = foundDel.parentNode;
-    
-    // Create a document fragment to hold the children
-    const fragment = document.createDocumentFragment();
-    while (foundDel.firstChild) {
-      fragment.appendChild(foundDel.firstChild);
-    }
-    
-    // Replace the del element with its children
-    parent.replaceChild(fragment, foundDel);
-    
-    // Restore selection
     const newRange = document.createRange();
-    newRange.setStart(fragment.firstChild || parent, 0);
-    newRange.setEnd(fragment.lastChild || parent, fragment.lastChild ? fragment.lastChild.length || 0 : 0);
+    newRange.selectNode(foundDel);
     selection.removeAllRanges();
     selection.addRange(newRange);
+    document.execCommand('insertHTML', false, foundDel.innerHTML);
   } else {
-    // Apply strikethrough
     const selectedText = range.toString();
     if (selectedText) {
-      // Wrap selected text with <del> tag
-      const del = document.createElement('del');
-      del.textContent = selectedText;
-      range.deleteContents();
-      range.insertNode(del);
-      
-      // Move cursor after the inserted element
-      const newRange = document.createRange();
-      newRange.setStartAfter(del);
-      newRange.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
+      const div = document.createElement('div');
+      div.appendChild(range.cloneContents());
+      document.execCommand('insertHTML', false, `<del>${div.innerHTML}</del>`);
     } else {
-      // If no text selected, insert a <del> element with placeholder
-      const del = document.createElement('del');
-      del.textContent = 'texto tachado';
-      range.insertNode(del);
-      
-      // Select the inserted text
-      const newRange = document.createRange();
-      newRange.selectNodeContents(del);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
+      document.execCommand('insertHTML', false, '<del>texto tachado</del>');
     }
   }
-  
-  // Force update
+
   editor.dispatchEvent(new Event('input'));
 }
 
@@ -3208,7 +3229,7 @@ document.addEventListener('keydown', e => {
 
 // Añadir al final del script existente, después de la función adjustMobileLayout()
 function fixSidebarLayout() {
-  if (window.innerWidth <= 768) {
+  if (window.innerWidth <= 1024) {
     const sidebar = document.querySelector('.editor-sidebar');
     const panels = sidebar?.querySelectorAll('.panel');
     
@@ -3410,7 +3431,7 @@ function previewBackup(timestamp, type, slug) {
     updateFloatingLabel();
 
     function checkMobile() {
-        const isMobile = window.innerWidth <= 768;
+        const isMobile = window.innerWidth <= 1024;
         if (isMobile) {
             publishBtn.style.display = 'none';
             floatingContainer.style.display = 'flex';
@@ -3496,7 +3517,7 @@ function previewBackup(timestamp, type, slug) {
 .floating-preview-btn span {
     display: none;
 }
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
     #publish-btn,
     button[name="status"][value="draft"] {
         display: none !important;

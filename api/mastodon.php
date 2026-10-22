@@ -10,6 +10,31 @@ if (!$post_url || !filter_var($post_url, FILTER_VALIDATE_URL)) {
     echo json_encode(['error' => 'Invalid URL']); exit;
 }
 
+// Intercept local ActivityPub Note URLs
+$base_host = parse_url(base_url(), PHP_URL_HOST);
+$req_host = parse_url($post_url, PHP_URL_HOST);
+
+if ($req_host === $base_host) {
+    $path = parse_url($post_url, PHP_URL_PATH);
+    if (preg_match('#/users/[^/]+/notes/([^/]+)$#', $path, $m)) {
+        $slug = $m[1];
+        if (cms_plugin_is_active('fediverse')) {
+            require_once dirname(__DIR__) . '/plugins/fediverse/activitypub.php';
+            $comments = ap_get_comments_for_slug($slug);
+            $stats = ap_get_note_stats($slug);
+
+            echo json_encode([
+                'url'           => $post_url,
+                'favourites'    => $stats['favourites'],
+                'reblogs'       => $stats['reblogs'],
+                'replies_count' => count($comments),
+                'comments'      => $comments,
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+    }
+}
+
 if (!preg_match('#^(https://[^/]+)/@[^/]+/(\d+)$#', $post_url, $m)) {
     echo json_encode(['error' => 'Not a valid Mastodon status URL', 'url' => $post_url]); exit;
 }

@@ -36,7 +36,7 @@ if ($path === 'robots.txt') {
 }
 
 // ── RSS feed ──────────────────────────────────────────────────────────────
-if ($path === 'rss.xml' || $path === 'feed' || $path === 'feed/rss') {
+if ($path === 'rss.xml' || $path === 'feed.xml' || $path === 'feed' || $path === 'feed/rss') {
     require __DIR__ . '/rss.xml.php';
     exit;
 }
@@ -44,6 +44,24 @@ if ($path === 'rss.xml' || $path === 'feed' || $path === 'feed/rss') {
 // ── Mastodon comments API ─────────────────────────────────────────────────
 if ($path === 'api/mastodon') {
     require __DIR__ . '/api/mastodon.php';
+    exit;
+}
+
+// ── Image Cache & Optimization API ────────────────────────────────────────
+if ($path === 'api/img' || $path === 'api/img.php') {
+    require __DIR__ . '/api/img.php';
+    exit;
+}
+
+// ── ActivityPub Endpoints (Webfinger / Actor / Inbox / Outbox) ─────────────
+if ($path === '.well-known/webfinger' || ($segments[0] ?? '') === 'users') {
+    if (cms_plugin_is_active('fediverse')) {
+        require_once ROOT_PATH . '/plugins/fediverse/activitypub.php';
+        ap_route_request($path, $segments);
+    } else {
+        http_response_code(404);
+        exit('Fediverso desactivado.');
+    }
     exit;
 }
 

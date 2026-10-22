@@ -1,6 +1,6 @@
 <?php
 // BrisaCMS - Configuration
-define('CMS_VERSION', '1.0.3');
+define('CMS_VERSION', '2.1.1');
 define('CMS_NAME', 'BrisaCMS');
 define('ROOT_PATH', dirname(__DIR__));
 define('CONTENT_PATH', ROOT_PATH . '/content');
@@ -9,6 +9,8 @@ define('UPLOADS_PATH', ROOT_PATH . '/uploads');
 define('CACHE_PATH', ROOT_PATH . '/cache');
 define('CONFIG_FILE', ROOT_PATH . '/config.json');
 define('INSTALLED_FLAG', ROOT_PATH . '/.installed');
+require_once __DIR__ . '/image_cache.php';
+require_once __DIR__ . '/media.php';
 
 function cms_config(): array {
     if (!file_exists(CONFIG_FILE)) return [];
@@ -90,3 +92,24 @@ function __raw( string $key, string $fallback = '' ): string {
     }
     return $strings_raw[$key] ?? $fallback ?: $key;
 }
+
+function cms_plugin_is_active(string $id): bool {
+    $config = cms_config();
+    $active = $config['active_plugins'] ?? [];
+    return is_array($active) && in_array($id, $active, true);
+}
+
+function cms_load_plugins(): void {
+    $config = cms_config();
+    $active = $config['active_plugins'] ?? [];
+    if (is_array($active)) {
+        foreach ($active as $plugin) {
+            $file = ROOT_PATH . "/plugins/{$plugin}/{$plugin}.php";
+            if (file_exists($file)) {
+                require_once $file;
+            }
+        }
+    }
+}
+cms_load_plugins();
+

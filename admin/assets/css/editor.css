@@ -834,29 +834,31 @@ body.focus-mode .focus-exit-hint {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 1rem;
+  padding: 1.25rem;
 }
 
 .panel-title {
-  font-size: 0.72rem;
-  font-weight: 600;
+  font-size: 0.82rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   color: var(--muted);
-  margin-bottom: 0.65rem;
+  margin-bottom: 0.75rem;
 }
 
 .panel-hint {
-  font-size: 0.75rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
   color: var(--muted);
-  margin-top: 0.4rem;
+  margin-top: 0.5rem;
 }
 
 .panel input,
 .panel select,
 .panel textarea {
   margin-top: 0;
-  font-size: 0.85rem;
+  font-size: 0.95rem;
+  padding: 0.65rem 0.85rem;
 }
 
 /* ── Audio Player ──────────────────────────────────────────────────────── */
@@ -1107,8 +1109,8 @@ body.scheme-light .floating-publish-btn {
    RESPONSIVE — Consolidated (was scattered ~8 times)
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Tablet (≤ 768px) ──────────────────────────────────────────────────── */
-@media (max-width: 768px) {
+/* ── Tablet (≤ 1024px) ──────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
   /* Prevent horizontal overflow */
   html, body {
     overflow-x: hidden;
@@ -1466,8 +1468,8 @@ body.scheme-light .floating-publish-btn {
   }
 }
 
-/* ── Desktop (≥ 769px) ─────────────────────────────────────────────────── */
-@media (min-width: 769px) {
+/* ── Desktop (≥ 1025px) ─────────────────────────────────────────────────── */
+@media (min-width: 1025px) {
   .mobile-dropdown-menu {
     display: none;
   }
@@ -1490,8 +1492,8 @@ body.scheme-light .floating-publish-btn {
   }
 }
 
-/* ── Between tablet and small mobile (481–768px) ──────────────────────── */
-@media (min-width: 481px) and (max-width: 768px) {
+/* ── Between tablet and small mobile (481–1024px) ──────────────────────── */
+@media (min-width: 481px) and (max-width: 1024px) {
   .mobile-hidden-tools {
     display: flex;
     align-items: center;

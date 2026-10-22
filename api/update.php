@@ -89,6 +89,17 @@ switch ($action) {
         echo json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         break;
 
+    // Eliminar copia de seguridad
+    case 'delete_backup':
+        $backupFile = $_POST['backup_file'] ?? '';
+        if (!$backupFile) {
+            echo json_encode(['error' => 'Falta el parámetro backup_file.']);
+            break;
+        }
+        $result = cms_update_delete_backup($backupFile);
+        echo json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        break;
+
     default:
         http_response_code(400);
         echo json_encode(['error' => 'Acción no reconocida: ' . $action]);

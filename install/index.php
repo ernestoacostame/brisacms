@@ -36,6 +36,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         file_put_contents(ROOT_PATH . '/content/.htaccess', "Order allow,deny\nDeny from all");
         file_put_contents(ROOT_PATH . '/cache/.htaccess', "Order allow,deny\nDeny from all");
 
+        $enable_fediverse = isset($_POST['enable_fediverse']) && $_POST['enable_fediverse'] === '1';
+
         // Save config
         cms_save_config([
             'site_title' => $site_title,
@@ -45,7 +47,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'theme' => 'default',
             'theme_color' => '#6366f1',
             'installed_at' => date('c'),
-            'version' => CMS_VERSION
+            'version' => CMS_VERSION,
+            'active_plugins' => $enable_fediverse ? ['fediverse'] : [],
+            'fediverse_username' => 'blog'
         ]);
 
         // Create sample content
@@ -172,6 +176,10 @@ $detected_base = (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . $_SERVE
         <div class="field">
           <label>Confirm Password</label>
           <input type="password" name="password2" required autocomplete="new-password">
+        </div>
+        <div class="field" style="display:flex; align-items:center; gap:0.5rem; margin-top:1.25rem; margin-bottom:1.25rem">
+          <input type="checkbox" name="enable_fediverse" id="enable_fediverse" value="1" checked style="width:16px; height:16px; accent-color:var(--accent); cursor:pointer">
+          <label for="enable_fediverse" style="margin:0; cursor:pointer; user-select:none; color:var(--text); font-size:0.9rem">Habilitar el Fediverso (ActivityPub)</label>
         </div>
         <button type="submit" class="btn">Install BrisaCMS →</button>
       </form>

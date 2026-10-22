@@ -288,7 +288,6 @@
     const range = selection.getRangeAt(0);
     const ancestor = range.commonAncestorContainer;
 
-    // Find the nearest <del>, <s>, or <strike> element
     let delElement = ancestor.nodeType === 3 ? ancestor.parentElement : ancestor;
     let foundDel = null;
 
@@ -301,44 +300,19 @@
     }
 
     if (foundDel) {
-      // Remove strikethrough — unwrap
-      const parent = foundDel.parentNode;
-      const fragment = document.createDocumentFragment();
-      while (foundDel.firstChild) {
-        fragment.appendChild(foundDel.firstChild);
-      }
-      parent.replaceChild(fragment, foundDel);
-
       const newRange = document.createRange();
-      newRange.setStart(fragment.firstChild || parent, 0);
-      newRange.setEnd(
-        fragment.lastChild || parent,
-        fragment.lastChild ? fragment.lastChild.length || 0 : 0
-      );
+      newRange.selectNode(foundDel);
       selection.removeAllRanges();
       selection.addRange(newRange);
+      document.execCommand('insertHTML', false, foundDel.innerHTML);
     } else {
       const selectedText = range.toString();
       if (selectedText) {
-        const del = document.createElement('del');
-        del.textContent = selectedText;
-        range.deleteContents();
-        range.insertNode(del);
-
-        const newRange = document.createRange();
-        newRange.setStartAfter(del);
-        newRange.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(newRange);
+        const div = document.createElement('div');
+        div.appendChild(range.cloneContents());
+        document.execCommand('insertHTML', false, `<del>${div.innerHTML}</del>`);
       } else {
-        const del = document.createElement('del');
-        del.textContent = 'texto tachado';
-        range.insertNode(del);
-
-        const newRange = document.createRange();
-        newRange.selectNodeContents(del);
-        selection.removeAllRanges();
-        selection.addRange(newRange);
+        document.execCommand('insertHTML', false, '<del>texto tachado</del>');
       }
     }
 
@@ -1105,7 +1079,7 @@ h1{font-family:'Roboto Condensed',sans-serif;font-size:clamp(1.5rem,4vw,2.2rem);
   // ═══════════════════════════════════════════════════════════════════════════
 
   function fixSidebarLayout() {
-    if (window.innerWidth > 768) return;
+    if (window.innerWidth > 1024) return;
 
     const sidebar = document.querySelector('.editor-sidebar');
     const panels  = sidebar?.querySelectorAll('.panel');
@@ -1268,7 +1242,7 @@ h1{font-family:'Roboto Condensed',sans-serif;font-size:clamp(1.5rem,4vw,2.2rem);
     updateFloatingLabel();
 
     function checkMobile() {
-      const isMobile = window.innerWidth <= 768;
+      const isMobile = window.innerWidth <= 1024;
       if (publishBtn) publishBtn.style.display = isMobile ? 'none' : '';
       floatingContainer.style.display = isMobile ? 'flex' : 'none';
     }

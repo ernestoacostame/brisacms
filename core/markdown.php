@@ -177,7 +177,17 @@ function md_inline(string $text): string {
     $text = preg_replace_callback('/!\[([^\]]*)\]\(([^)]+)\)/', function($m) {
         $alt = htmlspecialchars($m[1]);
         $src = htmlspecialchars($m[2]);
-        return "<img src=\"{$src}\" alt=\"{$alt}\">";
+        $extra = '';
+        if (function_exists('media_get_meta')) {
+            $meta = media_get_meta($m[2]);
+            if ($alt === '' && !empty($meta['alt'])) {
+                $alt = htmlspecialchars($meta['alt']);
+            }
+            if (!empty($meta['title'])) {
+                $extra .= ' title="' . htmlspecialchars($meta['title']) . '"';
+            }
+        }
+        return "<img src=\"{$src}\" alt=\"{$alt}\"{$extra}>";
     }, $text);
 
     // Links
