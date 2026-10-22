@@ -20,6 +20,11 @@ function ap_db(): PDO {
     ]);
     $pdo->exec('PRAGMA foreign_keys = ON');
     $pdo->exec('PRAGMA journal_mode = WAL');
+    $pdo->exec('PRAGMA synchronous = NORMAL');
+    $pdo->exec('PRAGMA cache_size = -32000');
+    $pdo->exec('PRAGMA temp_store = MEMORY');
+    $pdo->exec('PRAGMA mmap_size = 67108864');
+    $pdo->exec('PRAGMA busy_timeout = 5000');
     return $pdo;
 }
 
@@ -101,6 +106,14 @@ function ap_ensure_schema(): void {
         reason      TEXT,
         created_at  TEXT NOT NULL DEFAULT (datetime('now'))
     )");
+
+    // High performance database indexes for lightning-fast queries
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_ap_comments_slug ON ap_comments(post_slug, published_at)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_ap_comments_reply ON ap_comments(in_reply_to)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_ap_delivery_status_next ON ap_delivery(status, next_try)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_ap_interactions_note ON ap_interactions(note_id, type)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_ap_followers_inbox ON ap_followers(inbox)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_ap_outbox_published ON ap_outbox(published)");
 }
 
 // ---------------------------------------------------------------------------

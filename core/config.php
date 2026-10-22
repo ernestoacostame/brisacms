@@ -1,6 +1,6 @@
 <?php
 // BrisaCMS - Configuration
-define('CMS_VERSION', '2.0.4');
+define('CMS_VERSION', '2.1.0');
 define('CMS_NAME', 'BrisaCMS');
 define('ROOT_PATH', dirname(__DIR__));
 define('CONTENT_PATH', ROOT_PATH . '/content');
@@ -9,6 +9,8 @@ define('UPLOADS_PATH', ROOT_PATH . '/uploads');
 define('CACHE_PATH', ROOT_PATH . '/cache');
 define('CONFIG_FILE', ROOT_PATH . '/config.json');
 define('INSTALLED_FLAG', ROOT_PATH . '/.installed');
+require_once __DIR__ . '/image_cache.php';
+require_once __DIR__ . '/media.php';
 
 function cms_config(): array {
     if (!file_exists(CONFIG_FILE)) return [];

@@ -1,16 +1,20 @@
 <?php
 // BrisaCMS - Content Manager (File-based, no DB)
 require_once __DIR__ . '/markdown.php';
+require_once __DIR__ . '/auth.php';
 
 function content_path(string $type): string {
     return CONTENT_PATH . '/' . $type;
 }
 
 function slug_from_title(string $title): string {
-    $slug = strtolower($title);
-    $slug = iconv('UTF-8', 'ASCII//TRANSLIT', $slug);
-    $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
-    return trim($slug, '-');
+    $slug = function_exists('mb_strtolower') ? mb_strtolower($title, 'UTF-8') : strtolower($title);
+    if (function_exists('iconv')) {
+        $translit = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $slug);
+        if ($translit !== false) $slug = $translit;
+    }
+    $slug = preg_replace('/[^a-z0-9]+/i', '-', $slug);
+    return trim(strtolower($slug), '-');
 }
 
 function save_content_backup(string $type, array $data): void {
@@ -111,7 +115,8 @@ function save_content(string $type, array $data): string {
     
     file_put_contents("$dir/$slug.json", json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     
-    // Clear cache
+    // Clear index and page cache
+    invalidate_content_index($type);
     clear_cache();
     
     return $slug;
@@ -136,29 +141,91 @@ function delete_content(string $type, string $slug): bool {
     $file = content_path($type) . "/$slug.json";
     if (!file_exists($file)) return false;
     unlink($file);
+    invalidate_content_index($type);
     clear_cache();
     return true;
+}
+
+/**
+ * High-performance content index cache.
+ * Avoids reading and parsing hundreds of JSON files from disk on every query.
+ */
+function get_content_index(string $type, bool $force = false): array {
+    if (!$force && isset($GLOBALS['__content_index_cache'][$type])) {
+        return $GLOBALS['__content_index_cache'][$type];
+    }
+
+    $dir = content_path($type);
+    if (!is_dir($dir)) return [];
+
+    $cache_dir = CACHE_PATH;
+    if (!is_dir($cache_dir)) @mkdir($cache_dir, 0755, true);
+    $cache_file = $cache_dir . "/content_index_{$type}.json";
+
+    // Use cached index if it exists and directory has not been modified
+    if (!$force && file_exists($cache_file)) {
+        $index_mtime = filemtime($cache_file);
+        $dir_mtime = filemtime($dir);
+        if ($index_mtime >= $dir_mtime) {
+            $raw = @file_get_contents($cache_file);
+            $cached = json_decode($raw, true);
+            if (is_array($cached)) {
+                $GLOBALS['__content_index_cache'][$type] = $cached;
+                return $cached;
+            }
+        }
+    }
+
+    // Build index from disk
+    $files = glob("$dir/*.json");
+    $items = [];
+    if ($files) {
+        foreach ($files as $file) {
+            $raw = @file_get_contents($file);
+            $data = json_decode($raw, true);
+            if (!$data || !is_array($data)) continue;
+            $items[] = $data;
+        }
+    }
+
+    // Sort descending by created_at
+    usort($items, fn($a, $b) => strcmp($b['created_at'] ?? '', $a['created_at'] ?? ''));
+
+    // Atomic cache write
+    @file_put_contents($cache_file, json_encode($items, JSON_UNESCAPED_UNICODE), LOCK_EX);
+    $GLOBALS['__content_index_cache'][$type] = $items;
+    return $items;
+}
+
+function invalidate_content_index(?string $type = null): void {
+    if ($type !== null) {
+        unset($GLOBALS['__content_index_cache'][$type]);
+        $file = CACHE_PATH . "/content_index_{$type}.json";
+        if (file_exists($file)) @unlink($file);
+    } else {
+        unset($GLOBALS['__content_index_cache']);
+        $files = glob(CACHE_PATH . '/content_index_*.json');
+        if ($files) {
+            foreach ($files as $f) @unlink($f);
+        }
+    }
 }
 
 function list_content(string $type, bool $published_only = false, int $page = 1, int $per_page = 10): array {
     $dir = content_path($type);
     if (!is_dir($dir)) return ['items' => [], 'total' => 0, 'pages' => 0];
-    
-    $files = glob("$dir/*.json");
-    $items = [];
-    foreach ($files as $file) {
-        $data = json_decode(file_get_contents($file), true);
-        if ($published_only && ($data['status'] ?? 'draft') !== 'published') continue;
-        $items[] = $data;
+
+    // Read from optimized index cache instead of disk glob + parsing each file
+    $items = get_content_index($type);
+
+    if ($published_only) {
+        $items = array_values(array_filter($items, fn($d) => ($d['status'] ?? 'draft') === 'published'));
     }
-    
-    // Sort by created_at descending
-    usort($items, fn($a, $b) => strcmp($b['created_at'] ?? '', $a['created_at'] ?? ''));
-    
+
     $total = count($items);
     $pages = (int)ceil($total / $per_page);
     $offset = ($page - 1) * $per_page;
-    
+
     return [
         'items' => array_slice($items, $offset, $per_page),
         'total' => $total,
@@ -169,13 +236,15 @@ function list_content(string $type, bool $published_only = false, int $page = 1,
 
 function search_content(string $query): array {
     $results = [];
+    $query_lower = strtolower(trim($query));
+    if ($query_lower === '') return [];
+
     foreach (['articles', 'pages'] as $type) {
-        $dir = content_path($type);
-        if (!is_dir($dir)) continue;
-        foreach (glob("$dir/*.json") as $file) {
-            $data = json_decode(file_get_contents($file), true);
-            $haystack = strtolower(($data['title'] ?? '') . ' ' . strip_tags($data['content'] ?? ''));
-            if (str_contains($haystack, strtolower($query))) {
+        // Search through indexed records fast
+        $items = get_content_index($type);
+        foreach ($items as $data) {
+            $haystack = strtolower(($data['title'] ?? '') . ' ' . strip_tags($data['excerpt'] ?? '') . ' ' . strip_tags($data['content'] ?? ''));
+            if (str_contains($haystack, $query_lower)) {
                 $data['_type'] = $type;
                 $results[] = $data;
             }
@@ -190,7 +259,8 @@ function content_exists(string $type, string $slug): bool {
 
 function clear_cache(): void {
     $files = glob(CACHE_PATH . '/page_*.html');
-    if ($files) foreach ($files as $f) unlink($f);
+    if ($files) foreach ($files as $f) @unlink($f);
+    invalidate_content_index();
 }
 
 // ── WordPress XML importer with inline image download ─────────────────────

@@ -47,6 +47,12 @@ if ($path === 'api/mastodon') {
     exit;
 }
 
+// ── Image Cache & Optimization API ────────────────────────────────────────
+if ($path === 'api/img' || $path === 'api/img.php') {
+    require __DIR__ . '/api/img.php';
+    exit;
+}
+
 // ── ActivityPub Endpoints (Webfinger / Actor / Inbox / Outbox) ─────────────
 if ($path === '.well-known/webfinger' || ($segments[0] ?? '') === 'users') {
     if (cms_plugin_is_active('fediverse')) {

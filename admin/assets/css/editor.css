@@ -834,29 +834,31 @@ body.focus-mode .focus-exit-hint {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 1rem;
+  padding: 1.25rem;
 }
 
 .panel-title {
-  font-size: 0.72rem;
-  font-weight: 600;
+  font-size: 0.82rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   color: var(--muted);
-  margin-bottom: 0.65rem;
+  margin-bottom: 0.75rem;
 }
 
 .panel-hint {
-  font-size: 0.75rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
   color: var(--muted);
-  margin-top: 0.4rem;
+  margin-top: 0.5rem;
 }
 
 .panel input,
 .panel select,
 .panel textarea {
   margin-top: 0;
-  font-size: 0.85rem;
+  font-size: 0.95rem;
+  padding: 0.65rem 0.85rem;
 }
 
 /* ── Audio Player ──────────────────────────────────────────────────────── */

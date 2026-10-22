@@ -34,18 +34,18 @@ admin_header(__("themes_title"), 'themes');
           <div style="color:var(--muted);font-size:0.85rem"><?= htmlspecialchars($theme['label'] ?? $key) ?></div>
           <?php endif; ?>
         </div>
-        <div class="card-body" style="display:flex;align-items:center;justify-content:space-between;gap:1rem">
+        <div class="card-body" style="display:flex;align-items:center;justify-content:space-between;gap:1.25rem;padding:1.4rem">
           <div>
-            <div style="font-weight:600;font-size:0.9rem"><?= htmlspecialchars($theme['label'] ?? ucfirst($key)) ?></div>
+            <div style="font-weight:700;font-size:1.05rem;color:var(--text)"><?= htmlspecialchars($theme['label'] ?? ucfirst($key)) ?></div>
             <?php if (!empty($theme['description'])): ?>
-            <div style="font-size:0.78rem;color:var(--muted);margin-top:2px"><?= htmlspecialchars($theme['description']) ?></div>
+            <div style="font-size:0.88rem;color:var(--text2);margin-top:4px;line-height:1.5"><?= htmlspecialchars($theme['description']) ?></div>
             <?php endif; ?>
             <?php if (!empty($theme['author'])): ?>
-            <div style="font-size:0.75rem;color:var(--muted)">by <?= htmlspecialchars($theme['author']) ?></div>
+            <div style="font-size:0.82rem;color:var(--muted);margin-top:2px">por <?= htmlspecialchars($theme['author']) ?></div>
             <?php endif; ?>
           </div>
           <?php if ($key === $current): ?>
-          <span class="badge badge-green"><?= __("themes_active") ?></span>
+          <span class="badge badge-green">✓ <?= __("themes_active") ?></span>
           <?php else: ?>
           <form method="POST" action="<?= base_url() ?>/admin/settings.php">
             <input type="hidden" name="csrf" value="<?= generate_csrf() ?>">
