@@ -279,8 +279,86 @@ function totp_verify_recovery_code(array &$user, string $code): bool {
 }
 
 /**
- * Generates otpauth URI.
+ * Generates otpauth URI adhering strictly to RFC 6238 and Apple/Google Authenticator specs.
  */
 function totp_otpauth_url(string $user, string $secret, string $issuer = 'BrisaCMS'): string {
-    return 'otpauth://totp/' . rawurlencode($issuer) . ':' . rawurlencode($user) . '?secret=' . rawurlencode($secret) . '&issuer=' . rawurlencode($issuer);
+    $cleanSecret = strtoupper(trim(str_replace(['=', ' ', '-'], '', $secret)));
+    $cleanIssuer = trim(str_replace([':', '/', '?', '&', '='], '', $issuer)) ?: 'BrisaCMS';
+    $cleanUser   = trim(str_replace([':', '/', '?', '&', '='], '', $user)) ?: 'admin';
+
+    $label = rawurlencode($cleanIssuer) . ':' . rawurlencode($cleanUser);
+    return 'otpauth://totp/' . $label . '?secret=' . $cleanSecret . '&issuer=' . rawurlencode($cleanIssuer) . '&algorithm=SHA1&digits=6&period=30';
 }
+
+/**
+ * Resolves public avatar URL for a user or relative path.
+ */
+function user_avatar_url(?string $avatar): string {
+    if (!$avatar) {
+        return '';
+    }
+    if (preg_match('#^https?://#i', $avatar)) {
+        return $avatar;
+    }
+    $baseUrl = rtrim(base_url(), '/');
+    $cleanPath = ltrim($avatar, '/');
+    return $baseUrl . '/' . $cleanPath;
+}
+
+/**
+ * Handles avatar image upload for a user and returns relative path.
+ */
+function user_save_avatar(string $username, array $file): ?string {
+    if (empty($file['tmp_name']) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        return null;
+    }
+
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime  = finfo_file($finfo, $file['tmp_name']);
+    finfo_close($finfo);
+
+    $allowed = [
+        'image/jpeg' => 'jpg',
+        'image/png'  => 'png',
+        'image/webp' => 'webp',
+        'image/gif'  => 'gif',
+        'image/avif' => 'avif',
+    ];
+
+    if (!isset($allowed[$mime])) {
+        return null;
+    }
+
+    if ($file['size'] > 8 * 1024 * 1024) {
+        return null;
+    }
+
+    $ext = $allowed[$mime];
+    $cleanUser = sanitize_user_filename($username);
+    $dir = ROOT_PATH . '/media/avatars';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0755, true);
+    }
+
+    $filename = 'avatar_' . $cleanUser . '_' . substr(md5(uniqid()), 0, 8) . '.' . $ext;
+    $targetPath = $dir . '/' . $filename;
+
+    $moved = is_uploaded_file($file['tmp_name'])
+        ? move_uploaded_file($file['tmp_name'], $targetPath)
+        : @copy($file['tmp_name'], $targetPath);
+
+    if ($moved) {
+        // Remove old avatar if local file in media/avatars/
+        $user = get_user($username);
+        if (!empty($user['avatar']) && str_starts_with($user['avatar'], 'media/avatars/')) {
+            $oldFile = ROOT_PATH . '/' . $user['avatar'];
+            if (file_exists($oldFile) && is_file($oldFile) && realpath($oldFile) !== realpath($targetPath)) {
+                @unlink($oldFile);
+            }
+        }
+        return 'media/avatars/' . $filename;
+    }
+
+    return null;
+}
+

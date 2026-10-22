@@ -4,6 +4,9 @@ function admin_header(string $page_title = '', string $active = ''): void {
     $color = theme_color();
     $title = site_title();
     $user  = $_SESSION['username'] ?? 'Admin';
+    $profile = function_exists('current_user') ? current_user() : null;
+    $displayName = !empty($profile['name']) ? $profile['name'] : $user;
+    $avatarUrl = !empty($profile['avatar']) && function_exists('user_avatar_url') ? user_avatar_url($profile['avatar']) : '';
     $c     = preg_match('/^#[0-9a-fA-F]{6}$/', $color) ? $color : '#6366f1';
     $rgb   = hexdec(substr($c,1,2)).','.hexdec(substr($c,3,2)).','.hexdec(substr($c,5,2));
 
@@ -513,8 +516,12 @@ body.scheme-light .floating-publish-btn {
 
   <div class="sidebar-footer">
     <div class="user-row">
-      <div class="user-avatar"><?= strtoupper(substr($user, 0, 1)) ?></div>
-      <span class="user-name"><?= htmlspecialchars($user) ?></span>
+      <?php if ($avatarUrl): ?>
+        <img src="<?= htmlspecialchars(image_cache_url($avatarUrl, 68, 68)) ?>" alt="<?= htmlspecialchars($displayName) ?>" class="user-avatar" style="object-fit:cover;border:1px solid var(--border)">
+      <?php else: ?>
+        <div class="user-avatar"><?= strtoupper(substr($displayName ?: $user, 0, 1)) ?></div>
+      <?php endif; ?>
+      <span class="user-name" title="<?= htmlspecialchars($displayName) ?>"><?= htmlspecialchars($displayName) ?></span>
     </div>
     <a href="<?= base_url() ?>/admin/logout.php" class="logout-btn">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>

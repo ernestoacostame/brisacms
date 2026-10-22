@@ -1,0 +1,16 @@
+{
+    "username": "admin",
+    "name": "Administrador",
+    "email": "admin@localhost",
+    "password": "",
+    "role": "admin",
+    "status": "active",
+    "bio": "Administrador principal del sitio.",
+    "avatar": "",
+    "two_factor_enabled": false,
+    "two_factor_secret": "",
+    "recovery_codes": [],
+    "created_at": "2026-10-22T22:18:18+00:00",
+    "updated_at": "2026-10-22T22:18:18+00:00",
+    "last_login": "2026-10-22T22:18:18+00:00"
+}

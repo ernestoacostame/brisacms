@@ -18,10 +18,12 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.
   - `editor`: Gestión completa de contenidos (artículos, páginas, categorías, etiquetas) y biblioteca de medios.
   - `author`: Creación y edición de sus propios artículos y subida de archivos multimedia.
 - **Control de capacidades granular**: función `user_can($capability, $user)` para validar permisos en cada sección del panel administrativo.
-- **Panel de administración de usuarios** (`admin/users.php`):
-  - Listado con tarjetas y avatares, roles tipificados con etiquetas de color, estado de 2FA y fecha de último acceso.
-  - Modal interactivo para crear nuevos usuarios con validación de fortaleza de contraseñas mediante Argon2id.
-  - Modal para editar perfil, correo, rol y cambiar contraseñas.
+- **Panel de administración de usuarios** (`admin/users.php`) y **Sección Mi Perfil** (`admin/settings.php#profile`):
+  - **Soporte completo de fotos de avatar**: subida directa de imágenes (JPG, PNG, WebP, GIF), previsualización en vivo y opción para eliminar el avatar.
+  - Almacenamiento optimizado en `media/avatars/` con redimensionamiento y caché WebP integrado.
+  - Visualización del avatar real del usuario en la barra lateral del panel (`admin/layout.php`) y en las listas de usuarios, con alternativa elegante de inicial cuando no hay foto.
+  - Modal interactivo para crear nuevos usuarios con validación de contraseñas mediante Argon2id.
+  - Modal para editar perfil, correo, rol, contraseña y avatar.
   - Protección de seguridad para evitar la eliminación o auto-desactivación del último administrador activo.
   - Migración y siembra transparente del administrador existente desde `config.json` hacia `content/users/`.
 
@@ -38,7 +40,8 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.
   - Paso 2: Solicitud interactiva del código TOTP de 6 dígitos o código de recuperación si 2FA está habilitado.
   - Protección contra fuerza bruta con limitación de intentos y bloqueo temporal tras fallos consecutivos.
 - **Asistente de configuración 2FA** (`admin/settings.php`):
-  - Generador de códigos QR renderizado directamente en `<canvas>` HTML5 sin librerías pesadas ni servicios de terceros que comprometan la privacidad.
+  - Generador de códigos QR real y estandarizado ISO/IEC 18004 (`admin/assets/js/qrcode.min.js`) 100% offline y compatible con la cámara de iPhone (iOS Camera / Llavero de iCloud), Google Authenticator, Authy y 1Password.
+  - Enlace directo `otpauth://` para abrir la app de autenticación con un solo toque desde dispositivos móviles.
   - Clave secreta visible en texto plano para configuración manual.
   - Confirmación obligatoria con código antes de activar el 2FA en la cuenta.
   - Modal para visualizar, copiar e imprimir los códigos de emergencia.

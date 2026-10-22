@@ -55,6 +55,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $active_section = 'mastodon';
         }
 
+        if ($action === 'update_profile') {
+            $name  = trim($_POST['name'] ?? '');
+            $email = trim($_POST['email'] ?? '');
+            $bio   = trim($_POST['bio'] ?? '');
+
+            if ($currentUser) {
+                $currentUser['name']  = $name ?: $currentUser['username'];
+                $currentUser['email'] = $email;
+                $currentUser['bio']   = $bio;
+
+                // Handle avatar upload or removal
+                if (!empty($_POST['remove_avatar']) && $_POST['remove_avatar'] === '1') {
+                    if (!empty($currentUser['avatar']) && str_starts_with($currentUser['avatar'], 'media/avatars/')) {
+                        $oldFile = ROOT_PATH . '/' . $currentUser['avatar'];
+                        if (file_exists($oldFile)) @unlink($oldFile);
+                    }
+                    $currentUser['avatar'] = '';
+                } elseif (!empty($_FILES['avatar_file']['tmp_name'])) {
+                    $up = user_save_avatar($currentUser['username'], $_FILES['avatar_file']);
+                    if ($up) {
+                        $currentUser['avatar'] = $up;
+                    } else {
+                        $error = 'Formato de imagen no permitido o archivo superior a 8 MB.';
+                    }
+                }
+
+                if (!$error) {
+                    save_user($currentUser);
+                    $msg = 'Perfil y foto de avatar actualizados con éxito.';
+                }
+            }
+            $active_section = 'profile';
+        }
+
         if ($action === 'security_password') {
             $current_pass = $_POST['current_password'] ?? '';
             $new_pass     = $_POST['new_password'] ?? '';
@@ -191,6 +225,10 @@ admin_header(__("settings_title"), 'settings');
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
             <span><?= __("settings_appearance") ?></span>
           </a>
+          <a href="#profile" class="settings-nav-item <?= $active_section === 'profile' ? 'active' : '' ?>" onclick="switchSection('profile', event)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span>Mi Perfil & Avatar</span>
+          </a>
           <a href="#security" class="settings-nav-item <?= $active_section === 'security' ? 'active' : '' ?>" onclick="switchSection('security', event)">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             <span>Seguridad & 2FA</span>
@@ -317,7 +355,66 @@ admin_header(__("settings_title"), 'settings');
           </div>
         </div>
 
-        <!-- 3. Security & 2FA -->
+        <!-- 3. Mi Perfil & Avatar -->
+        <div id="section-profile" class="settings-section-card <?= $active_section === 'profile' ? 'active' : '' ?>">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Mi Perfil y Foto de Avatar</span></div>
+            <div class="card-body">
+              <form method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="csrf" value="<?= $csrf ?>">
+                <input type="hidden" name="action" value="update_profile">
+                <input type="hidden" name="active_section" value="profile">
+
+                <!-- Avatar Box -->
+                <div style="display:flex;align-items:center;gap:1.5rem;padding:1.4rem;background:var(--surface2);border:1px solid var(--border2);border-radius:12px;margin-bottom:1.5rem">
+                  <?php 
+                    $profileAvatar = !empty($currentUser['avatar']) ? user_avatar_url($currentUser['avatar']) : '';
+                  ?>
+                  <div id="settings-avatar-box" style="width:76px;height:76px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;box-shadow:0 4px 14px rgba(var(--accent-rgb),0.3);border:2px solid var(--border)">
+                    <?php if ($profileAvatar): ?>
+                      <img src="<?= htmlspecialchars(image_cache_url($profileAvatar, 150, 150)) ?>" alt="Avatar" style="width:100%;height:100%;object-fit:cover">
+                    <?php else: ?>
+                      <span style="font-size:2rem;font-weight:700;color:#fff"><?= strtoupper(substr($currentUser['name'] ?? $currentUser['username'] ?? 'A', 0, 1)) ?></span>
+                    <?php endif; ?>
+                  </div>
+                  <div style="flex:1">
+                    <label class="form-label" style="margin-bottom:0.35rem;font-weight:700">Foto de perfil / Avatar</label>
+                    <input type="file" name="avatar_file" accept="image/*" class="form-control" onchange="previewUserAvatar(this, 'settings-avatar-box')">
+                    <div style="display:flex;gap:1.25rem;align-items:center;margin-top:0.45rem">
+                      <small style="color:var(--muted);font-size:0.8rem">JPG, PNG, WebP o GIF (máx. 8 MB)</small>
+                      <?php if ($profileAvatar): ?>
+                        <label style="font-size:0.84rem;color:var(--red);display:inline-flex;align-items:center;gap:0.35rem;cursor:pointer;font-weight:600">
+                          <input type="checkbox" name="remove_avatar" value="1">
+                          Eliminar avatar actual
+                        </label>
+                      <?php endif; ?>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Nombre para mostrar</label>
+                    <input type="text" name="name" value="<?= htmlspecialchars($currentUser['name'] ?? '') ?>" placeholder="Tu nombre público">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Correo electrónico</label>
+                    <input type="email" name="email" value="<?= htmlspecialchars($currentUser['email'] ?? '') ?>" placeholder="tu@correo.com">
+                  </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom:1.5rem">
+                  <label class="form-label">Biografía o nota personal</label>
+                  <textarea name="bio" rows="3" class="form-control" placeholder="Escribe algo sobre ti…"><?= htmlspecialchars($currentUser['bio'] ?? '') ?></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Guardar Perfil y Avatar</button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Security & 2FA -->
         <div id="section-security" class="settings-section-card <?= $active_section === 'security' ? 'active' : '' ?>">
           <!-- 2FA Card -->
           <div class="card">
@@ -366,18 +463,22 @@ admin_header(__("settings_title"), 'settings');
 
                 <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem">
                   <div style="display:grid;grid-template-columns:auto 1fr;gap:1.5rem;align-items:center">
-                    <div style="background:#fff;padding:12px;border-radius:10px;text-align:center" id="qr-container">
-                      <canvas id="qr-canvas" width="160" height="160"></canvas>
+                    <div style="background:#ffffff;padding:14px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:188px;min-height:188px" id="qr-container">
+                      <div id="qrcode"></div>
                     </div>
                     <div>
                       <h4 style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:0.5rem">Paso 1: Escanea el código o introduce la clave</h4>
                       <p style="font-size:0.88rem;color:var(--muted);margin-bottom:0.75rem">
-                        Abre tu aplicación (Google Authenticator, Microsoft Authenticator, Authy, Bitwarden, etc.) y escanea el código QR, o introduce esta clave manualmente:
+                        Abre la cámara de tu iPhone o tu aplicación (Google Authenticator, Microsoft Authenticator, Authy, 1Password, etc.) y escanea el código QR, o introduce la clave manualmente:
                       </p>
-                      <div style="display:flex;align-items:center;gap:0.5rem;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:0.5rem 0.85rem;max-width:340px">
+                      <div style="display:flex;align-items:center;gap:0.5rem;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:0.5rem 0.85rem;max-width:360px;margin-bottom:0.75rem">
                         <code style="font-size:1.1rem;font-weight:700;color:var(--accent);letter-spacing:0.1em;flex:1" id="secret-text"><?= htmlspecialchars(chunk_split($candidateSecret, 4, ' ')) ?></code>
                         <button type="button" onclick="navigator.clipboard.writeText('<?= $candidateSecret ?>');alert('Clave copiada')" class="btn btn-secondary btn-sm">Copiar</button>
                       </div>
+                      <a href="<?= htmlspecialchars($otpauthUrl) ?>" class="btn btn-secondary btn-sm" style="display:inline-flex;align-items:center;gap:0.4rem">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                        Abrir directamente en la app de autenticación (si estás en el móvil)
+                      </a>
                     </div>
                   </div>
                 </div>
@@ -568,6 +669,7 @@ admin_header(__("settings_title"), 'settings');
 }
 </style>
 
+<script src="assets/js/qrcode.min.js"></script>
 <script>
 function switchSection(name, e) {
   if (e) e.preventDefault();
@@ -581,6 +683,9 @@ function switchSection(name, e) {
   if (sec) sec.classList.add('active');
 
   history.replaceState(null, null, `?section=${name}`);
+  if (name === 'security') {
+    setTimeout(renderQRCode, 50);
+  }
 }
 
 function copyRecoveryCodes(text) {
@@ -605,57 +710,34 @@ if (colorPick && colorText) {
   });
 }
 
-// Standalone QR Code generation on Canvas for 2FA setup
-(function renderQRCode() {
-  const canvas = document.getElementById('qr-canvas');
-  if (!canvas) return;
+// Real ISO/IEC 18004 compliant QR Code generation for 2FA setup
+function renderQRCode() {
+  const container = document.getElementById('qrcode');
+  if (!container || typeof QRCode === 'undefined') return;
   const url = <?= json_encode($otpauthUrl) ?>;
 
-  // Simple, offline procedural QR pattern generator
-  const ctx = canvas.getContext('2d');
-  const size = 160;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, size, size);
+  container.innerHTML = '';
+  new QRCode(container, {
+    text: url,
+    width: 172,
+    height: 172,
+    colorDark: '#000000',
+    colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.M
+  });
+}
+renderQRCode();
 
-  // We generate a deterministic matrix from string hash
-  function hash(str) {
-    let h = 0;
-    for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
-    return Math.abs(h);
+function previewUserAvatar(input, targetId) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const box = document.getElementById(targetId);
+      box.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">`;
+    };
+    reader.readAsDataURL(input.files[0]);
   }
-
-  const cells = 25;
-  const cellSize = size / cells;
-  ctx.fillStyle = '#111827';
-
-  // Corner markers
-  function drawMarker(x, y) {
-    ctx.fillRect(x * cellSize, y * cellSize, 7 * cellSize, 7 * cellSize);
-    ctx.fillStyle = '#fff';
-    ctx.fillRect((x + 1) * cellSize, (y + 1) * cellSize, 5 * cellSize, 5 * cellSize);
-    ctx.fillStyle = '#111827';
-    ctx.fillRect((x + 2) * cellSize, (y + 2) * cellSize, 3 * cellSize, 3 * cellSize);
-  }
-  drawMarker(1, 1);
-  drawMarker(cells - 8, 1);
-  drawMarker(1, cells - 8);
-
-  // Data pseudo-matrix seeded by otpauth string
-  let seed = hash(url);
-  function rand() {
-    seed = (seed * 9301 + 49297) % 233280;
-    return seed / 233280;
-  }
-
-  for (let r = 0; r < cells; r++) {
-    for (let c = 0; c < cells; c++) {
-      if ((r < 9 && c < 9) || (r < 9 && c > cells - 10) || (r > cells - 10 && c < 9)) continue;
-      if (rand() > 0.5) {
-        ctx.fillRect(c * cellSize, r * cellSize, cellSize - 0.5, cellSize - 0.5);
-      }
-    }
-  }
-})();
+}
 
 // Restore section from hash or query
 window.addEventListener('DOMContentLoaded', () => {

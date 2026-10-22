@@ -33,11 +33,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif (strlen($password) < 8) {
                 $error = 'La contraseña debe tener al menos 8 caracteres.';
             } else {
+                $avatar = '';
+                if (!empty($_FILES['avatar_file']['tmp_name'])) {
+                    $up = user_save_avatar($username, $_FILES['avatar_file']);
+                    if ($up) $avatar = $up;
+                }
+
                 $userData = [
                     'username'           => $username,
                     'name'               => $name ?: $username,
                     'email'              => $email,
                     'role'               => $role,
+                    'avatar'             => $avatar,
                     'status'             => 'active',
                     'password'           => hash_password($password),
                     'two_factor_enabled' => false,
@@ -75,6 +82,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $user['role'] = $role;
                 $user['status'] = $status;
 
+                // Handle avatar removal or upload
+                if (!empty($_POST['remove_avatar']) && $_POST['remove_avatar'] === '1') {
+                    if (!empty($user['avatar']) && str_starts_with($user['avatar'], 'media/avatars/')) {
+                        $oldFile = ROOT_PATH . '/' . $user['avatar'];
+                        if (file_exists($oldFile)) @unlink($oldFile);
+                    }
+                    $user['avatar'] = '';
+                } elseif (!empty($_FILES['avatar_file']['tmp_name'])) {
+                    $up = user_save_avatar($username, $_FILES['avatar_file']);
+                    if ($up) {
+                        $user['avatar'] = $up;
+                    } else {
+                        $error = 'Formato de imagen no válido o archivo superior a 8 MB.';
+                    }
+                }
+
                 if ($password) {
                     if ($password !== $confirm) {
                         $error = 'Las contraseñas no coinciden.';
@@ -87,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 if (!$error) {
                     save_user($user);
-                    $msg = "Usuario «{$username}» actualizado.";
+                    $msg = "Usuario «{$username}» actualizado correctamente.";
                 }
             }
         } elseif ($action === 'delete_user') {
@@ -136,15 +159,20 @@ admin_header('Gestión de Usuarios', 'users');
         <tbody>
           <?php foreach ($users as $u): 
             $isSelf = ($_SESSION['username'] ?? '') === $u['username'];
+            $avatarUrl = !empty($u['avatar']) ? user_avatar_url($u['avatar']) : '';
           ?>
           <tr>
             <td>
-              <div style="display:flex;align-items:center;gap:0.75rem">
-                <div class="user-avatar" style="width:36px;height:36px;font-size:0.9rem">
-                  <?= strtoupper(substr($u['name'] ?: $u['username'], 0, 1)) ?>
-                </div>
+              <div style="display:flex;align-items:center;gap:0.85rem">
+                <?php if ($avatarUrl): ?>
+                  <img src="<?= htmlspecialchars(image_cache_url($avatarUrl, 80, 80)) ?>" alt="<?= htmlspecialchars($u['name'] ?: $u['username']) ?>" class="user-avatar" style="object-fit:cover;border:1px solid var(--border)">
+                <?php else: ?>
+                  <div class="user-avatar" style="width:36px;height:36px;font-size:0.9rem">
+                    <?= strtoupper(substr($u['name'] ?: $u['username'], 0, 1)) ?>
+                  </div>
+                <?php endif; ?>
                 <div>
-                  <div style="font-weight:700;color:var(--text)"><?= htmlspecialchars($u['name'] ?: $u['username']) ?> <?= $isSelf ? '<span style="font-size:0.75rem;opacity:0.6">(Tú)</span>' : '' ?></div>
+                  <div style="font-weight:700;color:var(--text)"><?= htmlspecialchars($u['name'] ?: $u['username']) ?> <?= $isSelf ? '<span style="font-size:0.75rem;opacity:0.65;font-weight:600">(Tú)</span>' : '' ?></div>
                   <div style="font-size:0.82rem;color:var(--muted)">@<?= htmlspecialchars($u['username']) ?></div>
                 </div>
               </div>
@@ -193,15 +221,30 @@ admin_header('Gestión de Usuarios', 'users');
 
 <!-- Modal: Crear Usuario -->
 <div id="modal-create-user" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;backdrop-filter:blur(3px);align-items:center;justify-content:center;padding:1.5rem">
-  <div class="card" style="width:100%;max-width:480px;box-shadow:0 16px 40px rgba(0,0,0,0.5)">
+  <div class="card" style="width:100%;max-width:500px;box-shadow:0 16px 40px rgba(0,0,0,0.5)">
     <div class="card-header">
       <span class="card-title">Nuevo Usuario</span>
       <button onclick="closeModal('modal-create-user')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.2rem">✕</button>
     </div>
     <div class="card-body">
-      <form method="POST">
+      <form method="POST" enctype="multipart/form-data">
         <input type="hidden" name="csrf" value="<?= $csrf ?>">
         <input type="hidden" name="action" value="create_user">
+        
+        <!-- Avatar Field -->
+        <div class="form-group" style="margin-bottom:1.15rem">
+          <label class="form-label">Foto de perfil / Avatar</label>
+          <div style="display:flex;align-items:center;gap:1rem">
+            <div id="create-avatar-box" style="width:52px;height:52px;border-radius:50%;background:var(--surface2);border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">
+              <span style="font-size:1.4rem">👤</span>
+            </div>
+            <div style="flex:1">
+              <input type="file" name="avatar_file" accept="image/*" class="form-control" onchange="previewUserAvatar(this, 'create-avatar-box')">
+              <small style="display:block;color:var(--muted);font-size:0.78rem;margin-top:0.25rem">JPG, PNG, WebP o GIF (máx. 8 MB)</small>
+            </div>
+          </div>
+        </div>
+
         <div class="form-group">
           <label class="form-label">Nombre de usuario</label>
           <input type="text" name="username" placeholder="juan_perez" required pattern="^[a-zA-Z0-9_\-\.]{3,30}$">
@@ -232,7 +275,7 @@ admin_header('Gestión de Usuarios', 'users');
             <input type="password" name="confirm_password" required minlength="8">
           </div>
         </div>
-        <div style="display:flex;justify-content:flex-end;gap:0.75rem;margin-top:1rem">
+        <div style="display:flex;justify-content:flex-end;gap:0.75rem;margin-top:1.25rem">
           <button type="button" class="btn btn-secondary" onclick="closeModal('modal-create-user')">Cancelar</button>
           <button type="submit" class="btn btn-primary">Crear Usuario</button>
         </div>
@@ -243,16 +286,35 @@ admin_header('Gestión de Usuarios', 'users');
 
 <!-- Modal: Editar Usuario -->
 <div id="modal-edit-user" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;backdrop-filter:blur(3px);align-items:center;justify-content:center;padding:1.5rem">
-  <div class="card" style="width:100%;max-width:480px;box-shadow:0 16px 40px rgba(0,0,0,0.5)">
+  <div class="card" style="width:100%;max-width:500px;box-shadow:0 16px 40px rgba(0,0,0,0.5)">
     <div class="card-header">
       <span class="card-title">Editar Usuario <span id="edit-user-title-name" style="color:var(--accent)"></span></span>
       <button onclick="closeModal('modal-edit-user')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.2rem">✕</button>
     </div>
     <div class="card-body">
-      <form method="POST">
+      <form method="POST" enctype="multipart/form-data">
         <input type="hidden" name="csrf" value="<?= $csrf ?>">
         <input type="hidden" name="action" value="edit_user">
         <input type="hidden" name="username" id="edit-username">
+
+        <!-- Avatar Field -->
+        <div class="form-group" style="margin-bottom:1.15rem">
+          <label class="form-label">Foto de perfil / Avatar</label>
+          <div style="display:flex;align-items:center;gap:1.1rem">
+            <div id="edit-avatar-box" style="width:58px;height:58px;border-radius:50%;background:var(--surface2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,0.1)">
+              <img id="edit-avatar-img" src="" alt="" style="width:100%;height:100%;object-fit:cover;display:none">
+              <span id="edit-avatar-placeholder" style="font-size:1.5rem;font-weight:700;color:var(--accent)">A</span>
+            </div>
+            <div style="flex:1">
+              <input type="file" name="avatar_file" accept="image/*" class="form-control" onchange="previewUserAvatar(this, 'edit-avatar-box')">
+              <label style="display:inline-flex;align-items:center;gap:0.4rem;font-size:0.84rem;color:var(--muted);margin-top:0.4rem;cursor:pointer">
+                <input type="checkbox" name="remove_avatar" value="1" id="edit-remove-avatar">
+                Eliminar avatar actual
+              </label>
+            </div>
+          </div>
+        </div>
+
         <div class="form-group">
           <label class="form-label">Nombre completo / Mostrado</label>
           <input type="text" name="name" id="edit-name">
@@ -286,7 +348,7 @@ admin_header('Gestión de Usuarios', 'users');
             <input type="password" name="confirm_password">
           </div>
         </div>
-        <div style="display:flex;justify-content:flex-end;gap:0.75rem;margin-top:1rem">
+        <div style="display:flex;justify-content:flex-end;gap:0.75rem;margin-top:1.25rem">
           <button type="button" class="btn btn-secondary" onclick="closeModal('modal-edit-user')">Cancelar</button>
           <button type="submit" class="btn btn-primary">Guardar Cambios</button>
         </div>
@@ -307,11 +369,34 @@ function openEditUserModal(user) {
   document.getElementById('edit-email').value = user.email || '';
   document.getElementById('edit-role').value = user.role || 'author';
   document.getElementById('edit-status').value = user.status || 'active';
+
+  const removeChk = document.getElementById('edit-remove-avatar');
+  if (removeChk) removeChk.checked = false;
+
+  const box = document.getElementById('edit-avatar-box');
+  if (user.avatar) {
+    const avatarUrl = user.avatar.startsWith('http') ? user.avatar : ('<?= rtrim(base_url(), "/") ?>/' + user.avatar.replace(/^\//, ''));
+    box.innerHTML = `<img src="${avatarUrl}" style="width:100%;height:100%;object-fit:cover">`;
+  } else {
+    const initial = (user.name || user.username || 'U').substring(0, 1).toUpperCase();
+    box.innerHTML = `<span style="font-size:1.5rem;font-weight:700;color:var(--accent)">${initial}</span>`;
+  }
+
   const m = document.getElementById('modal-edit-user');
   m.style.display = 'flex';
 }
 function closeModal(id) {
   document.getElementById(id).style.display = 'none';
+}
+function previewUserAvatar(input, targetId) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const box = document.getElementById(targetId);
+      box.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">`;
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
 }
 </script>
 </body></html>
