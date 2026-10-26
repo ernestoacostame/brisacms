@@ -1,6 +1,7 @@
 {
     "active_plugins": [
-        "fediverse"
+        "fediverse",
+        "wp-import"
     ],
     "fediverse_username": "blog_test"
 }

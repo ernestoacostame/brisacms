@@ -88,7 +88,9 @@ if ($sub_action === 'settings' && $pluginId !== '') {
 
     if (file_exists($optionsFile)) {
         // Load layout header for configuration view
-        admin_header('Configurar ' . htmlspecialchars($plugin['name']), 'plugins');
+        $active_nav = ($pluginId === 'wp-import') ? 'import' : 'plugins';
+        $page_header_title = ($pluginId === 'wp-import') ? htmlspecialchars($plugin['name']) : ('Configurar ' . htmlspecialchars($plugin['name']));
+        admin_header($page_header_title, $active_nav);
         ?>
         </div>
       </div>

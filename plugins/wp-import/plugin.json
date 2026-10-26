@@ -1,0 +1,7 @@
+{
+  "id": "wp-import",
+  "name": "Importador de WordPress",
+  "description": "Permite importar artículos, páginas, categorías, etiquetas e imágenes desde un archivo de exportación XML de WordPress (.xml / WXR), y descargar imágenes externas a /media/.",
+  "version": "1.0",
+  "author": "BrisaCMS"
+}

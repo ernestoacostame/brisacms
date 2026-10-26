@@ -468,14 +468,12 @@ body.scheme-light .floating-publish-btn {
     </a>
 
     <div class="nav-section">Herramientas</div>
-    <a href="<?= base_url() ?>/admin/import.php" class="nav-item <?= $active === 'import' ? 'active' : '' ?>" data-label="Importar WP">
+    <?php if (cms_plugin_is_active('wp-import')): ?>
+    <a href="<?= base_url() ?>/admin/plugins.php?action=settings&plugin=wp-import" class="nav-item <?= $active === 'import' ? 'active' : '' ?>" data-label="Importar WP">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       <span class="nav-label"><?= __("nav_import_wp") ?></span>
     </a>
-    <a href="<?= base_url() ?>/admin/import_images.php" class="nav-item <?= $active === 'import_images' ? 'active' : '' ?>" data-label="Importar imágenes">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
-      <span class="nav-label"><?= __("nav_import_images") ?></span>
-    </a>
+    <?php endif; ?>
     <a href="<?= base_url() ?>/admin/search_replace.php" class="nav-item <?= $active === 'tools' ? 'active' : '' ?>" data-label="Buscar y reemplazar">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <span class="nav-label"><?= __("nav_search_replace") ?></span>

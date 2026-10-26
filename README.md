@@ -137,10 +137,14 @@ El instalador crea `config.json`, las carpetas necesarias y contenido de ejemplo
 │   ├── settings.php        ← Ajustes del sitio
 │   └── themes.php          ← Gestión de temas
 │
+├── plugins/                ← Sistema de plugins
+│   ├── fediverse/          ← Integración con Fediverso / ActivityPub
+│   └── wp-import/          ← Importador de WordPress (WXR) y gestor de imágenes externas
+│
 ├── core/                   ← Lógica interna (no accesible públicamente)
 │   ├── config.php          ← Constantes y funciones de configuración
 │   ├── auth.php            ← Autenticación y seguridad
-│   ├── content.php         ← CRUD de artículos/páginas e importador WP
+│   ├── content.php         ← CRUD de artículos y páginas
 │   ├── markdown.php        ← Parser Markdown puro PHP
 │   └── theme.php           ← Motor de temas
 │
@@ -286,7 +290,7 @@ Formatos aceptados: JPG, PNG, GIF, WebP, SVG, AVIF. Máximo 10 MB.
 
 ## Importar desde WordPress
 
-**Admin → Herramientas → Importar WordPress**
+Disponible a través del plugin oficial **Importador de WordPress** (`plugins/wp-import/`), administrable desde **Admin → Plugins** o en la barra lateral en **Admin → Herramientas → Importar WordPress**.
 
 ### Cómo exportar desde WordPress
 
