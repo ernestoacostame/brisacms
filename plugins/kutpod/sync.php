@@ -34,13 +34,22 @@ function kutpod_run_sync(): array {
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
             ]);
 
-            $stmt = $pdo->query("
+            $whereClause = "e.hidden = 0 AND e.status = 'published'";
+            $params = [];
+            if (!empty($cfg['podcast_filter']) && $cfg['podcast_filter'] !== 'all') {
+                $whereClause .= " AND (p.slug = :pslug OR p.id = :pid)";
+                $params[':pslug'] = $cfg['podcast_filter'];
+                $params[':pid'] = is_numeric($cfg['podcast_filter']) ? (int)$cfg['podcast_filter'] : 0;
+            }
+
+            $stmt = $pdo->prepare("
                 SELECT e.*, p.slug AS podcast_slug, p.title AS podcast_title, p.color AS podcast_color
                 FROM episodes e
                 JOIN podcasts p ON p.id = e.podcast_id
-                WHERE e.hidden = 0 AND e.status = 'published'
+                WHERE $whereClause
                 ORDER BY COALESCE(e.published_at, e.publish_at, e.created_at) DESC
             ");
+            $stmt->execute($params);
             $rows = $stmt->fetchAll();
 
             foreach ($rows as $row) {
@@ -131,8 +140,20 @@ function kutpod_upsert_article_from_episode(array $ep, array $cfg): string {
     $existingFile = null;
 
     if (file_exists($targetFile)) {
-        $existing = json_decode(file_get_contents($targetFile), true);
-        $existingFile = $targetFile;
+        $candidate = json_decode(file_get_contents($targetFile), true);
+        if (!empty($candidate['podcast_meta']['guid']) && $candidate['podcast_meta']['guid'] === $ep['guid']) {
+            $existing = $candidate;
+            $existingFile = $targetFile;
+        } else {
+            // Colisión de slug entre podcasts distintos -> prefijar slug del podcast
+            $pSlug = $ep['podcast_slug'] ?? 'podcast';
+            $episodeSlug = sanitize_filename("{$pSlug}-{$episodeSlug}");
+            $targetFile = "$articlesDir/{$episodeSlug}.json";
+            if (file_exists($targetFile)) {
+                $existing = json_decode(file_get_contents($targetFile), true);
+                $existingFile = $targetFile;
+            }
+        }
     } else {
         // Buscar en otros artículos por podcast_meta.guid o id
         foreach (glob("$articlesDir/*.json") as $f) {
@@ -198,7 +219,12 @@ function kutpod_upsert_article_from_episode(array $ep, array $cfg): string {
         return 'updated';
     } else {
         // Crear nuevo artículo
-        $categories = [$defaultCategory];
+        $categories = [];
+        if (!empty($cfg['categorize_by_show']) && !empty($ep['podcast_title'])) {
+            $categories[] = $ep['podcast_title'];
+        } else {
+            $categories[] = $defaultCategory;
+        }
         $tags = ['podcast', 'audio'];
         if (!empty($ep['podcast_title'])) {
             $tags[] = strtolower($ep['podcast_title']);

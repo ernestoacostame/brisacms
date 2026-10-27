@@ -62,6 +62,20 @@ if (empty($epData['title']) && empty($epData['id'])) {
     exit;
 }
 
+// Si se ha configurado sincronizar únicamente un podcast específico
+if (!empty($cfg['podcast_filter']) && $cfg['podcast_filter'] !== 'all') {
+    $epPodcastSlug = $epData['podcast_slug'] ?? '';
+    $epPodcastId = (string)($epData['podcast_id'] ?? '');
+    if ($epPodcastSlug !== $cfg['podcast_filter'] && $epPodcastId !== (string)$cfg['podcast_filter']) {
+        echo json_encode([
+            'success' => true,
+            'action'  => 'skipped',
+            'message' => 'Episode ignored: podcast not matching active filter.'
+        ]);
+        exit;
+    }
+}
+
 // 4. Procesar el evento
 if ($event === 'episode.deleted') {
     $slug = sanitize_filename($epData['slug'] ?? '');

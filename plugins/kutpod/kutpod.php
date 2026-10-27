@@ -19,6 +19,8 @@ function kutpod_config(): array {
         'instance_url'           => 'http://localhost:8000',
         'local_db_path'          => '/home/elav/Developer/KutStudio/kutpod/storage/kutpod.db',
         'webhook_secret'         => '',
+        'podcast_filter'         => 'all', // 'all' o slug específico del show
+        'categorize_by_show'     => true,  // Asigna el nombre del show como categoría
         'default_status'         => 'draft', // 'draft' o 'published'
         'default_category'       => 'Podcast',
         'auto_update_notes'      => true,

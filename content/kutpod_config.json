@@ -3,6 +3,8 @@
     "instance_url": "http://localhost:8000",
     "local_db_path": "/home/elav/Developer/KutStudio/kutpod/storage/kutpod.db",
     "webhook_secret": "e5b8a912f73c4d098e2176b940cf8821",
+    "podcast_filter": "all",
+    "categorize_by_show": true,
     "default_status": "draft",
     "default_category": "Podcast",
     "auto_update_notes": true,

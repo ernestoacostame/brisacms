@@ -34,7 +34,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $cfg['connection_mode']         = in_array($_POST['connection_mode'] ?? '', ['local', 'remote']) ? $_POST['connection_mode'] : 'local';
             $cfg['instance_url']            = rtrim(trim($_POST['instance_url'] ?? ''), '/');
             $cfg['local_db_path']           = trim($_POST['local_db_path'] ?? '');
-            $cfg['webhook_secret']          = trim($_POST['webhook_secret'] ?? '');
+            $cfg['podcast_filter']          = trim($_POST['podcast_filter'] ?? 'all') ?: 'all';
+            $cfg['categorize_by_show']      = !empty($_POST['categorize_by_show']);
             $cfg['default_status']          = in_array($_POST['default_status'] ?? '', ['draft', 'published']) ? $_POST['default_status'] : 'draft';
             $cfg['default_category']        = trim($_POST['default_category'] ?? 'Podcast') ?: 'Podcast';
             $cfg['auto_update_notes']       = !empty($_POST['auto_update_notes']);
@@ -66,9 +67,17 @@ foreach ($allArticles as $art) {
     }
 }
 
-// Comprobación de estado de conexión
 $isLocalDbFound = file_exists($cfg['local_db_path']);
 $webhookUrl = rtrim(base_url(), '/') . '/api/kutpod/webhook';
+
+// Cargar lista de podcasts de KutPod si SQLite está disponible
+$availablePodcasts = [];
+if ($isLocalDbFound) {
+    try {
+        $testPdo = new PDO("sqlite:{$cfg['local_db_path']}", null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+        $availablePodcasts = $testPdo->query("SELECT id, slug, title FROM podcasts WHERE hidden = 0 ORDER BY title ASC")->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {}
+}
 
 ?>
 
@@ -196,6 +205,21 @@ $webhookUrl = rtrim(base_url(), '/') . '/api/kutpod/webhook';
       </div>
       <div class="card-body" style="display: flex; flex-direction: column; gap: 1.25rem;">
         
+        <div>
+          <label style="display: block; font-weight: 600; margin-bottom: 6px;">Podcasts a Sincronizar</label>
+          <select name="podcast_filter" class="form-control">
+            <option value="all" <?= ($cfg['podcast_filter'] ?? 'all') === 'all' ? 'selected' : '' ?>>Todos los Podcasts de KutPod (<?= count($availablePodcasts) ?> programas)</option>
+            <?php foreach ($availablePodcasts as $pod): ?>
+              <option value="<?= htmlspecialchars($pod['slug']) ?>" <?= ($cfg['podcast_filter'] ?? '') === $pod['slug'] ? 'selected' : '' ?>>
+                Solo: <?= htmlspecialchars($pod['title']) ?> (@<?= htmlspecialchars($pod['slug']) ?>)
+              </option>
+            <?php endforeach; ?>
+          </select>
+          <small style="color: var(--muted); display: block; margin-top: 4px;">
+            Permite sincronizar todos los podcasts de tu instancia KutPod o elegir únicamente uno para este blog.
+          </small>
+        </div>
+
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
           <div>
             <label style="display: block; font-weight: 600; margin-bottom: 6px;">Estado inicial de nuevos episodios</label>
@@ -209,12 +233,19 @@ $webhookUrl = rtrim(base_url(), '/') . '/api/kutpod/webhook';
           </div>
 
           <div>
-            <label style="display: block; font-weight: 600; margin-bottom: 6px;">Categoría asignada a los episodios</label>
+            <label style="display: block; font-weight: 600; margin-bottom: 6px;">Categoría fija de respaldo</label>
             <input type="text" name="default_category" value="<?= htmlspecialchars($cfg['default_category']) ?>" class="form-control">
             <small style="color: var(--muted); display: block; margin-top: 4px;">
-              Ejemplo: <code>Podcast</code> o <code>Audio</code>.
+              Categoría por defecto si no se categoriza por show (ej: <code>Podcast</code>).
             </small>
           </div>
+        </div>
+
+        <div>
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+            <input type="checkbox" name="categorize_by_show" value="1" <?= !empty($cfg['categorize_by_show']) ? 'checked' : '' ?>>
+            <span><strong>Categorizar por nombre de Podcast:</strong> Asigna automáticamente el nombre del show (ej. <em>"SystemInside Podcast"</em> o <em>"FLASH"</em>) como su categoría en BrisaCMS.</span>
+          </label>
         </div>
 
         <div>
