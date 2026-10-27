@@ -1,0 +1,21 @@
+{
+    "connection_mode": "local",
+    "instance_url": "http://localhost:8000",
+    "local_db_path": "/home/elav/Developer/KutStudio/kutpod/storage/kutpod.db",
+    "webhook_secret": "e5b8a912f73c4d098e2176b940cf8821",
+    "default_status": "draft",
+    "default_category": "Podcast",
+    "auto_update_notes": true,
+    "delete_on_kutpod_delete": false,
+    "player_position": "top",
+    "player_theme": "auto",
+    "enable_timestamps": true,
+    "enable_transcripts": true,
+    "enable_stats_badge": true,
+    "enable_directory": true,
+    "directory_slug": "podcasts",
+    "directory_title": "Episodios y Podcasts",
+    "directory_desc": "Explora todos los episodios de nuestro podcast, escucha en el navegador y accede a notas y transcripciones completas.",
+    "enable_related": true,
+    "search_transcripts": true
+}

@@ -43,8 +43,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'categories'    => array_filter(array_map('trim', explode(',', $_POST['categories'] ?? ''))),
             'tags'          => array_filter(array_map('trim', explode(',', $_POST['tags'] ?? ''))),
             'featured_image'  => trim($_POST['featured_image'] ?? ''),
-            'content_format'  => in_array($_POST['content_format'] ?? '', ['html', 'markdown']) ? $_POST['content_format'] : 'html',
             'mastodon_url'    => trim($_POST['mastodon_url'] ?? ''),
+            'kutpod_url'      => trim($_POST['kutpod_url'] ?? ($post['kutpod_url'] ?? '')),
+            'podcast_meta'    => $post['podcast_meta'] ?? null,
             'original_slug' => $slug,
             'created_at'    => $post['created_at'] ?? '',
         ];
@@ -269,6 +270,35 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
             <input type="text" name="mastodon_url" placeholder="<?= __raw("panel_mastodon_ph") ?>"
               value="<?= htmlspecialchars($post['mastodon_url'] ?? '') ?>">
             <div class="panel-hint"><?= __("panel_mastodon_hint") ?></div>
+          </div>
+          <?php endif; ?>
+
+          <?php if (cms_plugin_is_active('kutpod')): 
+              $kpMeta = $post['podcast_meta'] ?? null;
+          ?>
+          <div class="panel">
+            <div class="panel-title" style="display:flex; align-items:center; gap:6px;">
+              <span>🎙️ KutPod Podcast</span>
+              <?php if ($kpMeta): ?>
+                <span style="background:rgba(255,95,126,0.15); color:#ff3b61; font-size:0.7rem; padding:2px 6px; border-radius:10px; margin-left:auto;">Sincronizado</span>
+              <?php endif; ?>
+            </div>
+            
+            <?php if ($kpMeta): ?>
+              <div style="font-size:0.83rem; margin-bottom:0.75rem; background:rgba(0,0,0,0.03); padding:8px 10px; border-radius:6px;">
+                <div style="font-weight:600; color:var(--text);"><?= htmlspecialchars($kpMeta['podcast_title'] ?: 'Podcast') ?></div>
+                <div style="color:var(--muted); margin-top:2px;">
+                  Temp <?= $kpMeta['season'] ?? 1 ?> · Ep <?= $kpMeta['number'] ?? 0 ?> · <?= htmlspecialchars($kpMeta['duration_fmt'] ?? '') ?>
+                </div>
+                <?php if (!empty($kpMeta['downloads'])): ?>
+                  <div style="color:var(--muted); margin-top:2px;">🎧 <?= number_format($kpMeta['downloads']) ?> descargas</div>
+                <?php endif; ?>
+              </div>
+            <?php endif; ?>
+
+            <input type="text" name="kutpod_url" placeholder="https://kutpod.com/@show/ep"
+              value="<?= htmlspecialchars($post['kutpod_url'] ?? '') ?>">
+            <div class="panel-hint">Pega aquí la URL pública del episodio para incrustar el reproductor en este post.</div>
           </div>
           <?php endif; ?>
 
@@ -2170,6 +2200,7 @@ function getFormData() {
     tags:           document.getElementById('tag-hidden')?.value || '',
     featured_image: document.getElementById('featured_image_input')?.value || '',
     mastodon_url:   document.querySelector('[name="mastodon_url"]')?.value || '',
+    kutpod_url:     document.querySelector('[name="kutpod_url"]')?.value || '',
   };
 }
 
@@ -2215,6 +2246,7 @@ async function syncToServer() {
     fd.append('tags',           data.tags);
     fd.append('featured_image', data.featured_image);
     fd.append('mastodon_url',   data.mastodon_url);
+    fd.append('kutpod_url',     data.kutpod_url);
 
     const res  = await fetch(AUTOSAVE_URL, { method: 'POST', body: fd });
     const json = await res.json();

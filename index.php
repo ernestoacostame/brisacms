@@ -65,6 +65,14 @@ if ($path === '.well-known/webfinger' || ($segments[0] ?? '') === 'users') {
     exit;
 }
 
+// ── KutPod Podcast Integration (Webhooks, Sync, /podcasts) ───────────────────
+if (cms_plugin_is_active('kutpod')) {
+    require_once ROOT_PATH . '/plugins/kutpod/kutpod.php';
+    if (kutpod_route_request($path, $segments)) {
+        exit;
+    }
+}
+
 // ── Homepage / blog listing ───────────────────────────────────────────────
 if ($path === '' || $path === 'blog') {
     $page_num = max(1, (int)($_GET['page'] ?? 1));

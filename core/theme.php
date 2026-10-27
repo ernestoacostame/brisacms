@@ -24,6 +24,11 @@ function theme_file(string $filename, string $theme = ''): string {
 }
 
 function render_theme(string $template, array $vars = []): void {
+    if (isset($vars['post']['content'])) {
+        if (cms_plugin_is_active('kutpod') && function_exists('kutpod_filter_content')) {
+            $vars['post']['content'] = kutpod_filter_content($vars['post']['content'], $vars['post']);
+        }
+    }
     extract($vars);
     $config = cms_config();
     $site_title = $config['site_title'] ?? CMS_NAME;
@@ -40,7 +45,13 @@ function render_theme(string $template, array $vars = []): void {
     // Load header
     $header_file = theme_file('header.php');
     if (file_exists($header_file)) include $header_file;
+    if (cms_plugin_is_active('kutpod') && function_exists('kutpod_theme_header')) {
+        kutpod_theme_header($template, $vars);
+    }
     include $file;
+    if (cms_plugin_is_active('kutpod') && function_exists('kutpod_theme_footer')) {
+        kutpod_theme_footer($template, $vars);
+    }
     $footer_file = theme_file('footer.php');
     if (file_exists($footer_file)) include $footer_file;
 }

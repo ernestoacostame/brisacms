@@ -243,9 +243,13 @@ function search_content(string $query): array {
         // Search through indexed records fast
         $items = get_content_index($type);
         foreach ($items as $data) {
-            $haystack = strtolower(($data['title'] ?? '') . ' ' . strip_tags($data['excerpt'] ?? '') . ' ' . strip_tags($data['content'] ?? ''));
+            $transcript = !empty($data['podcast_meta']['transcript']) ? (' ' . strtolower($data['podcast_meta']['transcript'])) : '';
+            $haystack = strtolower(($data['title'] ?? '') . ' ' . strip_tags($data['excerpt'] ?? '') . ' ' . strip_tags($data['content'] ?? '')) . $transcript;
             if (str_contains($haystack, $query_lower)) {
                 $data['_type'] = $type;
+                if (!empty($data['podcast_meta']['is_podcast'])) {
+                    $data['_is_podcast'] = true;
+                }
                 $results[] = $data;
             }
         }

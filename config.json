@@ -1,7 +1,8 @@
 {
     "active_plugins": [
         "fediverse",
-        "wp-import"
+        "wp-import",
+        "kutpod"
     ],
     "fediverse_username": "blog_test"
 }
