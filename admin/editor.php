@@ -51,6 +51,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ];
         if (!$data['title']) { $error = __("editor_error_title"); }
         else {
+            if (cms_plugin_is_active('kutpod')) {
+                require_once dirname(__DIR__) . '/plugins/kutpod/kutpod.php';
+                if (!empty($data['kutpod_url'])) {
+                    $data['podcast_meta'] = kutpod_resolve_meta_from_url($data['kutpod_url'], is_array($data['podcast_meta']) ? $data['podcast_meta'] : []);
+                }
+            }
             $new_slug = save_content($type, $data);
             $msg = __("editor_saved");
             $slug = $new_slug;

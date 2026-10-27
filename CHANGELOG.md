@@ -18,8 +18,8 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.
   - **Sincronización bidireccional continua**: Las actualizaciones de notas, título o audio en KutPod se reflejan automáticamente en el blog.
   - **Motor de sincronización directa** (`plugins/kutpod/sync.php`): Soporte dual con lectura directa ultrarrápida desde la base de datos SQLite de KutPod (`storage/kutpod.db`) o consultas a la API REST remota.
 - **Experiencia de Usuario y Contenido Enriquecido**:
+  - **Reproductor incrustado adaptable y Auto-Embed universal**: Detección inteligente de cualquier URL de KutPod (pegada en el cuerpo del texto, vía shortcode `[kutpod]`, o en el campo lateral `kutpod_url` del editor). Resuelve automáticamente el show y episodio correspondiente (`/embed/@{show}/{ep}`) evitando errores 404 de "Episodio no encontrado", con selección de tema (*Automático*, *Oscuro*, *Claro*) y ubicación configurable (*Arriba*, *Al pie*, o manual).
   - **Timestamps cliqueables (Capítulos interactivos)**: Parseo automático de marcas de tiempo (`04:15`, `[12:30]`, `1:05:20`) en las notas del post, transformándolas en botones `⏱️ MM:SS` que controlan el reproductor en tiempo real mediante `postMessage`.
-  - **Reproductor incrustado adaptable**: Iframe embebido con selección de tema (*Automático*, *Oscuro*, *Claro*) y ubicación configurable (*Arriba*, *Al pie*, o manual mediante shortcode `[kutpod]`).
   - **Transcripciones estructuradas y SEO Boost**: Renderizado de transcripciones completas en un bloque colapsable `<details class="kutpod-transcript-details">`, completamente indexable por buscadores.
   - **Microdatos Schema.org y OpenGraph**: Generación automática de etiquetas JSON-LD `PodcastEpisode` y `og:audio` para fragmentos enriquecidos en Google y redes sociales.
   - **Insignia de Estadísticas públicas**: Contador visible en el post con duración acumulada, temporada/episodio y número de escuchas directas desde OP3 (`🎧 1.4k escuchas`).

@@ -28,7 +28,7 @@ if (!$title) {
 
 // If no slug yet, generate one from the title
 if (!$slug) {
-    $slug = save_content($type, [
+    $autoData = [
         'title'          => $title,
         'content'        => $content,
         'content_format' => $format,
@@ -38,7 +38,14 @@ if (!$slug) {
         'tags'           => array_filter(array_map('trim', explode(',', $_POST['tags'] ?? ''))),
         'featured_image' => $_POST['featured_image'] ?? '',
         'mastodon_url'   => $_POST['mastodon_url'] ?? '',
-    ]);
+        'kutpod_url'     => trim($_POST['kutpod_url'] ?? ''),
+        'podcast_meta'   => null,
+    ];
+    if (cms_plugin_is_active('kutpod') && !empty($autoData['kutpod_url'])) {
+        require_once dirname(__DIR__) . '/plugins/kutpod/kutpod.php';
+        $autoData['podcast_meta'] = kutpod_resolve_meta_from_url($autoData['kutpod_url']);
+    }
+    $slug = save_content($type, $autoData);
     echo json_encode(['ok' => true, 'slug' => $slug, 'new' => true]);
     exit;
 }
@@ -53,6 +60,13 @@ $existing['categories']     = array_filter(array_map('trim', explode(',', $_POST
 $existing['tags']           = array_filter(array_map('trim', explode(',', $_POST['tags'] ?? '')));
 $existing['featured_image'] = $_POST['featured_image'] ?? ($existing['featured_image'] ?? '');
 $existing['mastodon_url']   = $_POST['mastodon_url'] ?? ($existing['mastodon_url'] ?? '');
+$existing['kutpod_url']     = trim($_POST['kutpod_url'] ?? ($existing['kutpod_url'] ?? ''));
+
+if (cms_plugin_is_active('kutpod') && !empty($existing['kutpod_url'])) {
+    require_once dirname(__DIR__) . '/plugins/kutpod/kutpod.php';
+    $existing['podcast_meta'] = kutpod_resolve_meta_from_url($existing['kutpod_url'], is_array($existing['podcast_meta'] ?? null) ? $existing['podcast_meta'] : []);
+}
+
 // Never change status to published via autosave
 if (!isset($existing['status'])) $existing['status'] = 'draft';
 

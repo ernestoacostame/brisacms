@@ -7,6 +7,9 @@
 if (!defined('ROOT_PATH')) {
     define('ROOT_PATH', dirname(__DIR__, 2));
 }
+if (!defined('CONTENT_PATH')) {
+    define('CONTENT_PATH', ROOT_PATH . '/content');
+}
 
 // ── Configuración del Plugin ──────────────────────────────────────────────────
 function kutpod_config_file(): string {
@@ -53,6 +56,220 @@ function kutpod_config(): array {
 function kutpod_save_config(array $data): void {
     $file = kutpod_config_file();
     @file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+}
+
+// ── Parser Universal de URLs de KutPod ─────────────────────────────────────────
+/**
+ * Parsea cualquier formato de URL de KutPod (pública, embed, tracker o API)
+ * y extrae base_url, podcast_slug (sin @), episode_slug y episode_id.
+ */
+function kutpod_parse_episode_url(string $url): ?array {
+    $url = trim($url);
+    if (empty($url)) return null;
+
+    // Limpiar caracteres circundantes de enlaces Markdown o etiquetas HTML
+    $url = trim($url, " \t\n\r\0\x0B<>\"'()");
+
+    $parts = @parse_url($url);
+    if (!$parts || empty($parts['path'])) return null;
+
+    $base = '';
+    if (!empty($parts['scheme']) && !empty($parts['host'])) {
+        $base = $parts['scheme'] . '://' . $parts['host'];
+        if (!empty($parts['port']) && !in_array((int)$parts['port'], [80, 443])) {
+            $base .= ':' . $parts['port'];
+        }
+    }
+
+    $path = trim($parts['path'], '/');
+    $query = [];
+    if (!empty($parts['query'])) {
+        parse_str($parts['query'], $query);
+    }
+
+    $podcastSlug = '';
+    $episodeSlug = '';
+    $episodeId = 0;
+
+    // 1. Parámetros Query (?id=42 o ?show=flash&ep=slug)
+    if (!empty($query['id']) && is_numeric($query['id'])) {
+        $episodeId = (int)$query['id'];
+    }
+    if (!empty($query['show'])) {
+        $podcastSlug = ltrim($query['show'], '@');
+    }
+    if (!empty($query['ep'])) {
+        $episodeSlug = $query['ep'];
+    }
+
+    // 2. Coincidencias en el Path
+    if (!$episodeSlug && !$episodeId) {
+        // Embed con show: embed/@show/ep o embed/show/ep
+        if (preg_match('#^embed/@?([a-z0-9\-]+)/([a-z0-9\-]+)#i', $path, $m)) {
+            $podcastSlug = $m[1];
+            $episodeSlug = $m[2];
+        }
+        // Embed de un solo slug o ID: embed/123 o embed/mi-ep
+        elseif (preg_match('#^embed/([a-z0-9\-]+)#i', $path, $m)) {
+            if (is_numeric($m[1])) {
+                $episodeId = (int)$m[1];
+            } else {
+                $episodeSlug = $m[1];
+            }
+        }
+        // Tracker URL de OP3: r/show/ep o r/show/ep/audio.mp3
+        elseif (preg_match('#^r/([a-z0-9\-]+)/([a-z0-9\-]+)#i', $path, $m)) {
+            $podcastSlug = $m[1];
+            $episodeSlug = $m[2];
+        }
+        // Episodio público con show: @show/episodes/ep o @show/ep o shows/show/ep
+        elseif (preg_match('#^(?:shows/|@)?([a-z0-9\-]+)/(?:episodes/)?([a-z0-9\-]+)#i', $path, $m)) {
+            $ignored = ['episodes', 'admin', 'api', 'install', 'p', 'site.php', 'index.php', 'feed', 'users', 'r'];
+            if (!in_array(strtolower($m[1]), $ignored)) {
+                $podcastSlug = $m[1];
+                $episodeSlug = $m[2];
+            } elseif (strtolower($m[1]) === 'episodes') {
+                $episodeSlug = $m[2];
+            }
+        }
+        // Episodio directo: episodes/ep-slug o episode/ep-slug
+        elseif (preg_match('#^(?:episodes|episode)/([a-z0-9\-]+)#i', $path, $m)) {
+            $episodeSlug = $m[1];
+        }
+    }
+
+    if (!$episodeSlug && !$episodeId) {
+        return null;
+    }
+
+    return [
+        'base_url'     => $base,
+        'podcast_slug' => $podcastSlug,
+        'episode_slug' => $episodeSlug,
+        'episode_id'   => $episodeId,
+        'raw_url'      => $url,
+    ];
+}
+
+/**
+ * Conexión opcional a la base de datos local SQLite de KutPod
+ */
+function kutpod_db(): ?PDO {
+    static $pdo = null;
+    static $attempted = false;
+    if ($attempted) return $pdo;
+    $attempted = true;
+
+    $cfg = kutpod_config();
+    $dbPath = $cfg['local_db_path'] ?? '';
+    if (!file_exists($dbPath) || !extension_loaded('pdo_sqlite')) {
+        return null;
+    }
+
+    try {
+        $pdo = new PDO('sqlite:' . $dbPath, null, null, [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_SILENT,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_TIMEOUT            => 2,
+        ]);
+        return $pdo;
+    } catch (\Throwable $e) {
+        return null;
+    }
+}
+
+/**
+ * Consulta un episodio en la BD local de KutPod si está disponible
+ */
+function kutpod_lookup_episode(?string $podcastSlug, ?string $episodeSlug, int $episodeId = 0): ?array {
+    $db = kutpod_db();
+    if (!$db) return null;
+
+    try {
+        if ($episodeId > 0) {
+            $stmt = $db->prepare("
+                SELECT e.*, p.slug as podcast_slug, p.title as podcast_title, p.cover_image as podcast_cover
+                FROM episodes e
+                JOIN podcasts p ON e.podcast_id = p.id
+                WHERE e.id = ?
+                LIMIT 1
+            ");
+            $stmt->execute([$episodeId]);
+            $r = $stmt->fetch();
+            if ($r) return $r;
+        }
+
+        if ($podcastSlug && $episodeSlug) {
+            $stmt = $db->prepare("
+                SELECT e.*, p.slug as podcast_slug, p.title as podcast_title, p.cover_image as podcast_cover
+                FROM episodes e
+                JOIN podcasts p ON e.podcast_id = p.id
+                WHERE p.slug = ? AND e.slug = ?
+                LIMIT 1
+            ");
+            $stmt->execute([$podcastSlug, $episodeSlug]);
+            $r = $stmt->fetch();
+            if ($r) return $r;
+        }
+
+        if ($episodeSlug) {
+            $stmt = $db->prepare("
+                SELECT e.*, p.slug as podcast_slug, p.title as podcast_title, p.cover_image as podcast_cover
+                FROM episodes e
+                JOIN podcasts p ON e.podcast_id = p.id
+                WHERE e.slug = ?
+                LIMIT 1
+            ");
+            $stmt->execute([$episodeSlug]);
+            $r = $stmt->fetch();
+            if ($r) return $r;
+        }
+    } catch (\Throwable $e) {}
+
+    return null;
+}
+
+/**
+ * Resuelve y enriquece metadatos a partir de una URL de KutPod
+ */
+function kutpod_resolve_meta_from_url(string $url, array $existingMeta = []): array {
+    $parsed = kutpod_parse_episode_url($url);
+    if (!$parsed) return $existingMeta;
+
+    $meta = $existingMeta;
+    $meta['is_podcast'] = true;
+    $meta['source_url'] = $parsed['raw_url'];
+
+    if (!empty($parsed['podcast_slug'])) {
+        $meta['podcast_slug'] = $parsed['podcast_slug'];
+    }
+    if (!empty($parsed['episode_slug'])) {
+        $meta['episode_slug'] = $parsed['episode_slug'];
+    }
+    if (!empty($parsed['episode_id'])) {
+        $meta['episode_id'] = $parsed['episode_id'];
+    }
+
+    $dbEp = kutpod_lookup_episode($meta['podcast_slug'] ?? '', $meta['episode_slug'] ?? '', $meta['episode_id'] ?? 0);
+    if ($dbEp) {
+        $meta['podcast_slug']  = $dbEp['podcast_slug'] ?? ($meta['podcast_slug'] ?? '');
+        $meta['podcast_title'] = $dbEp['podcast_title'] ?? ($meta['podcast_title'] ?? '');
+        $meta['episode_slug']  = $dbEp['slug'] ?? ($meta['episode_slug'] ?? '');
+        $meta['episode_id']    = (int)($dbEp['id'] ?? 0);
+        $meta['duration_secs'] = (int)($dbEp['duration_secs'] ?? 0);
+        $meta['duration_fmt']  = $dbEp['duration_fmt'] ?? ($meta['duration_secs'] ? gmdate('H:i:s', $meta['duration_secs']) : '');
+        $meta['season']        = (int)($dbEp['season'] ?? 0);
+        $meta['number']        = (int)($dbEp['number'] ?? 0);
+        $meta['downloads']     = (int)($dbEp['downloads_op3'] ?? 0);
+        if (!empty($dbEp['audio_url'])) {
+            $meta['audio_url'] = $dbEp['audio_url'];
+        }
+        if (empty($meta['transcript']) && !empty($dbEp['transcript'])) {
+            $meta['transcript'] = $dbEp['transcript'];
+        }
+    }
+
+    return $meta;
 }
 
 // ── Enrutador de peticiones del Plugin ────────────────────────────────────────
@@ -108,36 +325,110 @@ function kutpod_route_request(string $path, array $segments): bool {
 function kutpod_filter_content(string $content, array $post): string {
     $cfg = kutpod_config();
     $meta = $post['podcast_meta'] ?? [];
-    $isPodcast = !empty($meta['is_podcast']) || !empty($meta['audio_url']) || !empty($post['kutpod_url']);
 
-    // Si no tiene meta explícito, verificar si contiene URL de KutPod para auto-embed
-    if (!$isPodcast) {
-        if (preg_match('#https?://[^\s]+/embed/@([a-z0-9\-]+)/([a-z0-9\-]+)|https?://[^\s]+/@([a-z0-9\-]+)/([a-z0-9\-]+)#i', $content, $m)) {
-            $isPodcast = true;
-            $meta['podcast_slug'] = !empty($m[1]) ? $m[1] : $m[3];
-            $meta['episode_slug'] = !empty($m[2]) ? $m[2] : $m[4];
+    // 1. Detectar si hay una URL en kutpod_url o en el cuerpo
+    $parsed = null;
+    $foundUrl = '';
+
+    if (!empty($post['kutpod_url'])) {
+        $parsed = kutpod_parse_episode_url($post['kutpod_url']);
+        if ($parsed) $foundUrl = $post['kutpod_url'];
+    }
+
+    if (!$parsed) {
+        // Shortcode [kutpod url="..."]
+        if (preg_match('/\[kutpod\s+url=["\']([^"\']+)["\']\]/i', $content, $sm)) {
+            $parsed = kutpod_parse_episode_url($sm[1]);
+            if ($parsed) $foundUrl = $sm[0];
+        }
+        // Buscar cualquier URL de KutPod en el texto
+        elseif (preg_match_all('#https?://[^\s"\'<>()]+#i', $content, $allUrls)) {
+            foreach ($allUrls[0] as $u) {
+                $pu = kutpod_parse_episode_url($u);
+                if ($pu) {
+                    $parsed = $pu;
+                    $foundUrl = $u;
+                    break;
+                }
+            }
         }
     }
 
+    $isPodcast = !empty($meta['is_podcast']) || !empty($meta['audio_url']) || !empty($parsed);
+
     // 1. Caso Artículo de Podcast
     if ($isPodcast) {
-        $instanceUrl = rtrim($cfg['instance_url'] ?: 'http://localhost:8000', '/');
-        $pSlug = $meta['podcast_slug'] ?? 'default';
-        $epSlug = $meta['episode_slug'] ?? $post['slug'];
-        $theme = $cfg['player_theme'] ?? 'auto';
-        $embedSrc = $instanceUrl . "/embed/@" . rawurlencode($pSlug) . "/" . rawurlencode($epSlug) . "?theme=" . urlencode($theme);
+        // Enriquecer $meta con los datos parseados si faltan
+        if ($parsed) {
+            if (empty($meta['podcast_slug']) && !empty($parsed['podcast_slug'])) {
+                $meta['podcast_slug'] = $parsed['podcast_slug'];
+            }
+            if (empty($meta['episode_slug']) && !empty($parsed['episode_slug'])) {
+                $meta['episode_slug'] = $parsed['episode_slug'];
+            }
+            if (empty($meta['episode_id']) && !empty($parsed['episode_id'])) {
+                $meta['episode_id'] = $parsed['episode_id'];
+            }
+        }
+
+        // Si tenemos BD local, podemos rellenar estadísticas/slugs faltantes
+        if (!empty($meta['episode_slug']) || !empty($meta['episode_id'])) {
+            $dbEp = kutpod_lookup_episode($meta['podcast_slug'] ?? '', $meta['episode_slug'] ?? '', $meta['episode_id'] ?? 0);
+            if ($dbEp) {
+                if (empty($meta['podcast_slug'])) $meta['podcast_slug'] = $dbEp['podcast_slug'];
+                if (empty($meta['episode_slug'])) $meta['episode_slug'] = $dbEp['slug'];
+                if (empty($meta['downloads']) && !empty($dbEp['downloads_op3'])) $meta['downloads'] = (int)$dbEp['downloads_op3'];
+                if (empty($meta['duration_secs']) && !empty($dbEp['duration_secs'])) $meta['duration_secs'] = (int)$dbEp['duration_secs'];
+                if (empty($meta['duration_fmt']) && !empty($dbEp['duration_fmt'])) $meta['duration_fmt'] = $dbEp['duration_fmt'];
+                if (empty($meta['season']) && !empty($dbEp['season'])) $meta['season'] = (int)$dbEp['season'];
+                if (empty($meta['number']) && !empty($dbEp['number'])) $meta['number'] = (int)$dbEp['number'];
+                if (empty($meta['transcript']) && !empty($dbEp['transcript'])) $meta['transcript'] = $dbEp['transcript'];
+                if (empty($meta['podcast_title']) && !empty($dbEp['podcast_title'])) $meta['podcast_title'] = $dbEp['podcast_title'];
+            }
+        }
+
+        // Determinar host/base de KutPod (priorizar la de la URL ingresada si es válida)
+        $instanceUrl = (!empty($parsed['base_url']))
+            ? rtrim($parsed['base_url'], '/')
+            : rtrim($cfg['instance_url'] ?: 'http://localhost:8000', '/');
+
+        $pSlug  = trim($meta['podcast_slug'] ?? ($parsed['podcast_slug'] ?? ''));
+        $epSlug = trim($meta['episode_slug'] ?? ($parsed['episode_slug'] ?? ''));
+        $epId   = (int)($meta['episode_id'] ?? ($parsed['episode_id'] ?? 0));
+        $theme  = $cfg['player_theme'] ?? 'auto';
+
+        // Si todavía no tenemos epSlug ni epId, intentar usar el slug del post como último recurso
+        if (!$epSlug && !$epId && !empty($post['slug'])) {
+            $epSlug = $post['slug'];
+        }
+
+        // Construir embedSrc correcto sin forzar @default
+        $embedSrc = '';
+        if ($epId > 0) {
+            $embedSrc = $instanceUrl . "/embed/" . $epId . "?theme=" . urlencode($theme);
+        } elseif ($pSlug && $epSlug) {
+            $embedSrc = $instanceUrl . "/embed/@" . rawurlencode($pSlug) . "/" . rawurlencode($epSlug) . "?theme=" . urlencode($theme);
+        } elseif ($epSlug) {
+            $embedSrc = $instanceUrl . "/embed/" . rawurlencode($epSlug) . "?theme=" . urlencode($theme);
+        }
+
+        if (!$embedSrc) {
+            return $content;
+        }
 
         // Construir barra de estadísticas
         $statsBar = '';
         if (!empty($cfg['enable_stats_badge'])) {
             $downloads = (int)($meta['downloads'] ?? 0);
-            $durFmt = $meta['duration_fmt'] ?: ($meta['duration_secs'] ? gmdate('H:i:s', $meta['duration_secs']) : '');
+            $durFmt = $meta['duration_fmt'] ?? (!empty($meta['duration_secs']) ? gmdate('H:i:s', $meta['duration_secs']) : '');
             $season = (int)($meta['season'] ?? 0);
             $number = (int)($meta['number'] ?? 0);
 
             $statsBar = '<div class="kutpod-stats-bar">';
             if ($season > 0 && $number > 0) {
                 $statsBar .= '<span class="kutpod-stat-pill">🎙️ T' . $season . ' · Ep ' . $number . '</span>';
+            } elseif (!empty($meta['podcast_title'])) {
+                $statsBar .= '<span class="kutpod-stat-pill">🎙️ ' . htmlspecialchars($meta['podcast_title']) . '</span>';
             }
             if ($durFmt) {
                 $statsBar .= '<span class="kutpod-stat-pill">⏱️ ' . htmlspecialchars($durFmt) . '</span>';
@@ -189,9 +480,17 @@ function kutpod_filter_content(string $content, array $post): string {
             </details>';
         }
 
+        // Limpiar la URL raw del contenido si el usuario la pegó sola en un párrafo o línea
+        if (!empty($foundUrl) && empty($post['kutpod_url'])) {
+            $content = preg_replace('#<p>\s*' . preg_quote($foundUrl, '#') . '\s*</p>#i', '', $content);
+            $content = preg_replace('#^\s*' . preg_quote($foundUrl, '#') . '\s*$#m', '', $content);
+        }
+
         // Posicionar el reproductor
         $pos = $cfg['player_position'] ?? 'top';
         if ($pos === 'manual' && str_contains($content, '[kutpod]')) {
+            $content = str_replace('[kutpod]', $playerHtml, $content);
+        } elseif (str_contains($content, '[kutpod]')) {
             $content = str_replace('[kutpod]', $playerHtml, $content);
         } elseif ($pos === 'bottom') {
             $content = $content . $playerHtml . $transcriptHtml;
