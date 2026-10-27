@@ -329,13 +329,22 @@ function ap_endpoint_note(string $username, string $slug): void {
     require_once ROOT_PATH . '/core/content.php';
     $post = get_content('articles', $originalSlug);
     
-    if (!$post || ($post['status'] ?? 'draft') !== 'published') {
-        http_response_code(404);
-        exit('Nota no encontrada.');
-    }
-
     $actor = ap_base_url() . "/users/$username";
     $noteId = "$actor/notes/$slug";
+
+    // Si el artículo fue eliminado o ya no está publicado, responder con Tombstone 410 Gone (W3C ActivityPub)
+    if (!$post || ($post['status'] ?? 'draft') !== 'published') {
+        http_response_code(410);
+        header('Content-Type: application/activity+json; charset=utf-8');
+        echo json_encode([
+            '@context'   => 'https://www.w3.org/ns/activitystreams',
+            'id'         => $noteId,
+            'type'       => 'Tombstone',
+            'formerType' => 'Note',
+            'deleted'    => gmdate('Y-m-d\TH:i:s\Z')
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     
     $content = $post['content'] ?? '';
     // Format markdown if needed
@@ -573,29 +582,63 @@ function ap_delete_article(string $slug): void {
     $base = ap_base_url();
     $actor = "$base/users/$username";
     
+    // Obtener el noteId real de la actividad Create previa en el outbox
     $noteId = "$actor/notes/{$slug}";
+    $existing = ap_one("SELECT object_json FROM ap_outbox WHERE type = 'Create' AND activity_id LIKE ? ORDER BY id DESC LIMIT 1", ["%$slug%"]);
+    if ($existing) {
+        $createData = json_decode($existing['object_json'], true);
+        if (!empty($createData['object']['id'])) {
+            $noteId = $createData['object']['id'];
+        }
+    }
+
     $actId = "$actor/activities/delete-" . bin2hex(random_bytes(8));
 
+    // Estructura Delete estandarizada W3C / Mastodon con Tombstone
     $activity = [
         '@context' => 'https://www.w3.org/ns/activitystreams',
-        'id' => $actId,
-        'type' => 'Delete',
-        'actor' => $actor,
-        'to' => ['https://www.w3.org/ns/activitystreams#Public'],
-        'object' => $noteId
+        'id'       => $actId,
+        'type'     => 'Delete',
+        'actor'    => $actor,
+        'to'       => ['https://www.w3.org/ns/activitystreams#Public'],
+        'cc'       => ["$actor/followers"],
+        'object'   => [
+            'id'   => $noteId,
+            'type' => 'Tombstone'
+        ]
     ];
 
     $oid = ap_exec("INSERT INTO ap_outbox (activity_id, type, object_json) VALUES (?, ?, ?)",
         [$actId, 'Delete', json_encode($activity, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)]);
 
-    // Queue for all followers
-    $followers = ap_q("SELECT DISTINCT inbox FROM ap_followers WHERE inbox != ''");
-    $ins = ap_db()->prepare("INSERT INTO ap_delivery (outbox_id, inbox) VALUES (?, ?)");
-    foreach ($followers as $f) {
-        $ins->execute([$oid, $f['inbox']]);
+    // Recopilar inboxes de seguidores y de instancias que interactuaron
+    $inboxes = [];
+    foreach (ap_q("SELECT DISTINCT inbox FROM ap_followers WHERE inbox != ''") as $f) {
+        $inboxes[$f['inbox']] = true;
+    }
+    foreach (ap_q("SELECT DISTINCT actor_url FROM ap_interactions WHERE note_id = ? OR note_id LIKE ?", [$noteId, "%$slug%"]) as $i) {
+        $u = parse_url($i['actor_url']);
+        if (!empty($u['host']) && !empty($u['scheme'])) {
+            $inboxes["{$u['scheme']}://{$u['host']}/inbox"] = true;
+        }
     }
 
-    ap_log("Outbox: Envío de eliminación de '$slug' encolada.");
+    $ins = ap_db()->prepare("INSERT INTO ap_delivery (outbox_id, inbox) VALUES (?, ?)");
+    foreach (array_keys($inboxes) as $inbox) {
+        $ins->execute([$oid, $inbox]);
+    }
+
+    ap_log("Outbox: Envío de eliminación de '$slug' encolada para " . count($inboxes) . " destinos.");
+
+    // Entrega inmediata sincrónica para no depender exclusivamente de cron en segundo plano
+    if (function_exists('ap_deliver_pending') && !empty($inboxes)) {
+        try {
+            ap_deliver_pending(count($inboxes));
+        } catch (Throwable $e) {
+            ap_log("Entrega inmediata de Delete: " . $e->getMessage());
+        }
+    }
+
     ap_trigger_delivery();
 }
 

@@ -140,6 +140,15 @@ function get_content(string $type, string $slug): ?array {
 function delete_content(string $type, string $slug): bool {
     $file = content_path($type) . "/$slug.json";
     if (!file_exists($file)) return false;
+
+    // Notificar al Fediverso de la eliminación antes de purgar el archivo
+    if ($type === 'articles' && cms_plugin_is_active('fediverse')) {
+        require_once ROOT_PATH . '/plugins/fediverse/activitypub.php';
+        if (function_exists('ap_delete_article')) {
+            ap_delete_article($slug);
+        }
+    }
+
     unlink($file);
     invalidate_content_index($type);
     clear_cache();

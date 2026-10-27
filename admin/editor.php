@@ -57,11 +57,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $post = get_content($type, $new_slug);
             $is_new = false;
 
-            if ($type === 'articles' && $post['status'] === 'published') {
+            if ($type === 'articles') {
                 if (cms_plugin_is_active('fediverse')) {
                     require_once dirname(__DIR__) . '/plugins/fediverse/activitypub.php';
-                    $resend = !empty($_POST['fediverse_resend']);
-                    ap_publish_article($post, $resend);
+                    if ($post['status'] === 'published') {
+                        $resend = !empty($_POST['fediverse_resend']);
+                        ap_publish_article($post, $resend);
+                    } elseif ($post['status'] === 'draft') {
+                        // Si estaba federado y se pasa a borrador, eliminar la publicación en el Fediverso
+                        ap_delete_article($slug);
+                    }
                 }
             }
         }
