@@ -1,6 +1,6 @@
 <?php
 // BrisaCMS - Configuration
-define('CMS_VERSION', '2.1.6');
+define('CMS_VERSION', '2.1.7');
 define('CMS_NAME', 'BrisaCMS');
 define('ROOT_PATH', dirname(__DIR__));
 define('CONTENT_PATH', ROOT_PATH . '/content');
