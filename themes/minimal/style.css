@@ -187,6 +187,14 @@ button {
   color: var(--text);
 }
 
+.brand-link .site-logo-img {
+  height: 32px;
+  width: auto;
+  max-width: 140px;
+  object-fit: contain;
+  vertical-align: middle;
+}
+
 .brand-icon {
   width: 32px;
   height: 32px;

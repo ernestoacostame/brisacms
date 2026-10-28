@@ -62,7 +62,11 @@ if ($mastodon_url): ?>
   <div class="site-container header-inner">
     <!-- Brand -->
     <a href="<?= $base ?>/" class="brand-link" aria-label="<?= htmlspecialchars($site_title) ?>">
-      <span class="brand-icon"><?= mb_strtoupper(mb_substr($site_title, 0, 1)) ?></span>
+      <?php if (!empty($site_logo)): ?>
+        <img src="<?= htmlspecialchars($site_logo) ?>" alt="<?= htmlspecialchars($site_title) ?>" class="site-logo-img">
+      <?php else: ?>
+        <span class="brand-icon"><?= mb_strtoupper(mb_substr($site_title, 0, 1)) ?></span>
+      <?php endif; ?>
       <span><?= htmlspecialchars($site_title) ?></span>
     </a>
 

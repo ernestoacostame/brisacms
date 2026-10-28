@@ -83,8 +83,16 @@ body {
 .site-logo {
   text-decoration: none;
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  gap: 0.6rem;
   line-height: 1;
+}
+.site-logo-img {
+  height: 32px;
+  width: auto;
+  max-width: 140px;
+  object-fit: contain;
+  vertical-align: middle;
 }
 .logo-main {
   font-family: var(--font);
@@ -315,6 +323,9 @@ body {
       $w2 = strtoupper($words[1] ?? '');
     ?>
     <a href="<?= $base ?>/" class="site-logo">
+      <?php if (!empty($site_logo)): ?>
+        <img src="<?= htmlspecialchars($site_logo) ?>" alt="<?= htmlspecialchars($site_title) ?>" class="site-logo-img">
+      <?php endif; ?>
       <span class="logo-main"><?= htmlspecialchars($w1) ?></span>
       <?php if ($w2): ?><span class="logo-accent"><?= htmlspecialchars($w2) ?></span><?php endif; ?>
     </a>

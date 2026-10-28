@@ -32,6 +32,7 @@ function render_theme(string $template, array $vars = []): void {
     extract($vars);
     $config = cms_config();
     $site_title = $config['site_title'] ?? CMS_NAME;
+    $site_logo = site_logo();
     $theme_color = $config['theme_color'] ?? '#6366f1';
     $theme = active_theme();
     $base = base_url();

@@ -41,8 +41,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $config['theme'] = sanitize_filename($_POST['theme'] ?? 'default');
             $config['theme_color'] = preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['theme_color'] ?? '') ? $_POST['theme_color'] : '#6366f1';
             $config['admin_scheme'] = in_array($_POST['admin_scheme'] ?? '', ['dark','midnight','slate','warm','light']) ? $_POST['admin_scheme'] : 'dark';
+
+            // Handle logo upload or removal
+            if (!empty($_POST['remove_logo']) && $_POST['remove_logo'] === '1') {
+                cms_remove_logo();
+                $config['site_logo'] = '';
+            } elseif (!empty($_FILES['site_logo_file']['tmp_name'])) {
+                $upLogo = cms_save_logo($_FILES['site_logo_file']);
+                if ($upLogo) {
+                    $config['site_logo'] = $upLogo;
+                } else {
+                    $error = 'Formato de imagen no permitido o archivo superior a 5 MB (se permiten PNG, SVG, JPG, WebP, GIF, AVIF).';
+                }
+            }
+
             cms_save_config($config);
-            $msg = 'Apariencia guardada correctamente.';
+            if (!$error) {
+                $msg = 'Apariencia guardada correctamente.';
+            }
             $active_section = 'appearance';
         }
 
@@ -299,10 +315,42 @@ admin_header(__("settings_title"), 'settings');
           <div class="card">
             <div class="card-header"><span class="card-title"><?= __("settings_appearance") ?></span></div>
             <div class="card-body">
-              <form method="POST">
+              <form method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="csrf" value="<?= $csrf ?>">
                 <input type="hidden" name="action" value="appearance">
                 <input type="hidden" name="active_section" value="appearance">
+
+                <!-- Logo del Blog -->
+                <div class="form-group" style="margin-bottom:1.5rem">
+                  <label class="form-label" style="font-weight:700"><?= __("field_site_logo", "Logotipo del blog") ?></label>
+                  <div style="display:flex;align-items:center;gap:1.5rem;padding:1.25rem;background:var(--surface2);border:1px solid var(--border2);border-radius:12px">
+                    <?php $currentLogo = site_logo(); ?>
+                    <div id="settings-logo-box" style="width:72px;height:72px;border-radius:10px;background:var(--surface);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;border:1px solid var(--border);padding:6px">
+                      <?php if ($currentLogo): ?>
+                        <img src="<?= htmlspecialchars($currentLogo) ?>" alt="Logo" style="max-width:100%;max-height:100%;object-fit:contain">
+                      <?php else: ?>
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--muted)">
+                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                          <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                          <polyline points="21 15 16 10 5 21"></polyline>
+                        </svg>
+                      <?php endif; ?>
+                    </div>
+                    <div style="flex:1">
+                      <input type="file" name="site_logo_file" accept="image/*,.svg" class="form-control" onchange="previewSiteLogo(this, 'settings-logo-box')">
+                      <div style="display:flex;gap:1.25rem;align-items:center;margin-top:0.45rem">
+                        <small style="color:var(--muted);font-size:0.8rem">PNG, SVG, JPG, WebP o GIF (máx. 5 MB)</small>
+                        <?php if (!empty($config['site_logo'])): ?>
+                          <label style="font-size:0.84rem;color:var(--red);display:inline-flex;align-items:center;gap:0.35rem;cursor:pointer;font-weight:600">
+                            <input type="checkbox" name="remove_logo" value="1">
+                            <?= __("btn_remove_logo", "Eliminar logotipo actual") ?>
+                          </label>
+                        <?php endif; ?>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <div class="form-group">
                   <label class="form-label"><?= __("field_theme") ?></label>
                   <select name="theme">
@@ -734,6 +782,17 @@ function previewUserAvatar(input, targetId) {
     reader.onload = function(e) {
       const box = document.getElementById(targetId);
       box.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">`;
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+
+function previewSiteLogo(input, targetId) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const box = document.getElementById(targetId);
+      box.innerHTML = `<img src="${e.target.result}" alt="Logo" style="max-width:100%;max-height:100%;object-fit:contain">`;
     };
     reader.readAsDataURL(input.files[0]);
   }

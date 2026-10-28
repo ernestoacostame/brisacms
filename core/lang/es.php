@@ -165,6 +165,8 @@ return [
     'field_posts_per_page'=> 'Artículos por página',
     'field_rss_posts_limit'=> 'Límite de artículos en el RSS',
     'field_footer_text' => 'Texto del footer',
+    'field_site_logo'   => 'Logotipo del blog',
+    'btn_remove_logo'   => 'Eliminar logotipo actual',
     'field_theme'       => 'Tema',
     'field_accent'      => 'Color de acento',
     'field_mastodon_handle'=> 'Tu handle de Mastodon',

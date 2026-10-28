@@ -53,7 +53,8 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
 /* ── HEADER ── */
 .site-header { background: var(--header-bg); position: sticky; top: 0; z-index: 200; border-bottom: 2px solid #1a1a1a; }
 .header-inner { display: flex; align-items: center; justify-content: space-between; padding: 0 1.5rem; height: 56px; max-width: 1200px; margin: 0 auto; }
-.site-logo { text-decoration: none; display: flex; align-items: baseline; line-height: 1; }
+.site-logo { text-decoration: none; display: flex; align-items: center; gap: 0.6rem; line-height: 1; }
+.site-logo-img { height: 32px; width: auto; max-width: 140px; object-fit: contain; vertical-align: middle; }
 .logo-main  { font-family: var(--font); font-size: 1.75rem; font-weight: 700; color: #fff; letter-spacing: -0.02em; text-transform: uppercase; }
 .logo-accent { font-family: var(--font); font-size: 1.75rem; font-weight: 300; color: var(--accent); letter-spacing: -0.02em; text-transform: uppercase; }
 .hamburger { background: none; border: none; cursor: pointer; padding: 0.5rem; display: flex; flex-direction: column; gap: 5px; }
@@ -115,6 +116,9 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
   <div class="header-inner">
     <?php $words = explode(' ', $site_title, 2); $w1 = strtoupper($words[0]); $w2 = strtoupper($words[1] ?? ''); ?>
     <a href="<?= $base ?>/" class="site-logo">
+      <?php if (!empty($site_logo)): ?>
+        <img src="<?= htmlspecialchars($site_logo) ?>" alt="<?= htmlspecialchars($site_title) ?>" class="site-logo-img">
+      <?php endif; ?>
       <span class="logo-main"><?= htmlspecialchars($w1) ?></span>
       <?php if ($w2): ?><span class="logo-accent"><?= htmlspecialchars($w2) ?></span><?php endif; ?>
     </a>

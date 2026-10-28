@@ -64,6 +64,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--font-body);
 .site-title {
   font-family: var(--font-heading); font-size: 1.3rem; font-weight: 700;
   color: var(--text); text-decoration: none; letter-spacing: -0.02em;
+  display: inline-flex; align-items: center; gap: 0.6rem;
+}
+.site-logo-img {
+  height: 32px; width: auto; max-width: 140px; object-fit: contain; vertical-align: middle;
 }
 .site-title span { color: var(--accent); }
 /* Hamburger */
@@ -200,7 +204,12 @@ body { background: var(--bg); color: var(--text); font-family: var(--font-body);
 <body>
 <header class="site-header">
   <div class="header-inner">
-    <a href="<?= $base ?>/" class="site-title"><?= htmlspecialchars($site_title) ?></a>
+    <a href="<?= $base ?>/" class="site-title">
+      <?php if (!empty($site_logo)): ?>
+        <img src="<?= htmlspecialchars($site_logo) ?>" alt="<?= htmlspecialchars($site_title) ?>" class="site-logo-img">
+      <?php endif; ?>
+      <span><?= htmlspecialchars($site_title) ?></span>
+    </a>
     <div style="display:flex;align-items:center;gap:0.75rem">
       <form class="search-form" action="<?= $base ?>/search" method="GET">
         <input type="text" name="q" placeholder="Buscar…" value="<?= htmlspecialchars($_GET['q'] ?? '') ?>">
