@@ -46,7 +46,7 @@
       </a>
     </nav>
     <div class="footer-text">
-      <?= htmlspecialchars($config['footer_text'] ?? ('© ' . date('Y') . ' ' . $site_title . ' | Powered by BrisaCMS')) ?>
+      <?= htmlspecialchars($config['footer_text'] ?? ('© ' . date('Y') . ' ' . $site_title . ' | Powered by KutBlog')) ?>
     </div>
   </div>
 </footer>

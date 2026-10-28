@@ -1,6 +1,6 @@
 <?php
 // ============================================================================
-// admin/update.php — Sistema de actualización de BrisaCMS
+// admin/update.php — Sistema de actualización de KutBlog
 // ============================================================================
 require_once dirname(__DIR__) . '/core/config.php';
 require_once dirname(__DIR__) . '/core/auth.php';
@@ -32,7 +32,7 @@ admin_header(__('update_title', 'Actualizaciones'), 'update');
         <?= __('update_title', 'Actualizaciones') ?>
       </h1>
       <p style="color: var(--text2); font-size: 0.9rem;">
-        <?= __('update_sub', 'Mantén BrisaCMS al día · actualización con un click · rollback instantáneo') ?>
+        <?= __('update_sub', 'Mantén KutBlog al día · actualización con un click · rollback instantáneo') ?>
       </p>
     </div>
 
@@ -198,7 +198,7 @@ admin_header(__('update_title', 'Actualizaciones'), 'update');
         <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1rem;">
           <div style="flex: 1; min-width: 250px;">
             <div style="font-size: 12.5px; color: var(--text2); line-height: 1.5; margin-bottom: 1rem;">
-              <?= __('update_revert_subtitle', 'Restaura una versión previamente guardada de BrisaCMS. Tus artículos, páginas y configuración no se verán afectados.') ?>
+              <?= __('update_revert_subtitle', 'Restaura una versión previamente guardada de KutBlog. Tus artículos, páginas y configuración no se verán afectados.') ?>
             </div>
             <div>
               <label class="form-label" for="rollback-select"><?= __('update_select_backup', 'Seleccionar copia de seguridad:') ?></label>
@@ -343,7 +343,7 @@ function cmsUpdateCheck() {
       if (data.up_to_date) {
         status.style.background = 'rgba(52, 211, 153, 0.1)';
         status.style.color = 'var(--green)';
-        status.innerHTML = '✅ BrisaCMS está actualizado — v' + data.version;
+        status.innerHTML = '✅ KutBlog está actualizado — v' + data.version;
         return;
       }
       if (data.available) {
@@ -371,7 +371,7 @@ function cmsUpdateCheck() {
 
 function cmsUpdateApply() {
   if (!_updateData) return;
-  if (!confirm('¿Actualizar BrisaCMS de v' + _updateData.current_version + ' a v' + _updateData.new_version + '?\n\nSe creará un backup automáticamente antes de aplicar los cambios.')) return;
+  if (!confirm('¿Actualizar KutBlog de v' + _updateData.current_version + ' a v' + _updateData.new_version + '?\n\nSe creará un backup automáticamente antes de aplicar los cambios.')) return;
 
   const btn = document.getElementById('btn-apply');
   const progress = document.getElementById('update-progress');
@@ -452,7 +452,7 @@ function cmsUpdateApply() {
             resultCard.style.color = 'var(--green)';
             document.getElementById('result-title').textContent = '✅ Actualización completada';
             document.getElementById('result-body').innerHTML =
-              'BrisaCMS actualizado de <strong>v' + data.from + '</strong> a <strong>v' + data.to + '</strong>. ' +
+              'KutBlog actualizado de <strong>v' + data.from + '</strong> a <strong>v' + data.to + '</strong>. ' +
               data.files_updated + ' ficheros actualizados.<br><br>' +
               '<a href="<?= base_url() ?>/admin/update.php" class="btn btn-primary" style="margin-top:8px">Recargar página</a>';
           }
@@ -472,7 +472,7 @@ function cmsUpdateRollback() {
   const option = select.options[select.selectedIndex];
   const versionText = option ? option.text : 'la versión seleccionada';
 
-  if (!confirm('¿Revertir BrisaCMS a ' + versionText + '?\n\nSe restaurarán todos los ficheros del código. Tus datos (artículos, páginas y configuración) no se verán afectados.')) return;
+  if (!confirm('¿Revertir KutBlog a ' + versionText + '?\n\nSe restaurarán todos los ficheros del código. Tus datos (artículos, páginas y configuración) no se verán afectados.')) return;
 
   const btn = document.getElementById('btn-rollback');
   const status = document.getElementById('rollback-status');

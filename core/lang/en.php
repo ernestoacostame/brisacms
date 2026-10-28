@@ -1,5 +1,5 @@
 <?php
-// BrisaCMS - English translations
+// KutBlog - English translations
 return [
 
     // ── General ──────────────────────────────────────────────────────────
@@ -257,7 +257,7 @@ return [
     'install_username'  => 'Admin Username',
     'install_password'  => 'Password',
     'install_confirm_pass'=> 'Confirm Password',
-    'install_btn'       => 'Install BrisaCMS →',
+    'install_btn'       => 'Install KutBlog →',
     'install_done_title'=> 'Installation Complete!',
     'install_done_text' => 'Your site is ready. Head to the admin panel to start publishing.',
     'install_go_admin'  => 'Go to Admin Panel →',
@@ -274,7 +274,7 @@ return [
     // ── Updates / Actualizaciones ──────────────────────────────────────────
     'nav_updates'                  => 'Updates',
     'update_title'                 => 'System Updates',
-    'update_sub'                   => 'Keep BrisaCMS up to date · one-click update · instant rollback',
+    'update_sub'                   => 'Keep KutBlog up to date · one-click update · instant rollback',
     'update_installed_version'     => 'Installed Version',
     'update_current_compilation'   => 'Current compilation',
     'update_github_token'          => 'GitHub Token',
@@ -299,7 +299,7 @@ return [
     'update_token_hint'            => 'A Personal Access Token is required to check the repository releases on GitHub.',
     'update_token_create_link'     => 'Create token on GitHub ↗',
     'update_revert_title'          => 'Revert update',
-    'update_revert_subtitle'       => 'Restore a previously saved version of BrisaCMS. Your articles, pages, and settings will not be affected.',
+    'update_revert_subtitle'       => 'Restore a previously saved version of KutBlog. Your articles, pages, and settings will not be affected.',
     'update_select_backup'         => 'Select backup:',
     'update_revert_btn'            => 'Revert to selected version',
     'update_history_title'         => 'Update History',

@@ -26,7 +26,7 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
     <language>es</language>
     <lastBuildDate><?= date('r') ?></lastBuildDate>
     <atom:link href="<?= htmlspecialchars($base) ?>/rss.xml" rel="self" type="application/rss+xml"/>
-    <generator>BrisaCMS <?= CMS_VERSION ?></generator>
+    <generator>KutBlog <?= CMS_VERSION ?></generator>
 
     <?php foreach ($result['items'] as $post):
       $url     = $base . '/article/' . rawurlencode($post['slug']);

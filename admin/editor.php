@@ -2163,7 +2163,7 @@ document.getElementById('editor-form').addEventListener('submit', function(e) {
 });
 
 // ── Autosave ──────────────────────────────────────────────────────────────
-const AUTOSAVE_KEY  = 'brisa_autosave_' + <?= json_encode($type) ?> + '_' + <?= json_encode($slug ?: 'new') ?>;
+const AUTOSAVE_KEY  = 'kutblog_autosave_' + <?= json_encode($type) ?> + '_' + <?= json_encode($slug ?: 'new') ?>;
 const AUTOSAVE_URL  = <?= json_encode(base_url() . '/admin/autosave.php') ?>;
 const AUTOSAVE_CSRF = <?= json_encode(generate_csrf()) ?>;
 
@@ -2837,9 +2837,9 @@ if (featUpload) {
 }
 
 // ── Editor font size ──────────────────────────────────────────────────────
-const FONT_SIZE_KEY = 'brisa_editor_font_size';
+const FONT_SIZE_KEY = 'kutblog_editor_font_size';
 const FONT_MIN = 12, FONT_MAX = 28, FONT_STEP = 1;
-let editorFontSize = parseInt(localStorage.getItem(FONT_SIZE_KEY) || '16', 10);
+let editorFontSize = parseInt(localStorage.getItem(FONT_SIZE_KEY) || localStorage.getItem('brisa_editor_font_size') || '16', 10);
 
 function applyEditorFontSize(size) {
   editorFontSize = Math.min(FONT_MAX, Math.max(FONT_MIN, size));

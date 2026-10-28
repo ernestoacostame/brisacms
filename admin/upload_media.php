@@ -1,5 +1,5 @@
 <?php
-// BrisaCMS - Media upload endpoint (images, audio, video)
+// KutBlog - Media upload endpoint (images, audio, video)
 require_once dirname(__DIR__) . '/core/config.php';
 require_once dirname(__DIR__) . '/core/auth.php';
 require_login();

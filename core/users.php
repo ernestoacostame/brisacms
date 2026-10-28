@@ -1,5 +1,5 @@
 <?php
-// BrisaCMS - User Management & 2FA Engine (RFC 6238 TOTP)
+// KutBlog - User Management & 2FA Engine (RFC 6238 TOTP)
 
 if (!defined('ROOT_PATH')) define('ROOT_PATH', dirname(__DIR__));
 if (!defined('CONTENT_PATH')) define('CONTENT_PATH', ROOT_PATH . '/content');
@@ -281,9 +281,9 @@ function totp_verify_recovery_code(array &$user, string $code): bool {
 /**
  * Generates otpauth URI adhering strictly to RFC 6238 and Apple/Google Authenticator specs.
  */
-function totp_otpauth_url(string $user, string $secret, string $issuer = 'BrisaCMS'): string {
+function totp_otpauth_url(string $user, string $secret, string $issuer = 'KutBlog'): string {
     $cleanSecret = strtoupper(trim(str_replace(['=', ' ', '-'], '', $secret)));
-    $cleanIssuer = trim(str_replace([':', '/', '?', '&', '='], '', $issuer)) ?: 'BrisaCMS';
+    $cleanIssuer = trim(str_replace([':', '/', '?', '&', '='], '', $issuer)) ?: 'KutBlog';
     $cleanUser   = trim(str_replace([':', '/', '?', '&', '='], '', $user)) ?: 'admin';
 
     $label = rawurlencode($cleanIssuer) . ':' . rawurlencode($cleanUser);

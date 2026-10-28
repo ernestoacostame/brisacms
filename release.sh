@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# BrisaCMS · Release Script
+# KutBlog · Release Script
 # ============================================================================
 # Uso:
 #   ./release.sh 1.1.0              → release con notas vacías
@@ -56,8 +56,8 @@ fi
 sed -i "s/define('CMS_VERSION', '$CURRENT')/define('CMS_VERSION', '$NEW')/" "$VERSION_FILE"
 echo "✅ core/config.php actualizado a $NEW"
 
-# --- 2. Crear el ZIP (solo ficheros de BrisaCMS, sin datos de usuario ni configs personales) ---
-ZIP_NAME="brisacms-v${NEW}.zip"
+# --- 2. Crear el ZIP (solo ficheros de KutBlog, sin datos de usuario ni configs personales) ---
+ZIP_NAME="kutblog-v${NEW}.zip"
 ZIP_PATH="/tmp/$ZIP_NAME"
 
 STAGE_DIR=$(mktemp -d)
@@ -103,8 +103,8 @@ fi
 git add core/config.php
 
 # Commit
-git commit -m "Release BrisaCMS v$NEW"
-git tag -a "v$NEW" -m "BrisaCMS v$NEW"
+git commit -m "Release KutBlog v$NEW"
+git tag -a "v$NEW" -m "KutBlog v$NEW"
 echo "✅ Commit y tag v$NEW creados"
 
 # --- 4. Push ---
@@ -128,13 +128,13 @@ if [[ -z "$NOTES" ]]; then
 fi
 
 gh release create "v$NEW" "$ZIP_PATH" \
-  --repo "ernestoacostame/BrisaCMS" \
-  --title "BrisaCMS v$NEW" \
+  --repo "ernestoacostame/KutBlog" \
+  --title "KutBlog v$NEW" \
   --notes "$NOTES"
 
 echo ""
 echo "✅ Release v$NEW publicada con $ZIP_NAME adjunto"
-echo "   https://github.com/ernestoacostame/BrisaCMS/releases/tag/v$NEW"
+echo "   https://github.com/ernestoacostame/KutBlog/releases/tag/v$NEW"
 
 # --- Limpiar ---
 rm -f "$ZIP_PATH"

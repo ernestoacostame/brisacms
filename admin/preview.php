@@ -1,5 +1,5 @@
 <?php
-// BrisaCMS - Article/Page Preview for admin
+// KutBlog - Article/Page Preview for admin
 // Serves any article (including drafts) to logged-in admins
 require_once dirname(__DIR__) . '/core/config.php';
 require_once dirname(__DIR__) . '/core/auth.php';
@@ -65,7 +65,7 @@ $post_title    = htmlspecialchars($post['title'] ?? '');
 
 // CSS injected into <head>: pushes any sticky/fixed headers down by banner height
 $head_css = <<<CSS
-<style id="brisa-preview-css">
+<style id="kutblog-preview-css">
 /* Preview banner height compensation */
 .site-header,
 header.site-header,
@@ -86,7 +86,7 @@ CSS;
 
 // Banner HTML fixed at top
 $banner_html = <<<HTML
-<div id="brisa-preview-bar" style="
+<div id="kutblog-preview-bar" style="
 position:fixed;top:0;left:0;right:0;z-index:999999;height:{$banner_h}px;
 background:{$status_color};color:{$status_text};
 font-family:system-ui,sans-serif;font-size:0.78rem;font-weight:700;

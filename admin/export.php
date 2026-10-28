@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
     $include_media = ($_POST['include_media'] ?? '0') === '1';
 
     if ($format === 'zip') {
-        $zip_file = tempnam(sys_get_temp_dir(), 'brisa_export_');
+        $zip_file = tempnam(sys_get_temp_dir(), 'kutblog_export_');
         $zip = new ZipArchive();
         $zip->open($zip_file, ZipArchive::CREATE | ZipArchive::OVERWRITE);
 
@@ -46,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
 
         $zip->close();
 
-        $filename = 'brisacms-export-' . date('Y-m-d') . '.zip';
+        $filename = 'kutblog-export-' . date('Y-m-d') . '.zip';
         header('Content-Type: application/zip');
         header('Content-Disposition: attachment; filename="' . $filename . '"');
         header('Content-Length: ' . filesize($zip_file));
@@ -134,7 +134,7 @@ admin_header(__("export_title"), 'export');
             <div style="color:var(--green)">/var/www/html/viyoer/media/</div>
             <div style="color:var(--green)">/var/www/html/viyoer/config.json</div>
           </div>
-          <p style="margin-top:0.75rem;font-size:0.82rem">Los archivos PHP del CMS se reinstalan desde cero con el ZIP de BrisaCMS.</p>
+          <p style="margin-top:0.75rem;font-size:0.82rem">Los archivos PHP del CMS se reinstalan desde cero con el ZIP de KutBlog.</p>
         </div>
       </div>
     </div>

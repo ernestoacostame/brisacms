@@ -1,5 +1,5 @@
 <?php
-// BrisaCMS - Theme Engine
+// KutBlog - Theme Engine
 
 function theme_path(string $theme = ''): string {
     return THEMES_PATH . '/' . ($theme ?: active_theme());

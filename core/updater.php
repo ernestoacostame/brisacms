@@ -1,11 +1,11 @@
 <?php
 // ============================================================================
-// BrisaCMS · Motor de actualización (GitHub Releases + PAT)
+// KutBlog · Motor de actualización (GitHub Releases + PAT)
 // ============================================================================
 require_once __DIR__ . '/config.php';
 
-define('CMS_UPDATE_REPO', 'ernestoacostame/BrisaCMS');
-define('CMS_UPDATE_SUBDIR', ''); // BrisaCMS root is the zip root folder
+define('CMS_UPDATE_REPO', 'ernestoacostame/KutBlog');
+define('CMS_UPDATE_SUBDIR', ''); // KutBlog root is the zip root folder
 
 function cms_update_dir(): string {
   $dir = CACHE_PATH . '/updates';
@@ -27,7 +27,7 @@ function cms_update_check(): ?array {
       'Accept: application/vnd.github+json',
       'X-GitHub-Api-Version: 2022-11-28',
     ],
-    CURLOPT_USERAGENT => 'BrisaCMS/' . CMS_VERSION,
+    CURLOPT_USERAGENT => 'KutBlog/' . CMS_VERSION,
     CURLOPT_TIMEOUT => 15,
   ]);
   $resp = curl_exec($ch);
@@ -55,12 +55,12 @@ function cms_update_check(): ?array {
     return ['up_to_date' => true, 'version' => $localVersion];
   }
 
-  // Buscar el ZIP de la release (priorizando brisacms-*.zip o cualquier zip)
+  // Buscar el ZIP de la release (priorizando kutblog-*.zip o cualquier zip)
   $zipUrl = '';
   $zipIsAsset = false;
   if (!empty($release['assets'])) {
     foreach ($release['assets'] as $asset) {
-      if (preg_match('/^brisacms.*\.zip$/i', $asset['name'])) {
+      if (preg_match('/^kutblog.*\.zip$/i', $asset['name'])) {
         $zipUrl = $asset['url'];
         $zipIsAsset = true;
         break;
@@ -145,7 +145,7 @@ function cms_update_download(string $zipUrl): array {
       'Accept: application/octet-stream',
       'X-GitHub-Api-Version: 2022-11-28',
     ],
-    CURLOPT_USERAGENT => 'BrisaCMS/' . CMS_VERSION,
+    CURLOPT_USERAGENT => 'KutBlog/' . CMS_VERSION,
     CURLOPT_FOLLOWLOCATION => true,
     CURLOPT_MAXREDIRS => 5,
     CURLOPT_TIMEOUT => 120,
@@ -222,11 +222,11 @@ function cms_update_apply(string $zipPath, string $newVersion): array {
   $zip->extractTo($tmpDir);
   $zip->close();
 
-  // 3. Localizar la raíz de BrisaCMS en el ZIP
+  // 3. Localizar la raíz de KutBlog en el ZIP
   $sourceDir = cms_update_find_cms_dir($tmpDir);
   if (!$sourceDir) {
     cms_update_cleanup_tmp($tmpDir);
-    return ['error' => 'No se encontró la carpeta de BrisaCMS dentro del ZIP. Asegúrate de que contiene un index.php o similar.'];
+    return ['error' => 'No se encontró la carpeta de KutBlog dentro del ZIP. Asegúrate de que contiene un index.php o similar.'];
   }
 
   // 4. Directorios protegidos
@@ -406,7 +406,7 @@ function cms_update_rollback_from_path(string $backupPath): array {
   return ['success' => true];
 }
 
-// Buscar el directorio principal de BrisaCMS dentro del ZIP
+// Buscar el directorio principal de KutBlog dentro del ZIP
 function cms_update_find_cms_dir(string $tmpDir): ?string {
   if (file_exists("$tmpDir/index.php")) return $tmpDir;
 

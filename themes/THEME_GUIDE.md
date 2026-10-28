@@ -1,4 +1,4 @@
-# Creating a Custom BrisaCMS Theme
+# Creating a Custom KutBlog Theme
 
 ## Quick Start
 
@@ -90,7 +90,7 @@ $post = [
 
 ## CSS Variables
 
-BrisaCMS injects these CSS variables automatically based on the active accent color:
+KutBlog injects these CSS variables automatically based on the active accent color:
 
 ```css
 :root {

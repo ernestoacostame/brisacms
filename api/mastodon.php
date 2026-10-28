@@ -1,5 +1,5 @@
 <?php
-// BrisaCMS - Mastodon Comments Fetcher
+// KutBlog - Mastodon Comments Fetcher
 require_once dirname(__DIR__) . '/core/config.php';
 
 header('Content-Type: application/json; charset=utf-8');
@@ -118,7 +118,7 @@ function mastodon_get(string $url): ?array {
     $ctx  = stream_context_create(['http' => [
         'timeout'       => 10,
         'ignore_errors' => true,
-        'header'        => "User-Agent: BrisaCMS/1.0\r\nAccept: application/json\r\n",
+        'header'        => "User-Agent: KutBlog/1.0\r\nAccept: application/json\r\n",
     ]]);
     $body = @file_get_contents($url, false, $ctx);
     if ($body === false || $body === '') return null;

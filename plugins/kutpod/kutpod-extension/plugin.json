@@ -1,7 +1,7 @@
 {
-  "id": "brisacms",
-  "name": "BrisaCMS Webhook Publisher",
-  "description": "Envía automáticamente los episodios publicados o actualizados de KutPod a tu blog BrisaCMS mediante webhooks.",
+  "id": "kutblog",
+  "name": "KutBlog Webhook Publisher",
+  "description": "Envía automáticamente los episodios publicados o actualizados de KutPod a tu blog KutBlog mediante webhooks.",
   "version": "1.0.0",
   "author": "KutStudio"
 }

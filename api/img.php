@@ -1,5 +1,5 @@
 <?php
-// BrisaCMS - Image Cache & Optimization Endpoint
+// KutBlog - Image Cache & Optimization Endpoint
 require_once dirname(__DIR__) . '/core/config.php';
 require_once dirname(__DIR__) . '/core/image_cache.php';
 

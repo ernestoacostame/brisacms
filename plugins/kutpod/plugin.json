@@ -3,5 +3,5 @@
   "name": "KutPod Studio",
   "description": "Integración oficial con KutPod: sincronización de episodios por webhooks, reproductor embebido interactivo, timestamps cliqueables, transcripciones SEO, estadísticas de escuchas y directorio /podcasts.",
   "version": "1.0.0",
-  "author": "KutStudio / BrisaCMS"
+  "author": "KutStudio / KutBlog"
 }

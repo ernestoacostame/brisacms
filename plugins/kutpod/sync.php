@@ -1,6 +1,6 @@
 <?php
 /**
- * KutPod Plugin - Synchronization Engine for BrisaCMS
+ * KutPod Plugin - Synchronization Engine for KutBlog
  * Synchronizes episodes from KutPod (via local SQLite or remote REST API)
  */
 
@@ -92,7 +92,7 @@ function kutpod_run_sync(): array {
         $ctx = stream_context_create([
             'http' => [
                 'timeout' => 10,
-                'header'  => "User-Agent: BrisaCMS-KutPod/1.0\r\n"
+                'header'  => "User-Agent: KutBlog-KutPod/1.0\r\n"
             ]
         ]);
         
@@ -107,7 +107,7 @@ function kutpod_run_sync(): array {
         }
     }
 
-    // Procesar cada episodio e importarlo / actualizarlo en BrisaCMS
+    // Procesar cada episodio e importarlo / actualizarlo en KutBlog
     foreach ($episodes as $ep) {
         $res = kutpod_upsert_article_from_episode($ep, $cfg);
         if ($res === 'created') $stats['created']++;
@@ -124,7 +124,7 @@ function kutpod_run_sync(): array {
 }
 
 /**
- * Inserta o actualiza un artículo en BrisaCMS a partir de un episodio
+ * Inserta o actualiza un artículo en KutBlog a partir de un episodio
  */
 function kutpod_upsert_article_from_episode(array $ep, array $cfg): string {
     $articlesDir = content_path('articles');

@@ -1,6 +1,6 @@
 <?php
 // ============================================================================
-// KutPod · Opciones del Plugin BrisaCMS
+// KutPod · Opciones del Plugin KutBlog
 // ============================================================================
 
 // Evitar acceso directo
@@ -10,24 +10,27 @@ if (!defined('KUTPOD_VERSION')) {
 
 // Procesar el guardado si es POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    kp_update_setting('brisacms_webhook_url', trim($_POST['brisacms_webhook_url'] ?? ''));
-    kp_update_setting('brisacms_secret', trim($_POST['brisacms_secret'] ?? ''));
+    $url = trim($_POST['kutblog_webhook_url'] ?? '');
+    $secret = trim($_POST['kutblog_secret'] ?? '');
+
+    kp_update_setting('kutblog_webhook_url', $url);
+    kp_update_setting('kutblog_secret', $secret);
     
-    setcookie('kp_flash', 'Configuración de BrisaCMS guardada con éxito', time() + 30, '/');
-    header('Location: ' . admin_url('plugins?action=settings&plugin=brisacms'));
+    setcookie('kp_flash', 'Configuración de KutBlog guardada con éxito', time() + 30, '/');
+    header('Location: ' . admin_url('plugins?action=settings&plugin=kutblog'));
     exit;
 }
 
-$webhookUrl = kp_setting('brisacms_webhook_url', '');
-$secret = kp_setting('brisacms_secret', '');
+$webhookUrl = kp_setting('kutblog_webhook_url', '');
+$secret = kp_setting('kutblog_secret', '');
 
 ?>
 
 <div class="card span-12" style="max-width:800px; margin:0 auto">
   <div class="card-head" style="margin-bottom:18px">
     <div>
-      <h2 style="margin:0">Publicador Automático hacia BrisaCMS</h2>
-      <p class="help" style="margin:4px 0 0 0">Envía automáticamente episodios a tu blog BrisaCMS cuando se publiquen o actualicen.</p>
+      <h2 style="margin:0">Publicador Automático hacia KutBlog</h2>
+      <p class="help" style="margin:4px 0 0 0">Envía automáticamente episodios a tu blog KutBlog cuando se publiquen o actualicen.</p>
     </div>
   </div>
 
@@ -36,22 +39,22 @@ $secret = kp_setting('brisacms_secret', '');
     
     <div class="field-row">
       <div class="field">
-        <label class="label">URL del Webhook de BrisaCMS</label>
-        <input class="input" type="url" name="brisacms_webhook_url" value="<?= e($webhookUrl) ?>" placeholder="https://tublog.com/api/kutpod/webhook" required>
-        <div class="help" style="margin-top:4px">La URL del endpoint webhook de BrisaCMS (ej. <code>https://tublog.com/api/kutpod/webhook</code>).</div>
+        <label class="label">URL del Webhook de KutBlog</label>
+        <input class="input" type="url" name="kutblog_webhook_url" value="<?= e($webhookUrl) ?>" placeholder="https://tublog.com/api/kutpod/webhook" required>
+        <div class="help" style="margin-top:4px">La URL del endpoint webhook de KutBlog (ej. <code>https://tublog.com/api/kutpod/webhook</code>).</div>
       </div>
     </div>
 
     <div class="field-row" style="margin-top:14px">
       <div class="field">
         <label class="label">Token Secreto (Secret Token)</label>
-        <input class="input" type="text" name="brisacms_secret" value="<?= e($secret) ?>" placeholder="Token secreto configurado en BrisaCMS" style="font-family:ui-monospace,monospace">
-        <div class="help" style="margin-top:4px">Debe coincidir exactamente con el token secreto configurado en el panel de BrisaCMS.</div>
+        <input class="input" type="text" name="kutblog_secret" value="<?= e($secret) ?>" placeholder="Token secreto configurado en KutBlog" style="font-family:ui-monospace,monospace">
+        <div class="help" style="margin-top:4px">Debe coincidir exactamente con el token secreto configurado en el panel de KutBlog.</div>
       </div>
     </div>
 
     <div style="font-size:12.5px;color:var(--text-3);margin-top:18px;line-height:1.5">
-      Cada vez que publiques o actualices un episodio en cualquiera de tus podcasts, KutPod notificará a BrisaCMS para crear o actualizar el artículo correspondiente.
+      Cada vez que publiques o actualices un episodio en cualquiera de tus podcasts, KutPod notificará a KutBlog para crear o actualizar el artículo correspondiente.
     </div>
 
     <div style="margin-top:24px; display:flex; gap:12px">

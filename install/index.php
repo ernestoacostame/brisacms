@@ -58,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         save_content('articles', [
             'title' => 'Welcome to ' . $site_title,
             'content' => '<p>This is your first article. Start writing and share your thoughts with the world.</p><p>You can edit or delete this article from the admin panel.</p>',
-            'excerpt' => 'Welcome to your new BrisaCMS site.',
+            'excerpt' => 'Welcome to your new KutBlog site.',
             'status' => 'published',
             'categories' => ['General'],
             'tags' => ['welcome'],
@@ -92,7 +92,7 @@ $detected_base = (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . $_SERVE
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Install BrisaCMS</title>
+<title>Install KutBlog</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -181,7 +181,7 @@ $detected_base = (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . $_SERVE
           <input type="checkbox" name="enable_fediverse" id="enable_fediverse" value="1" checked style="width:16px; height:16px; accent-color:var(--accent); cursor:pointer">
           <label for="enable_fediverse" style="margin:0; cursor:pointer; user-select:none; color:var(--text); font-size:0.9rem">Habilitar el Fediverso (ActivityPub)</label>
         </div>
-        <button type="submit" class="btn">Install BrisaCMS →</button>
+        <button type="submit" class="btn">Install KutBlog →</button>
       </form>
     <?php endif; ?>
   </div>

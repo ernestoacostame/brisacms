@@ -1,5 +1,5 @@
 <?php
-// BrisaCMS - Media Management & Metadata Storage
+// KutBlog - Media Management & Metadata Storage
 
 if (!defined('ROOT_PATH')) {
     define('ROOT_PATH', dirname(__DIR__));

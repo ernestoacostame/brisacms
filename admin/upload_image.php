@@ -1,5 +1,5 @@
 <?php
-// BrisaCMS - Image upload endpoint for editor
+// KutBlog - Image upload endpoint for editor
 require_once dirname(__DIR__) . '/core/config.php';
 require_once dirname(__DIR__) . '/core/auth.php';
 require_login();

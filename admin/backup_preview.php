@@ -1,5 +1,5 @@
 <?php
-// BrisaCMS - Backup Preview endpoint
+// KutBlog - Backup Preview endpoint
 require_once dirname(__DIR__) . '/core/config.php';
 require_once dirname(__DIR__) . '/core/auth.php';
 require_once dirname(__DIR__) . '/core/content.php';

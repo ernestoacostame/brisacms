@@ -1,6 +1,6 @@
 <?php
 /**
- * KutPod Plugin for BrisaCMS
+ * KutPod Plugin for KutBlog
  * Main Bootstrapper and Extension Manager
  */
 

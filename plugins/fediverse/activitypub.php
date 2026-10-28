@@ -1,5 +1,5 @@
 <?php
-// ActivityPub Engine for BrisaCMS Fediverse Plugin
+// ActivityPub Engine for KutBlog Fediverse Plugin
 
 if (!defined('ROOT_PATH')) {
     define('ROOT_PATH', dirname(dirname(__DIR__)));
@@ -253,7 +253,7 @@ function ap_make_actor_array(string $username): array {
         'id' => $url,
         'type' => 'Person',
         'preferredUsername' => $username,
-        'name' => !empty($config['fediverse_name']) ? $config['fediverse_name'] : ($config['site_title'] ?? 'BrisaCMS'),
+        'name' => !empty($config['fediverse_name']) ? $config['fediverse_name'] : ($config['site_title'] ?? 'KutBlog'),
         'summary' => !empty($config['fediverse_bio']) ? $config['fediverse_bio'] : ($config['tagline'] ?? ''),
         'manuallyApprovesFollowers' => false,
         'url' => ap_base_url(),
@@ -722,7 +722,7 @@ function ap_post_signed(string $url, string $body): void {
             "Content-Type: application/activity+json",
             "Accept: application/activity+json",
         ],
-        CURLOPT_USERAGENT => 'BrisaCMS/1.0 (+' . ap_base_url() . ')',
+        CURLOPT_USERAGENT => 'KutBlog/1.0 (+' . ap_base_url() . ')',
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => 20,
         CURLOPT_FAILONERROR => true,
@@ -807,7 +807,7 @@ function ap_fetch_actor(string $url): ?array {
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_HTTPHEADER => ['Accept: application/activity+json'],
-        CURLOPT_USERAGENT => 'BrisaCMS/1.0 (+' . ap_base_url() . ')',
+        CURLOPT_USERAGENT => 'KutBlog/1.0 (+' . ap_base_url() . ')',
         CURLOPT_TIMEOUT => 10,
     ]);
     $r = curl_exec($ch);
@@ -826,7 +826,7 @@ function ap_resolve_webfinger(string $acct): ?array {
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_HTTPHEADER => ['Accept: application/jrd+json, application/json'],
-        CURLOPT_USERAGENT => 'BrisaCMS/1.0 (+' . ap_base_url() . ')',
+        CURLOPT_USERAGENT => 'KutBlog/1.0 (+' . ap_base_url() . ')',
         CURLOPT_TIMEOUT => 10,
     ]);
     $r = curl_exec($ch);

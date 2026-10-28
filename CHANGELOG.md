@@ -33,7 +33,7 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.
   - Copia rápida con un clic de la URL del webhook y generador de tokens aleatorios seguros.
   - Opciones de drafting, diseño del reproductor, directorio y buscador.
 
-#### 🛠️ 2. Mejoras en el Núcleo de BrisaCMS
+#### 🛠️ 2. Mejoras en el Núcleo de KutBlog
 - **Motor de Temas (`core/theme.php`)**:
   - Inyección de ganchos en `render_theme()` para filtrado automático de contenido (`kutpod_filter_content`), inclusión de estilos en cabecera (`kutpod_theme_header`) y scripts interactivos en el pie (`kutpod_theme_footer`).
 - **Enrutamiento Principal (`index.php`)**:
@@ -48,7 +48,7 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.
 
 ### 📋 Guía de Instalación y Conexión con KutPod
 
-#### 1. En BrisaCMS:
+#### 1. En KutBlog:
 1. Ve a **Admin → Plugins → Configurar KutPod Studio**.
 2. Verifica que el modo de conexión esté en **Local (SQLite)** si KutPod reside en el mismo servidor (ruta predeterminada: `/home/elav/Developer/KutStudio/kutpod/storage/kutpod.db`), o selecciona **Remoto** e indica la URL pública.
 3. Haz clic en **"Sincronizar episodios ahora"** para importar todos los episodios existentes a tu blog.
@@ -57,10 +57,10 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.
 #### 2. En KutPod:
 1. Copia la extensión complementaria incluida en `plugins/kutpod/kutpod-extension/` hacia KutPod:
    ```bash
-   mkdir -p /tu_Carpeta/kutpod/plugins/brisacms
-   cp -r /tu_Carpeta/BrisaCMS/plugins/kutpod/kutpod-extension/* /tu_Carpeta/kutpod/plugins/brisacms/
+   mkdir -p /tu_Carpeta/kutpod/plugins/KutBlog
+   cp -r /tu_Carpeta/KutBlog/plugins/kutpod/kutpod-extension/* /tu_Carpeta/kutpod/plugins/KutBlog/
    ```
-2. Entra al panel de KutPod (**Admin → Plugins**), activa **BrisaCMS Webhook Publisher** y pega la URL del Webhook y el Token Secreto.
+2. Entra al panel de KutPod (**Admin → Plugins**), activa **KutBlog Webhook Publisher** y pega la URL del Webhook y el Token Secreto.
 3. En `/tu_Carpeta/kutpod/public/embed.php`, añade el receptor de `postMessage` antes del cierre `})();` para habilitar el salto de timestamps:
    ```javascript
    window.addEventListener('message', (event) => {
@@ -78,7 +78,7 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.
 #### 💡 ¿Cómo funciona la integración?
 
 - **Los audios y carátulas se quedan siempre en KutPod:**  
-  BrisaCMS nunca descarga ni almacena los archivos de audio; el reproductor simplemente transmite el streaming directamente desde KutPod.
+  KutBlog nunca descarga ni almacena los archivos de audio; el reproductor simplemente transmite el streaming directamente desde KutPod.
 
 - **Lo que se crea en el blog es una entrada de texto (artículo):**  
   Crea un archivo JSON en `content/articles/` con:
@@ -91,7 +91,7 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.
   Solo es necesario si ya tienes episodios publicados anteriormente en KutPod y quieres que aparezcan como borradores en el blog de una sola vez, sin copiarlos a mano.
 
 - **¿Y si solo quieres poner un episodio dentro de un post que escribes a mano?**  
-  No necesitas sincronizar nada. Al redactar cualquier artículo en BrisaCMS:
+  No necesitas sincronizar nada. Al redactar cualquier artículo en KutBlog:
   1. Pegas la URL del episodio (ej. `https://tupodcast.com/@mishow/mi-episodio`) en el texto o en el campo lateral **"🎙️ KutPod Podcast"**.
   2. Al guardar, el reproductor interactivo se inserta automáticamente en ese post puntual.
 

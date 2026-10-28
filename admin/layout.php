@@ -1,5 +1,5 @@
 <?php
-// BrisaCMS - Admin Layout
+// KutBlog - Admin Layout
 function admin_header(string $page_title = '', string $active = ''): void {
     $color = theme_color();
     $title = site_title();
@@ -434,7 +434,7 @@ body.scheme-light .floating-publish-btn {
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-logo">
     <div class="logo-text">
-      <div>Brisa<span>CMS</span></div>
+      <div>Kut<span>Blog</span></div>
       <small><?= htmlspecialchars(mb_strimwidth($title, 0, 22, '…')) ?></small>
     </div>
     <button class="sidebar-toggle" id="sidebar-toggle" title="<?= __("nav_collapse") ?>" aria-label="<?= __("nav_collapse") ?>">
@@ -552,7 +552,7 @@ body.scheme-light .floating-publish-btn {
 <script>
 // Run immediately — body already exists at this point
 (function() {
-  const COLLAPSED_KEY = 'brisa_sidebar_collapsed';
+  const COLLAPSED_KEY = 'kutblog_sidebar_collapsed';
 
   // Restore collapsed state before paint to avoid flicker
   if (localStorage.getItem(COLLAPSED_KEY) === '1') {

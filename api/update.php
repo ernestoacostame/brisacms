@@ -1,6 +1,6 @@
 <?php
 // ============================================================================
-// BrisaCMS · API endpoint para actualizaciones
+// KutBlog · API endpoint para actualizaciones
 // ============================================================================
 require_once dirname(__DIR__) . '/core/config.php';
 require_once dirname(__DIR__) . '/core/auth.php';

@@ -73,7 +73,7 @@ $instanceUrl = rtrim($cfg['instance_url'] ?: 'http://localhost:8000', '/');
     <div style="text-align: center; padding: 4rem 1rem; color: var(--muted, #64748b);">
       <div style="font-size: 3rem; margin-bottom: 1rem;">🎙️</div>
       <h3 style="font-size: 1.3rem; margin-bottom: 0.5rem;">No hay episodios sincronizados todavía</h3>
-      <p>Configura y sincroniza tus episodios desde el panel de administración de BrisaCMS.</p>
+      <p>Configura y sincroniza tus episodios desde el panel de administración de KutBlog.</p>
     </div>
   <?php else: ?>
     <div class="kutpod-grid" id="kp-episode-grid">

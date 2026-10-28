@@ -1,6 +1,6 @@
 <?php
 /**
- * KutPod Plugin - Webhook Endpoint for BrisaCMS
+ * KutPod Plugin - Webhook Endpoint for KutBlog
  * Receives real-time push events from KutPod when episodes are created, updated, or published
  */
 

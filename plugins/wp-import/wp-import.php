@@ -1,5 +1,5 @@
 <?php
-// WordPress Importer Plugin for BrisaCMS
+// WordPress Importer Plugin for KutBlog
 // Main plugin loader & functions
 
 if (!defined('ROOT_PATH')) {
@@ -49,7 +49,7 @@ function wp_download_image(string $src_url, string $base_url, array &$log): stri
         'timeout'          => 20,
         'follow_location'  => true,
         'ignore_errors'    => true,
-        'header'           => "User-Agent: BrisaCMS/1.0 (compatible)\r\n",
+        'header'           => "User-Agent: KutBlog/1.0 (compatible)\r\n",
     ]]);
     $data = @file_get_contents($src_url, false, $ctx);
 
@@ -248,7 +248,7 @@ function wp_import_download_image(string $url): ?string {
     $ctx  = stream_context_create(['http' => [
         'timeout'         => 15,
         'follow_location' => true,
-        'header'          => "User-Agent: BrisaCMS/1.0\r\n",
+        'header'          => "User-Agent: KutBlog/1.0\r\n",
     ]]);
     $data = @file_get_contents($url, false, $ctx);
     if ($data === false || strlen($data) < 100) return null;

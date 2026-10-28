@@ -1,5 +1,5 @@
 <?php
-// BrisaCMS - Content Manager (File-based, no DB)
+// KutBlog - Content Manager (File-based, no DB)
 require_once __DIR__ . '/markdown.php';
 require_once __DIR__ . '/auth.php';
 

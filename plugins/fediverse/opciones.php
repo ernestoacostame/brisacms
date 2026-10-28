@@ -1,5 +1,5 @@
 <?php
-// Opciones del Plugin de Fediverso para BrisaCMS
+// Opciones del Plugin de Fediverso para KutBlog
 
 if (!defined('CMS_NAME')) {
     exit;
@@ -103,7 +103,7 @@ $admin_mastodon_handle = $config['admin_mastodon_handle'] ?? '';
 $admin_mastodon_url = $config['mastodon_url'] ?? '';
 $avatar_url = $config['fediverse_avatar'] ?? '';
 $cover_url = $config['fediverse_cover'] ?? '';
-$disp_name = !empty($config['fediverse_name']) ? $config['fediverse_name'] : ($config['site_title'] ?? 'BrisaCMS');
+$disp_name = !empty($config['fediverse_name']) ? $config['fediverse_name'] : ($config['site_title'] ?? 'KutBlog');
 $bio = !empty($config['fediverse_bio']) ? $config['fediverse_bio'] : ($config['tagline'] ?? '');
 
 $followers = ap_q("SELECT * FROM ap_followers ORDER BY followed_at DESC");
@@ -163,7 +163,7 @@ $full_handle = "@" . $fed_username . "@" . $handle_domain;
 
           <div class="form-group">
             <label class="form-label">Nombre a mostrar (Display Name)</label>
-            <input type="text" name="fediverse_name" value="<?= htmlspecialchars($config['fediverse_name'] ?? '') ?>" placeholder="<?= htmlspecialchars($config['site_title'] ?? 'BrisaCMS') ?>" oninput="document.getElementById('profile-name-text').innerText = this.value.trim() || <?= json_encode($config['site_title'] ?? 'BrisaCMS') ?>;">
+            <input type="text" name="fediverse_name" value="<?= htmlspecialchars($config['fediverse_name'] ?? '') ?>" placeholder="<?= htmlspecialchars($config['site_title'] ?? 'KutBlog') ?>" oninput="document.getElementById('profile-name-text').innerText = this.value.trim() || <?= json_encode($config['site_title'] ?? 'KutBlog') ?>;">
             <div class="panel-hint" style="margin-top:0.35rem">El nombre público de tu perfil. Por defecto usa el título del sitio.</div>
           </div>
 

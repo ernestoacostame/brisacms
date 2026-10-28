@@ -1,14 +1,14 @@
-# BrisaCMS
+# KutBlog
 
-**BrisaCMS** es un gestor de contenidos ligero, rápido y sin base de datos, escrito en PHP puro. Almacena todo el contenido en archivos JSON, no requiere MySQL ni PostgreSQL, y es fácil de instalar en cualquier servidor con PHP 8.0+.
+**KutBlog** es un gestor de contenidos ligero, rápido y sin base de datos, escrito en PHP puro. Almacena todo el contenido en archivos JSON, no requiere MySQL ni PostgreSQL, y es fácil de instalar en cualquier servidor con PHP 8.0+.
 
-<img width="2440" height="1208" alt="brisa_dashboard" src="https://github.com/user-attachments/assets/40a75b05-450d-47ff-aeed-628c528a2543" />
+<img width="2440" height="1208" alt="kutblog_dashboard" src="https://github.com/user-attachments/assets/40a75b05-450d-47ff-aeed-628c528a2543" />
 
-<img width="2419" height="1207" alt="brisa_editor" src="https://github.com/user-attachments/assets/da5405ec-fc92-4842-9ac2-b3df1417ad1f" />
+<img width="2419" height="1207" alt="kutblog_editor" src="https://github.com/user-attachments/assets/da5405ec-fc92-4842-9ac2-b3df1417ad1f" />
 
-<img width="2426" height="1208" alt="brisa_default" src="https://github.com/user-attachments/assets/f49b4a42-4acd-4250-831e-ebe3242849cf" />
+<img width="2426" height="1208" alt="kutblog_default" src="https://github.com/user-attachments/assets/f49b4a42-4acd-4250-831e-ebe3242849cf" />
 
-<img width="2426" height="1210" alt="brisa_systeminside" src="https://github.com/user-attachments/assets/d2b72f74-6c2f-4026-9bc3-eb7b7a8399b4" />
+<img width="2426" height="1210" alt="kutblog_systeminside" src="https://github.com/user-attachments/assets/d2b72f74-6c2f-4026-9bc3-eb7b7a8399b4" />
 
 ---
 
@@ -50,7 +50,7 @@
 
 ### 1. Subir los archivos
 
-Sube todos los archivos de BrisaCMS al directorio raíz de tu servidor web:
+Sube todos los archivos de KutBlog al directorio raíz de tu servidor web:
 
 ```
 /var/www/html/misitio/
@@ -309,7 +309,7 @@ En tu WordPress: **Herramientas → Exportar → Todo el contenido → Descargar
 
 ### Opción "Descargar imágenes automáticamente"
 
-Con esta opción activa, BrisaCMS durante la importación:
+Con esta opción activa, KutBlog durante la importación:
 1. Detecta todas las `<img src="...">` del contenido
 2. Descarga cada imagen preservando la estructura de carpetas de WP (`/media/2025/02/imagen.jpg`)
 3. Reescribe las URLs en el contenido para apuntar a tu dominio
@@ -394,7 +394,7 @@ Flujo completo:
 4. En el editor del artículo, pega esa URL en el campo **"URL de Mastodon"** del panel lateral
 5. Guarda
 
-Los comentarios son las respuestas al toot. BrisaCMS carga el hilo completo (incluyendo respuestas a respuestas) con indentación visual. Caché de 3 minutos.
+Los comentarios son las respuestas al toot. KutBlog carga el hilo completo (incluyendo respuestas a respuestas) con indentación visual. Caché de 3 minutos.
 
 Para borrar la caché y forzar recarga:
 
@@ -459,7 +459,7 @@ media/        ← imágenes
 config.json   ← configuración y credenciales
 ```
 
-Los archivos PHP del CMS se reinstalan desde cero descargando BrisaCMS de nuevo.
+Los archivos PHP del CMS se reinstalan desde cero descargando KutBlog de nuevo.
 
 ---
 
@@ -684,7 +684,7 @@ Cada artículo se guarda en `content/articles/el-slug.json`. Puedes editar los a
     "excerpt": "Un resumen del artículo.",
     "status": "published",
     "categories": ["General"],
-    "tags": ["brisacms", "blog"],
+    "tags": ["kutblog", "blog"],
     "featured_image": "https://tudominio.com/media/2025/04/portada.jpg",
     "mastodon_url": "",
     "content_format": "html",
@@ -791,4 +791,4 @@ goaccess /var/log/nginx/tudominio.access.log \
 
 ---
 
-*BrisaCMS — Ligero como la brisa.*
+*KutBlog — Ligero, rápido y sin base de datos.*

@@ -1,6 +1,6 @@
 <?php
 /**
- * KutPod Plugin - Settings Panel for BrisaCMS Admin
+ * KutPod Plugin - Settings Panel for KutBlog Admin
  */
 
 if (!defined('CMS_NAME') && !defined('ROOT_PATH')) {
@@ -58,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Estadísticas de episodios sincronizados en BrisaCMS
+// Estadísticas de episodios sincronizados en KutBlog
 $allArticles = list_content('articles', false, 1, 9999)['items'] ?? [];
 $syncedEpisodesCount = 0;
 foreach ($allArticles as $art) {
@@ -244,14 +244,14 @@ if ($isLocalDbFound) {
         <div>
           <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
             <input type="checkbox" name="categorize_by_show" value="1" <?= !empty($cfg['categorize_by_show']) ? 'checked' : '' ?>>
-            <span><strong>Categorizar por nombre de Podcast:</strong> Asigna automáticamente el nombre del show (ej. <em>"SystemInside Podcast"</em> o <em>"FLASH"</em>) como su categoría en BrisaCMS.</span>
+            <span><strong>Categorizar por nombre de Podcast:</strong> Asigna automáticamente el nombre del show (ej. <em>"SystemInside Podcast"</em> o <em>"FLASH"</em>) como su categoría en KutBlog.</span>
           </label>
         </div>
 
         <div>
           <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
             <input type="checkbox" name="auto_update_notes" value="1" <?= !empty($cfg['auto_update_notes']) ? 'checked' : '' ?>>
-            <span><strong>Sincronizar actualizaciones de notas:</strong> Si editas la descripción o notas en KutPod, actualizar automáticamente el contenido en BrisaCMS.</span>
+            <span><strong>Sincronizar actualizaciones de notas:</strong> Si editas la descripción o notas en KutPod, actualizar automáticamente el contenido en KutBlog.</span>
           </label>
         </div>
 

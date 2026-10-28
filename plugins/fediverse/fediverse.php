@@ -1,5 +1,5 @@
 <?php
-// Fediverse plugin for BrisaCMS
+// Fediverse plugin for KutBlog
 // This file initializes the ActivityPub system when loaded.
 
 if (!in_array('sqlite', PDO::getAvailableDrivers())) {

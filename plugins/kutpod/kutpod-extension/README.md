@@ -1,26 +1,26 @@
-# Complemento KutPod ➔ BrisaCMS
+# Complemento KutPod ➔ KutBlog
 
-Este directorio contiene el complemento para instalar en **KutPod** (`/home/elav/Developer/KutStudio/kutpod/plugins/brisacms/`).
+Este directorio contiene el complemento para instalar en **KutPod** (`/ruta_tu_carpeta/kutpod/plugins/KutBlog/`).
 
 ## 1. Instalación en KutPod
 
 Copia esta carpeta al directorio de plugins de KutPod:
 
 ```bash
-mkdir -p /home/elav/Developer/KutStudio/kutpod/plugins/brisacms
-cp brisacms.php opciones.php plugin.json /home/elav/Developer/KutStudio/kutpod/plugins/brisacms/
+mkdir -p /ruta_tu_carpeta/kutpod/plugins/KutBlog
+cp kutblog.php opciones.php plugin.json /ruta_tu_carpeta/kutpod/plugins/KutBlog/
 ```
 
-Luego, en el panel de administración de KutPod ve a **Plugins** y activa **BrisaCMS Webhook Publisher**. En sus opciones, pega la URL del Webhook generada en BrisaCMS y el Token Secreto.
+Luego, en el panel de administración de KutPod ve a **Plugins** y activa **KutBlog Webhook Publisher**. En sus opciones, pega la URL del Webhook generada en KutBlog y el Token Secreto.
 
 ---
 
 ## 2. Timestamps Interactivos en el Reproductor Embebido (`embed.php`)
 
-Para que al hacer clic en un minuto (ej. `04:15`) en un post de BrisaCMS el reproductor de KutPod salte directamente al audio sin recargar, añade estas líneas antes del cierre `})();` en `/home/elav/Developer/KutStudio/kutpod/public/embed.php`:
+Para que al hacer clic en un minuto (ej. `04:15`) en un post de KutBlog el reproductor de KutPod salte directamente al audio sin recargar, añade estas líneas antes del cierre `})();` en `/ruta_tu_carpeta/kutpod/public/embed.php`:
 
 ```javascript
-// Soporte de control remoto vía postMessage desde BrisaCMS
+// Soporte de control remoto vía postMessage desde KutBlog
 window.addEventListener('message', (event) => {
   if (!event.data || typeof event.data !== 'object') return;
   if (event.data.action === 'seek') {

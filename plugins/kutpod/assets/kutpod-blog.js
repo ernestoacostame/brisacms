@@ -1,5 +1,5 @@
 /**
- * KutPod Plugin - Interactive Reader JS for BrisaCMS
+ * KutPod Plugin - Interactive Reader JS for KutBlog
  * Enables clickable timestamps, chapter seeking, and postMessage control
  */
 

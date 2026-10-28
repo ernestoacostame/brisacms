@@ -1,8 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   BrisaCMS — Editor JavaScript (extracted, consolidated, bugs fixed)
+   KutBlog — Editor JavaScript (extracted, consolidated, bugs fixed)
    ═══════════════════════════════════════════════════════════════════════════
    
-   Depends on window.BRISA = { baseUrl, csrf, type, slug, isNew }
+   Depends on window.KUTBLOG = { baseUrl, csrf, type, slug, isNew }
    being set before this file loads.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -10,7 +10,7 @@
   'use strict';
 
   // ── Config from PHP ──────────────────────────────────────────────────────
-  const BRISA = window.BRISA || {};
+  const KUTBLOG = window.KUTBLOG || window.BRISA || {};
 
   // ── DOM References ───────────────────────────────────────────────────────
   const rawEditor    = document.getElementById('raw-editor');
@@ -23,7 +23,7 @@
 
   // ── State ────────────────────────────────────────────────────────────────
   let mode = 'visual'; // 'visual' | 'raw'
-  let slugManuallySet = !BRISA.isNew;
+  let slugManuallySet = !KUTBLOG.isNew;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // CONTENT SYNC
@@ -71,10 +71,10 @@
   // AUTOSAVE
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const AUTOSAVE_KEY = 'brisa_autosave_' + BRISA.type + '_' + (BRISA.slug || 'new');
-  const AUTOSAVE_URL = BRISA.baseUrl + '/admin/autosave.php';
+  const AUTOSAVE_KEY = 'kutblog_autosave_' + KUTBLOG.type + '_' + (KUTBLOG.slug || 'new');
+  const AUTOSAVE_URL = KUTBLOG.baseUrl + '/admin/autosave.php';
 
-  let autosaveSlug    = BRISA.slug;
+  let autosaveSlug    = KUTBLOG.slug;
   let lastSavedHash   = null;
   let serverSyncTimer = null;
 
@@ -141,8 +141,8 @@
 
     try {
       const fd = new FormData();
-      fd.append('csrf', BRISA.csrf);
-      fd.append('type', BRISA.type);
+      fd.append('csrf', KUTBLOG.csrf);
+      fd.append('type', KUTBLOG.type);
       fd.append('slug', autosaveSlug);
       fd.append('title', data.title);
       fd.append('content', data.content);
@@ -320,7 +320,7 @@
   };
 
   window.insertLink = function () {
-    const url = prompt(BRISA.i18n?.promptLinkUrl || 'URL del enlace:');
+    const url = prompt(KUTBLOG.i18n?.promptLinkUrl || 'URL del enlace:');
     if (url) {
       editorEl.focus();
       document.execCommand('createLink', false, url);
@@ -625,10 +625,10 @@
 
       const fd = new FormData();
       fd.append('upload', file);
-      fd.append('csrf', BRISA.csrf);
+      fd.append('csrf', KUTBLOG.csrf);
 
       try {
-        const res  = await fetch(BRISA.baseUrl + '/admin/upload_media.php', { method: 'POST', body: fd });
+        const res  = await fetch(KUTBLOG.baseUrl + '/admin/upload_media.php', { method: 'POST', body: fd });
         const data = await res.json();
         if (data.url) {
           featInput.value = data.url;
@@ -649,9 +649,9 @@
   // EDITOR FONT SIZE
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const FONT_SIZE_KEY = 'brisa_editor_font_size';
+  const FONT_SIZE_KEY = 'kutblog_editor_font_size';
   const FONT_MIN = 12, FONT_MAX = 28, FONT_STEP = 1;
-  let editorFontSize = parseInt(localStorage.getItem(FONT_SIZE_KEY) || '16', 10);
+  let editorFontSize = parseInt(localStorage.getItem(FONT_SIZE_KEY) || localStorage.getItem('brisa_editor_font_size') || '16', 10);
 
   function applyEditorFontSize(size) {
     editorFontSize = Math.min(FONT_MAX, Math.max(FONT_MIN, size));
@@ -681,7 +681,7 @@
   // ═══════════════════════════════════════════════════════════════════════════
 
   window.openPreview = function () {
-    const adminBase = BRISA.baseUrl + '/admin';
+    const adminBase = KUTBLOG.baseUrl + '/admin';
 
     let content = getCurrentContent();
     const title   = document.getElementById('post-title').value || '(Sin título)';
@@ -689,11 +689,11 @@
     const status  = document.getElementById('status-select')?.value || 'draft';
 
     // If saved post exists, use proper preview
-    if (BRISA.slug) {
+    if (KUTBLOG.slug) {
       const url =
         adminBase +
-        '/preview.php?type=' + encodeURIComponent(BRISA.type) +
-        '&slug=' + encodeURIComponent(BRISA.slug) +
+        '/preview.php?type=' + encodeURIComponent(KUTBLOG.type) +
+        '&slug=' + encodeURIComponent(KUTBLOG.slug) +
         '&t=' + Date.now();
       window.open(url, '_blank');
       return;
@@ -828,9 +828,9 @@ h1{font-family:'Roboto Condensed',sans-serif;font-size:clamp(1.5rem,4vw,2.2rem);
     async function uploadImage(file) {
       const fd = new FormData();
       fd.append('upload', file);
-      fd.append('csrf', BRISA.csrf);
+      fd.append('csrf', KUTBLOG.csrf);
       try {
-        const res = await fetch(BRISA.baseUrl + '/admin/upload_media.php', {
+        const res = await fetch(KUTBLOG.baseUrl + '/admin/upload_media.php', {
           method: 'POST',
           body: fd,
         });
@@ -1120,11 +1120,11 @@ h1{font-family:'Roboto Condensed',sans-serif;font-size:clamp(1.5rem,4vw,2.2rem);
     }
 
     fetch(
-      BRISA.baseUrl +
+      KUTBLOG.baseUrl +
         '/admin/backup_preview.php?type=' + encodeURIComponent(type) +
         '&slug=' + encodeURIComponent(slug) +
         '&timestamp=' + encodeURIComponent(timestamp) +
-        '&csrf=' + encodeURIComponent(BRISA.csrf)
+        '&csrf=' + encodeURIComponent(KUTBLOG.csrf)
     )
       .then((r) => r.json())
       .then((data) => {
@@ -1195,7 +1195,7 @@ h1{font-family:'Roboto Condensed',sans-serif;font-size:clamp(1.5rem,4vw,2.2rem);
 
     function updateFloatingLabel() {
       const isPublished = statusSelect ? statusSelect.value === 'published' : false;
-      const label       = isPublished ? (BRISA.i18n?.editorUpdate || 'Actualizar') : (BRISA.i18n?.editorPublish || 'Publicar');
+      const label       = isPublished ? (KUTBLOG.i18n?.editorUpdate || 'Actualizar') : (KUTBLOG.i18n?.editorPublish || 'Publicar');
       const el = document.getElementById('floating-publish-label');
       if (el) el.textContent = label;
     }

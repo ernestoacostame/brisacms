@@ -1,7 +1,7 @@
 <?php
-// BrisaCMS - Configuration
+// KutBlog - Configuration
 define('CMS_VERSION', '2.1.7');
-define('CMS_NAME', 'BrisaCMS');
+define('CMS_NAME', 'KutBlog');
 define('ROOT_PATH', dirname(__DIR__));
 define('CONTENT_PATH', ROOT_PATH . '/content');
 define('THEMES_PATH', ROOT_PATH . '/themes');

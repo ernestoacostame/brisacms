@@ -1,5 +1,5 @@
 <?php
-// BrisaCMS - Image Caching and Optimization Engine
+// KutBlog - Image Caching and Optimization Engine
 
 if (!defined('ROOT_PATH')) {
     define('ROOT_PATH', dirname(__DIR__));

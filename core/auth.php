@@ -1,5 +1,5 @@
 <?php
-// BrisaCMS - Authentication, User Roles & Security Engine
+// KutBlog - Authentication, User Roles & Security Engine
 require_once __DIR__ . '/users.php';
 
 function session_start_secure(): void {

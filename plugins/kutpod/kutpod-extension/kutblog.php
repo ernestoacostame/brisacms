@@ -1,7 +1,7 @@
 <?php
 /**
- * KutPod Plugin - BrisaCMS Auto-Publisher
- * To be installed in KutPod: plugins/brisacms/brisacms.php
+ * KutPod Plugin - KutBlog Auto-Publisher
+ * To be installed in KutPod: plugins/KutBlog/kutblog.php
  */
 
 if (!defined('KUTPOD_VERSION')) {
@@ -9,20 +9,20 @@ if (!defined('KUTPOD_VERSION')) {
 }
 
 // ── Hooks ───────────────────────────────────────────────────────────────────
-kp_add_action('episode_published', 'kp_brisacms_on_published', 10, 5);
-kp_add_action('episode_saved', 'kp_brisacms_on_saved', 10, 2);
-kp_add_action('episode_deleted', 'kp_brisacms_on_deleted', 10, 1);
+kp_add_action('episode_published', 'kp_kutblog_on_published', 10, 5);
+kp_add_action('episode_saved', 'kp_kutblog_on_saved', 10, 2);
+kp_add_action('episode_deleted', 'kp_kutblog_on_deleted', 10, 1);
 
-function kp_brisacms_is_configured(): bool {
-    $url = kp_setting('brisacms_webhook_url', '');
+function kp_kutblog_is_configured(): bool {
+    $url = kp_setting('kutblog_webhook_url', '');
     return !empty($url);
 }
 
-function kp_brisacms_send_webhook(string $event, array $episodeData): void {
-    if (!kp_brisacms_is_configured()) return;
+function kp_kutblog_send_webhook(string $event, array $episodeData): void {
+    if (!kp_kutblog_is_configured()) return;
 
-    $url = kp_setting('brisacms_webhook_url', '');
-    $secret = kp_setting('brisacms_secret', '');
+    $url = kp_setting('kutblog_webhook_url', '');
+    $secret = kp_setting('kutblog_secret', '');
 
     $payload = json_encode([
         'event'     => $event,
@@ -32,7 +32,7 @@ function kp_brisacms_send_webhook(string $event, array $episodeData): void {
 
     $headers = [
         'Content-Type: application/json',
-        'User-Agent: KutPod-BrisaCMS-Publisher/1.0'
+        'User-Agent: KutPod-KutBlog-Publisher/1.0'
     ];
     if ($secret !== '') {
         $headers[] = 'X-KutPod-Secret: ' . $secret;
@@ -52,7 +52,7 @@ function kp_brisacms_send_webhook(string $event, array $episodeData): void {
     @file_get_contents($url, false, $ctx);
 }
 
-function kp_brisacms_on_published(int $episodeId, int $podcastId, string $title, string $description, string $episodeUrl): void {
+function kp_kutblog_on_published(int $episodeId, int $podcastId, string $title, string $description, string $episodeUrl): void {
     $ep = kp_one("SELECT * FROM episodes WHERE id = ?", [$episodeId]);
     $p = kp_one("SELECT * FROM podcasts WHERE id = ?", [$podcastId]);
     if (!$ep || !$p) return;
@@ -77,10 +77,10 @@ function kp_brisacms_on_published(int $episodeId, int $podcastId, string $title,
         'chapters_url'  => $ep['chapters_url'] ?? ''
     ];
 
-    kp_brisacms_send_webhook('episode.published', $data);
+    kp_kutblog_send_webhook('episode.published', $data);
 }
 
-function kp_brisacms_on_saved(int $episodeId, array $postData): void {
+function kp_kutblog_on_saved(int $episodeId, array $postData): void {
     $ep = kp_one("SELECT * FROM episodes WHERE id = ?", [$episodeId]);
     if (!$ep || $ep['status'] !== 'published') return;
     $p = kp_one("SELECT * FROM podcasts WHERE id = ?", [$ep['podcast_id']]);
@@ -106,12 +106,12 @@ function kp_brisacms_on_saved(int $episodeId, array $postData): void {
         'chapters_url'  => $ep['chapters_url'] ?? ''
     ];
 
-    kp_brisacms_send_webhook('episode.updated', $data);
+    kp_kutblog_send_webhook('episode.updated', $data);
 }
 
-function kp_brisacms_on_deleted(array $ep): void {
+function kp_kutblog_on_deleted(array $ep): void {
     if (empty($ep['slug'])) return;
-    kp_brisacms_send_webhook('episode.deleted', [
+    kp_kutblog_send_webhook('episode.deleted', [
         'id'   => $ep['id'] ?? 0,
         'slug' => $ep['slug']
     ]);

@@ -1,5 +1,5 @@
 # =============================================================================
-#  BrisaCMS — Ejemplo de configuración Nginx
+#  KutBlog — Ejemplo de configuración Nginx
 #  Renombra este archivo y ajusta los valores marcados con <CAMBIAR>
 #
 #  Uso:
@@ -52,7 +52,7 @@ server {
     ssl_protocols       TLSv1.2 TLSv1.3;
     ssl_prefer_server_ciphers on;
 
-    root  /var/www/html/misitio;    # <CAMBIAR> ruta donde están los archivos de BrisaCMS
+    root  /var/www/html/misitio;    # <CAMBIAR> ruta donde están los archivos de KutBlog
     index index.php index.html;
 
     access_log /var/log/nginx/tudominio.access.log;  # <CAMBIAR>
@@ -155,7 +155,7 @@ server {
         allow all;
     }
 
-    # ── Router de BrisaCMS ────────────────────────────────────────────────
+    # ── Router de KutBlog ────────────────────────────────────────────────
     # RSS, sitemap, api y todo lo demás se gestiona desde index.php / .htaccess
     location / {
         try_files $uri $uri/ /index.php?$uri&$args;

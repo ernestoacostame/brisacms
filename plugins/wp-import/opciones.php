@@ -1,5 +1,5 @@
 <?php
-// Opciones del Plugin Importador de WordPress para BrisaCMS
+// Opciones del Plugin Importador de WordPress para KutBlog
 
 if (!defined('CMS_NAME') && !defined('ROOT_PATH')) {
     exit;
@@ -62,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem; margin-bottom:1.5rem">
     <div>
       <h2 style="font-size:1.4rem; font-weight:700; margin:0 0 0.25rem; color:var(--text)">Importador de WordPress</h2>
-      <p style="font-size:0.88rem; color:var(--text2); margin:0">Herramientas para migrar tu contenido y descargar imágenes hacia BrisaCMS.</p>
+      <p style="font-size:0.88rem; color:var(--text2); margin:0">Herramientas para migrar tu contenido y descargar imágenes hacia KutBlog.</p>
     </div>
     
     <!-- Tab selector -->
@@ -183,7 +183,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <div class="card-header"><span class="card-title">Descargar imágenes externas a /media/</span></div>
       <div class="card-body">
         <p style="color:var(--text2); font-size:0.9rem; margin-bottom:1rem">
-          Escanea todos los artículos y páginas existentes de BrisaCMS, descarga a <code style="background:var(--bg); padding:1px 6px; border-radius:4px">/media/</code> las imágenes que aún apunten a dominios externos y reescribe automáticamente las URLs locales.
+          Escanea todos los artículos y páginas existentes de KutBlog, descarga a <code style="background:var(--bg); padding:1px 6px; border-radius:4px">/media/</code> las imágenes que aún apunten a dominios externos y reescribe automáticamente las URLs locales.
         </p>
         <p style="color:var(--text2); font-size:0.85rem; margin-bottom:1.25rem">
           Ideal si importaste un archivo XML desactivando la opción de descarga automática o si migraste contenido externamente.

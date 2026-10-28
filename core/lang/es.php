@@ -1,5 +1,5 @@
 <?php
-// BrisaCMS - Spanish translations / Traducciones en español
+// KutBlog - Spanish translations / Traducciones en español
 return [
 
     // ── General ──────────────────────────────────────────────────────────
@@ -257,7 +257,7 @@ return [
     'install_username'  => 'Usuario administrador',
     'install_password'  => 'Contraseña',
     'install_confirm_pass'=> 'Confirmar contraseña',
-    'install_btn'       => 'Instalar BrisaCMS →',
+    'install_btn'       => 'Instalar KutBlog →',
     'install_done_title'=> '¡Instalación completa!',
     'install_done_text' => 'Tu sitio está listo. Ve al panel de administración para empezar a publicar.',
     'install_go_admin'  => 'Ir al panel de administración →',
@@ -274,7 +274,7 @@ return [
     // ── Updates / Actualizaciones ──────────────────────────────────────────
     'nav_updates'                  => 'Actualizaciones',
     'update_title'                 => 'Actualizaciones',
-    'update_sub'                   => 'Mantén BrisaCMS al día · actualización con un click · rollback instantáneo',
+    'update_sub'                   => 'Mantén KutBlog al día · actualización con un click · rollback instantáneo',
     'update_installed_version'     => 'Versión instalada',
     'update_current_compilation'   => 'Compilación actual',
     'update_github_token'          => 'Token GitHub',
@@ -299,7 +299,7 @@ return [
     'update_token_hint'            => 'Se requiere un Token de Acceso Personal para poder consultar los releases del repositorio en GitHub.',
     'update_token_create_link'     => 'Crear token en GitHub ↗',
     'update_revert_title'          => 'Revertir actualización',
-    'update_revert_subtitle'       => 'Restaura una versión previamente guardada de BrisaCMS. Tus artículos, páginas y configuración no se verán afectados.',
+    'update_revert_subtitle'       => 'Restaura una versión previamente guardada de KutBlog. Tus artículos, páginas y configuración no se verán afectados.',
     'update_select_backup'         => 'Seleccionar copia de seguridad:',
     'update_revert_btn'            => 'Revertir a la versión seleccionada',
     'update_history_title'         => 'Historial de actualizaciones',

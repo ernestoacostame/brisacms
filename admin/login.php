@@ -147,7 +147,7 @@ $rgb = hexdec(substr($c,1,2)).','.hexdec(substr($c,3,2)).','.hexdec(substr($c,5,
 <body>
 <div class="wrap">
   <div class="logo">
-    <h1>Brisa<span>CMS</span></h1>
+    <h1>Kut<span>Blog</span></h1>
     <p><?= $step === '2fa' ? 'Verificación de dos pasos' : __("login_title") ?></p>
   </div>
   <div class="card">
