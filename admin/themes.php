@@ -30,6 +30,14 @@ admin_header(__("themes_title"), 'themes');
             <div style="height:5px;background:#2a2a35;border-radius:4px;width:80%;margin-bottom:4px"></div>
             <div style="height:5px;background:#2a2a35;border-radius:4px;width:70%"></div>
           </div>
+          <?php elseif ($key === 'minimal'): ?>
+          <div style="width:85%;background:var(--surface,#fff);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.08);padding:8px;display:flex;flex-direction:column;gap:6px;border:1px solid var(--border)">
+            <div style="height:48px;background:linear-gradient(135deg,rgba(99,102,241,0.25),rgba(15,23,42,0.1));border-radius:6px;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center">
+              <span style="font-size:0.65rem;color:var(--text-muted);font-weight:700">🖼️ THUMB</span>
+            </div>
+            <div style="height:6px;background:var(--text);border-radius:3px;width:70%"></div>
+            <div style="height:4px;background:var(--muted);border-radius:2px;width:85%"></div>
+          </div>
           <?php else: ?>
           <div style="color:var(--muted);font-size:0.85rem"><?= htmlspecialchars($theme['label'] ?? $key) ?></div>
           <?php endif; ?>
