@@ -123,12 +123,10 @@ function kutpod_parse_episode_url(string $url): ?array {
             $episodeSlug = $m[2];
         }
         // Episodio público con show: @show/episodes/ep o @show/ep o shows/show/ep
-        elseif (preg_match('#^(?:shows/|@)?([a-z0-9\-]+)/(?:episodes/)?([a-z0-9\-]+)#i', $path, $m)) {
-            $ignored = ['episodes', 'admin', 'api', 'install', 'p', 'site.php', 'index.php', 'feed', 'users', 'r'];
+        elseif (preg_match('#^(?:shows/|@)([a-z0-9\-]+)/(?:episodes/)?([a-z0-9\-]+)#i', $path, $m)) {
+            $ignored = ['episodes', 'admin', 'api', 'install', 'p', 'site.php', 'index.php', 'feed', 'users', 'r', 'media', 'uploads', 'assets', 'themes', 'content', 'category', 'tag', 'article', 'articles', 'page', 'pages'];
             if (!in_array(strtolower($m[1]), $ignored)) {
                 $podcastSlug = $m[1];
-                $episodeSlug = $m[2];
-            } elseif (strtolower($m[1]) === 'episodes') {
                 $episodeSlug = $m[2];
             }
         }
@@ -343,7 +341,13 @@ function kutpod_filter_content(string $content, array $post): string {
         }
         // Buscar cualquier URL de KutPod en el texto
         elseif (preg_match_all('#https?://[^\s"\'<>()]+#i', $content, $allUrls)) {
+            $instHost = parse_url($cfg['instance_url'] ?? '', PHP_URL_HOST);
             foreach ($allUrls[0] as $u) {
+                $uHost = parse_url($u, PHP_URL_HOST);
+                // Solo analizar si la URL coincide con la instancia de KutPod o contiene 'kutpod' / 'op3.dev'
+                if ($instHost && strcasecmp($uHost ?? '', $instHost) !== 0 && !str_contains($u, 'kutpod') && !str_contains($u, 'op3.dev')) {
+                    continue;
+                }
                 $pu = kutpod_parse_episode_url($u);
                 if ($pu) {
                     $parsed = $pu;

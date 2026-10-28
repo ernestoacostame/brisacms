@@ -28,6 +28,8 @@ function cms_update_check(): ?array {
       'X-GitHub-Api-Version: 2022-11-28',
     ],
     CURLOPT_USERAGENT => 'KutBlog/' . CMS_VERSION,
+    CURLOPT_FOLLOWLOCATION => true,
+    CURLOPT_MAXREDIRS => 5,
     CURLOPT_TIMEOUT => 15,
   ]);
   $resp = curl_exec($ch);
