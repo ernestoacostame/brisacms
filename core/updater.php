@@ -4,7 +4,7 @@
 // ============================================================================
 require_once __DIR__ . '/config.php';
 
-define('CMS_UPDATE_SERVER', 'https://kutstudio.com/updates/');
+define('CMS_UPDATE_SERVER', 'https://kutstudio.org/updates/');
 define('CMS_UPDATE_REPO', 'ernestoacostame/KutBlog');
 define('CMS_UPDATE_SUBDIR', ''); // KutBlog root is the zip root folder
 
