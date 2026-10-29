@@ -19,6 +19,7 @@
           </svg>
           <span>RSS</span>
         </a>
+        <a href="<?= $base ?>/admin" class="footer-admin" title="Panel de Administración">Admin</a>
       </nav>
       <div class="footer-copy">
         <?= htmlspecialchars($config['footer_text'] ?? ('© ' . date('Y') . ' ' . $site_title . ' · Impulsado por KutBlog')) ?>

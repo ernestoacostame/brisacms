@@ -13,6 +13,7 @@
       <a href="<?= $base ?>/rss.xml" class="rss-link" title="RSS Feed" aria-label="RSS Feed">
         <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><path d="M4 11a9 9 0 0 1 9 9"></path><path d="M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1"></circle></svg>RSS
       </a>
+      <a href="<?= $base ?>/admin" class="admin-link" title="Panel de Administración">Admin</a>
     </nav>
     <div class="footer-text">
       <?= htmlspecialchars($config['footer_text'] ?? ('© ' . date('Y') . ' ' . $site_title . ' · Powered by KutBlog')) ?>

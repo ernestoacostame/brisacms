@@ -148,6 +148,8 @@ if ($mastodon_url): ?>
         <?php foreach ($nav_pages['items'] as $np): ?>
         <a href="<?= $base ?>/page/<?= htmlspecialchars($np['slug']) ?>" class="mobile-nav-item"><?= htmlspecialchars($np['title']) ?></a>
         <?php endforeach; ?>
+        <a href="<?= $base ?>/rss.xml" class="mobile-nav-item">RSS Feed</a>
+        <a href="<?= $base ?>/admin" class="mobile-nav-item">Admin</a>
       </nav>
     </div>
   </div>

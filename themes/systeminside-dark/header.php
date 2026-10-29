@@ -133,6 +133,8 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
     <?php require_once ROOT_PATH . '/core/content.php'; $nav_pages = list_content('pages', true, 1, 20); foreach ($nav_pages['items'] as $np): ?>
     <a href="<?= $base ?>/page/<?= htmlspecialchars($np['slug']) ?>"><?= htmlspecialchars($np['title']) ?></a>
     <?php endforeach; ?>
+    <a href="<?= $base ?>/rss.xml" class="nav-rss" title="Feed RSS">RSS</a>
+    <a href="<?= $base ?>/admin" class="nav-admin" title="Panel de Administración">Admin</a>
   </div>
 </nav>
 <div class="site-wrap">

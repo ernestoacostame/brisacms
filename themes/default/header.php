@@ -231,6 +231,8 @@ body { background: var(--bg); color: var(--text); font-family: var(--font-body);
     ?>
     <a href="<?= $base ?>/page/<?= htmlspecialchars($np['slug']) ?>"><?= htmlspecialchars($np['title']) ?></a>
     <?php endforeach; ?>
+    <a href="<?= $base ?>/rss.xml" class="nav-rss" title="Feed RSS">RSS</a>
+    <a href="<?= $base ?>/admin" class="nav-admin" title="Panel de Administración">Admin</a>
   </div>
 </nav>
 
