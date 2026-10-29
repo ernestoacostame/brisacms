@@ -1,25 +1,33 @@
 #!/usr/bin/env bash
 # ============================================================================
-# KutBlog · Release Script
+# KutBlog · Release Script (Compatible con Submódulos y Repositorios Standalone)
 # ============================================================================
 # Uso:
-#   ./release.sh 1.1.0              → release con notas vacías
-#   ./release.sh 1.1.0 "Changelog"  → release con notas
-#   ./release.sh patch               → auto-bump patch (1.0.0 → 1.0.1)
-#   ./release.sh minor               → auto-bump minor (1.0.0 → 1.1.0)
-#   ./release.sh major               → auto-bump major (1.0.0 → 2.0.0)
+#   ./release.sh 2.1.12              → release con notas vacías
+#   ./release.sh 2.1.12 "Changelog"  → release con notas
+#   ./release.sh patch               → auto-bump patch (2.1.11 → 2.1.12)
+#   ./release.sh minor               → auto-bump minor (2.1.11 → 2.2.0)
+#   ./release.sh major               → auto-bump major (2.1.11 → 3.0.0)
 #
 # Requisitos: git, gh (GitHub CLI autenticado), python3
 # ============================================================================
 
 set -euo pipefail
 
-CMS_DIR="$(cd "$(dirname "$0")" && pwd)"
+CMS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$CMS_DIR"
+
 VERSION_FILE="$CMS_DIR/core/config.php"
+
+# Verificar que estamos en un repositorio Git válido
+if ! git rev-parse --is-inside-work-tree &>/dev/null; then
+  echo "❌ Error: No se detectó un repositorio git en $CMS_DIR."
+  exit 1
+fi
 
 # --- Leer versión actual ---
 CURRENT=$(grep -oP "define\('CMS_VERSION',\s*'\K[0-9.]+" "$VERSION_FILE")
-echo "📦 Versión actual: v$CURRENT"
+echo "📦 Versión actual de KutBlog: v$CURRENT"
 
 # --- Calcular nueva versión ---
 if [[ -z "${1:-}" ]]; then
@@ -28,7 +36,7 @@ if [[ -z "${1:-}" ]]; then
   echo "    $0 patch              → $(echo "$CURRENT" | awk -F. '{print $1"."$2"."$3+1}')"
   echo "    $0 minor              → $(echo "$CURRENT" | awk -F. '{print $1"."$2+1".0"}')"
   echo "    $0 major              → $(echo "$CURRENT" | awk -F. '{print $1+1".0.0"}')"
-  echo "    $0 1.1.0 \"Mi changelog\""
+  echo "    $0 2.1.12 \"Mi changelog\""
   exit 1
 fi
 
@@ -41,6 +49,12 @@ case "$INPUT" in
   major) NEW=$(echo "$CURRENT" | awk -F. '{print $1+1".0.0"}') ;;
   *)     NEW="$INPUT" ;;
 esac
+
+# --- Validar formato de versión ---
+if [[ ! "$NEW" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "❌ Error: La versión '$NEW' no es válida. Debe tener formato X.Y.Z o usar: patch, minor, major."
+  exit 1
+fi
 
 echo "🚀 Nueva versión: v$NEW"
 echo ""
@@ -66,7 +80,7 @@ cd "$CMS_DIR"
 # Copiar sólo ficheros tracked por git (excluyendo carpetas dinámicas del usuario y la desactualizada cms/)
 git ls-files -z \
   | grep -zZv -e '^content/' -e '^media/' -e '^uploads/' -e '^cache/' -e '^config.json' \
-    -e '^\.installed' -e '^\.htaccess' -e '^release.\sh$' -e '^cms/' \
+    -e '^\.installed' -e '^\.htaccess' -e '^release.*\.sh$' -e '^cms/' -e '^\.git' \
   | xargs -0 -I{} install -D "{}" "${STAGE_DIR}/{}"
 
 # Crear ZIP usando python3 para máxima compatibilidad
@@ -80,6 +94,9 @@ with zipfile.ZipFile('$ZIP_PATH', 'w', zipfile.ZIP_DEFLATED) as z:
             arcname = os.path.relpath(filepath, '.')
             z.write(filepath, arcname)
 "
+
+# Regresar SIEMPRE al directorio del proyecto antes de borrar STAGE_DIR
+cd "$CMS_DIR"
 rm -rf "$STAGE_DIR"
 
 ZIP_SIZE=$(du -h "$ZIP_PATH" | cut -f1)
@@ -89,13 +106,13 @@ echo "✅ ZIP creado: $ZIP_NAME ($ZIP_SIZE)"
 cd "$CMS_DIR"
 
 # Verificar si hay cambios staged/unstaged
-UNSTAGED=$(git diff --name-only 2>/dev/null | grep -v 'core/config.php' | wc -l || true)
+UNSTAGED=$(git status --porcelain | grep -v 'core/config.php' | wc -l || true)
 
 if [[ "$UNSTAGED" -gt 0 ]]; then
   echo "📋 Hay $UNSTAGED archivo(s) modificados sin stage."
   read -rp "¿Incluirlos en el release? (s/N) " inc
   if [[ "$inc" == "s" || "$inc" == "S" ]]; then
-    git add .
+    git add -A
   fi
 fi
 
@@ -107,9 +124,8 @@ git commit -m "Release KutBlog v$NEW"
 git tag -a "v$NEW" -m "KutBlog v$NEW"
 echo "✅ Commit y tag v$NEW creados"
 
-# --- 4. Push ---
-# Auto-detectar la rama actual
-BRANCH=$(git branch --show-current || git rev-parse --abbrev-ref HEAD || echo "master")
+# --- 4. Push al repositorio de KutBlog ---
+BRANCH=$(git branch --show-current || git rev-parse --abbrev-ref HEAD || echo "main")
 git push origin "$BRANCH"
 git push origin "v$NEW"
 echo "✅ Pushed to GitHub (rama: $BRANCH)"
@@ -128,13 +144,13 @@ if [[ -z "$NOTES" ]]; then
 fi
 
 gh release create "v$NEW" "$ZIP_PATH" \
-  --repo "ernestoacostame/KutBlog" \
+  --repo "ernestoacostame/kutblog" \
   --title "KutBlog v$NEW" \
   --notes "$NOTES"
 
 echo ""
 echo "✅ Release v$NEW publicada con $ZIP_NAME adjunto"
-echo "   https://github.com/ernestoacostame/KutBlog/releases/tag/v$NEW"
+echo "   https://github.com/ernestoacostame/kutblog/releases/tag/v$NEW"
 
 # --- Limpiar ---
 rm -f "$ZIP_PATH"
