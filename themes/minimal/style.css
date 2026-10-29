@@ -587,6 +587,13 @@ button {
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.card-footer:hover {
+  color: var(--accent-hover);
 }
 
 .card-footer-arrow {
@@ -596,8 +603,9 @@ button {
   transition: transform var(--transition-fast);
 }
 
-.post-card:hover .card-footer-arrow {
-  transform: translateX(3px);
+.post-card:hover .card-footer-arrow,
+.card-footer:hover .card-footer-arrow {
+  transform: translateX(4px);
 }
 
 /* ── 7. Single Article View (Clean & Spacious Reading) ───────────────────── */

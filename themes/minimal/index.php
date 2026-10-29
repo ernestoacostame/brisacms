@@ -79,10 +79,10 @@ $total_pages  = $posts['pages'] ?? 1;
       <p class="card-excerpt"><?= htmlspecialchars($excerpt) ?></p>
       <?php endif; ?>
 
-      <div class="card-footer">
+      <a href="<?= $post_url ?>" class="card-footer" aria-label="Leer <?= htmlspecialchars($post['title'] ?? 'publicación') ?>">
         <span>Leer publicación</span>
         <span class="card-footer-arrow">→</span>
-      </div>
+      </a>
     </div>
   </article>
   <?php endforeach; ?>

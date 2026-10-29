@@ -72,10 +72,10 @@ $count = count($results);
       <p class="card-excerpt"><?= htmlspecialchars($excerpt) ?></p>
       <?php endif; ?>
 
-      <div class="card-footer">
+      <a href="<?= $item_url ?>" class="card-footer" aria-label="Ver <?= htmlspecialchars($item['title'] ?? '') ?>">
         <span>Ver <?= $is_art ? 'artículo' : 'página' ?></span>
         <span class="card-footer-arrow">→</span>
-      </div>
+      </a>
     </div>
   </article>
   <?php endforeach; ?>
