@@ -1,9 +1,10 @@
 <?php
 // ============================================================================
-// KutBlog · Motor de actualización (GitHub Releases + PAT)
+// KutBlog · Motor de actualización (Servidor KutStudio + GitHub Fallback)
 // ============================================================================
 require_once __DIR__ . '/config.php';
 
+define('CMS_UPDATE_SERVER', 'https://kutstudio.com/updates/');
 define('CMS_UPDATE_REPO', 'ernestoacostame/KutBlog');
 define('CMS_UPDATE_SUBDIR', ''); // KutBlog root is the zip root folder
 
@@ -16,20 +17,89 @@ function cms_update_dir(): string {
 // Comprobar actualización disponible
 function cms_update_check(): ?array {
   $token = cms_setting('update_github_token', '');
-  if (!$token) return ['error' => 'No se ha configurado el token de GitHub.'];
+  $localVersion = CMS_VERSION;
 
-  $url = 'https://api.github.com/repos/' . CMS_UPDATE_REPO . '/releases/latest';
+  // 1. Modo Desarrollo / Directo: Si el usuario configuró un token de GitHub explícito
+  if (!empty($token)) {
+    $url = 'https://api.github.com/repos/' . CMS_UPDATE_REPO . '/releases/latest';
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+      CURLOPT_RETURNTRANSFER => true,
+      CURLOPT_HTTPHEADER => [
+        "Authorization: Bearer $token",
+        'Accept: application/vnd.github+json',
+        'X-GitHub-Api-Version: 2022-11-28',
+      ],
+      CURLOPT_USERAGENT => 'KutBlog/' . CMS_VERSION,
+      CURLOPT_FOLLOWLOCATION => true,
+      CURLOPT_MAXREDIRS => 5,
+      CURLOPT_TIMEOUT => 15,
+    ]);
+    $resp = curl_exec($ch);
+    $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err = curl_error($ch);
+    curl_close($ch);
+
+    if ($http === 401 || $http === 403) {
+      return ['error' => 'Token de GitHub de desarrollo inválido o sin permisos. HTTP ' . $http];
+    }
+    if ($http !== 200 || !$resp) {
+      return ['error' => "Error al consultar GitHub directamente (HTTP $http). $err"];
+    }
+
+    $release = json_decode($resp, true);
+    if (!$release || empty($release['tag_name'])) {
+      return ['error' => 'No se encontraron releases en el repositorio de GitHub.'];
+    }
+
+    $remoteVersion = ltrim($release['tag_name'], 'vV');
+    if (version_compare($remoteVersion, $localVersion, '<=')) {
+      cms_update_save_cache(['up_to_date' => true, 'version' => $localVersion]);
+      return ['up_to_date' => true, 'version' => $localVersion];
+    }
+
+    $zipUrl = '';
+    $zipIsAsset = false;
+    if (!empty($release['assets'])) {
+      foreach ($release['assets'] as $asset) {
+        if (preg_match('/^kutblog.*\.zip$/i', $asset['name']) || preg_match('/\.zip$/i', $asset['name'])) {
+          $zipUrl = $asset['url'];
+          $zipIsAsset = true;
+          break;
+        }
+      }
+    }
+    if (!$zipUrl) {
+      $zipUrl = $release['zipball_url'] ?? '';
+    }
+
+    $result = [
+      'available' => true,
+      'channel' => 'github_direct',
+      'current_version' => $localVersion,
+      'new_version' => $remoteVersion,
+      'tag' => $release['tag_name'],
+      'name' => $release['name'] ?? $release['tag_name'],
+      'changelog' => $release['body'] ?? '',
+      'published_at' => $release['published_at'] ?? '',
+      'zip_url' => $zipUrl,
+      'zip_is_asset' => $zipIsAsset,
+      'html_url' => $release['html_url'] ?? '',
+    ];
+
+    cms_update_save_cache($result);
+    return $result;
+  }
+
+  // 2. Modo Estándar Transparente: Servidor Central de Actualizaciones KutStudio
+  $server = rtrim(defined('CMS_UPDATE_SERVER') ? CMS_UPDATE_SERVER : 'https://kutstudio.com/updates/', '/');
+  $url = $server . '/?app=kutblog&action=check&version=' . rawurlencode($localVersion);
+
   $ch = curl_init($url);
   curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_HTTPHEADER => [
-      "Authorization: Bearer $token",
-      'Accept: application/vnd.github+json',
-      'X-GitHub-Api-Version: 2022-11-28',
-    ],
     CURLOPT_USERAGENT => 'KutBlog/' . CMS_VERSION,
     CURLOPT_FOLLOWLOCATION => true,
-    CURLOPT_MAXREDIRS => 5,
     CURLOPT_TIMEOUT => 15,
   ]);
   $resp = curl_exec($ch);
@@ -37,67 +107,26 @@ function cms_update_check(): ?array {
   $err = curl_error($ch);
   curl_close($ch);
 
-  if ($http === 401 || $http === 403) {
-    return ['error' => 'Token de GitHub inválido o sin permisos. HTTP ' . $http];
-  }
   if ($http !== 200 || !$resp) {
-    return ['error' => "Error al consultar GitHub (HTTP $http). $err"];
+    return ['error' => 'No se pudo conectar con el servidor de actualizaciones KutStudio. ' . ($err ?: "HTTP $http")];
   }
 
-  $release = json_decode($resp, true);
-  if (!$release || empty($release['tag_name'])) {
-    return ['error' => 'No se encontraron releases en el repositorio.'];
+  $data = json_decode($resp, true);
+  if (!$data) {
+    return ['error' => 'Respuesta no válida del servidor de actualizaciones.'];
+  }
+  if (!empty($data['error'])) {
+    return ['error' => $data['error']];
   }
 
-  $remoteVersion = ltrim($release['tag_name'], 'vV');
-  $localVersion = CMS_VERSION;
-
-  if (version_compare($remoteVersion, $localVersion, '<=')) {
+  if (!empty($data['up_to_date'])) {
     cms_update_save_cache(['up_to_date' => true, 'version' => $localVersion]);
     return ['up_to_date' => true, 'version' => $localVersion];
   }
 
-  // Buscar el ZIP de la release (priorizando kutblog-*.zip o cualquier zip)
-  $zipUrl = '';
-  $zipIsAsset = false;
-  if (!empty($release['assets'])) {
-    foreach ($release['assets'] as $asset) {
-      if (preg_match('/^kutblog.*\.zip$/i', $asset['name'])) {
-        $zipUrl = $asset['url'];
-        $zipIsAsset = true;
-        break;
-      }
-    }
-    if (!$zipUrl) {
-      foreach ($release['assets'] as $asset) {
-        if (preg_match('/\.zip$/i', $asset['name'])) {
-          $zipUrl = $asset['url'];
-          $zipIsAsset = true;
-          break;
-        }
-      }
-    }
-  }
-  if (!$zipUrl) {
-    $zipUrl = $release['zipball_url'] ?? '';
-  }
-
-  $result = [
-    'available' => true,
-    'current_version' => $localVersion,
-    'new_version' => $remoteVersion,
-    'tag' => $release['tag_name'],
-    'name' => $release['name'] ?? $release['tag_name'],
-    'changelog' => $release['body'] ?? '',
-    'published_at' => $release['published_at'] ?? '',
-    'zip_url' => $zipUrl,
-    'zip_is_asset' => $zipIsAsset,
-    'html_url' => $release['html_url'] ?? '',
-  ];
-
-  cms_update_save_cache($result);
-
-  return $result;
+  $data['channel'] = 'kutstudio';
+  cms_update_save_cache($data);
+  return $data;
 }
 
 function cms_setting(string $key, $default = '') {
@@ -129,8 +158,6 @@ function cms_update_cache_stale(): bool {
 
 // Descargar el ZIP
 function cms_update_download(string $zipUrl): array {
-  $token = cms_setting('update_github_token', '');
-  if (!$token) return ['error' => 'Token no configurado.'];
   if (!$zipUrl) return ['error' => 'URL del ZIP no disponible.'];
 
   $destDir = cms_update_dir();
@@ -139,18 +166,32 @@ function cms_update_download(string $zipUrl): array {
   $fp = fopen($destPath, 'w');
   if (!$fp) return ['error' => 'No se puede escribir en ' . $destDir];
 
+  $headers = [
+    'User-Agent: KutBlog/' . CMS_VERSION,
+  ];
+
+  // Si la descarga es directamente desde api.github.com, requerir y adjuntar el token
+  $isGitHubApi = (strpos($zipUrl, 'api.github.com') !== false);
+  if ($isGitHubApi) {
+    $token = cms_setting('update_github_token', '');
+    if (!$token) {
+      fclose($fp);
+      @unlink($destPath);
+      return ['error' => 'Token de GitHub no configurado para descarga directa desde la API de GitHub.'];
+    }
+    $headers[] = "Authorization: Bearer $token";
+    $headers[] = 'Accept: application/octet-stream';
+    $headers[] = 'X-GitHub-Api-Version: 2022-11-28';
+  }
+
   $ch = curl_init($zipUrl);
   curl_setopt_array($ch, [
     CURLOPT_FILE => $fp,
-    CURLOPT_HTTPHEADER => [
-      "Authorization: Bearer $token",
-      'Accept: application/octet-stream',
-      'X-GitHub-Api-Version: 2022-11-28',
-    ],
+    CURLOPT_HTTPHEADER => $headers,
     CURLOPT_USERAGENT => 'KutBlog/' . CMS_VERSION,
     CURLOPT_FOLLOWLOCATION => true,
     CURLOPT_MAXREDIRS => 5,
-    CURLOPT_TIMEOUT => 120,
+    CURLOPT_TIMEOUT => 300,
   ]);
   curl_exec($ch);
   $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);

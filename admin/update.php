@@ -54,17 +54,17 @@ admin_header(__('update_title', 'Actualizaciones'), 'update');
       <div class="stat-card">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
           <div style="flex: 1; min-width: 0;">
-            <div class="stat-label"><?= __('update_github_token', 'Token GitHub') ?></div>
-            <div class="stat-value" style="color: <?= $hasToken ? 'var(--green)' : 'var(--red)' ?>; font-size: 1.3rem; line-height: 1.25; margin-top: 0.4rem; font-weight: 700; word-wrap: break-word;">
-              <?= $hasToken ? __('update_token_configured', 'Configurado') : __('update_token_not_configured', 'No configurado') ?>
+            <div class="stat-label">Canal de actualización</div>
+            <div class="stat-value" style="color: <?= $hasToken ? 'var(--yellow)' : 'var(--green)' ?>; font-size: 1.25rem; line-height: 1.25; margin-top: 0.4rem; font-weight: 700; word-wrap: break-word;">
+              <?= $hasToken ? 'GitHub Directo' : 'KutStudio Cloud' ?>
             </div>
           </div>
-          <div style="background: <?= $hasToken ? 'rgba(52, 211, 153, 0.1)' : 'rgba(248, 113, 113, 0.1)' ?>; color: <?= $hasToken ? 'var(--green)' : 'var(--red)' ?>; padding: 0.5rem; border-radius: 8px; display: flex; flex-shrink: 0;">
+          <div style="background: <?= $hasToken ? 'rgba(251, 191, 36, 0.1)' : 'rgba(52, 211, 153, 0.1)' ?>; color: <?= $hasToken ? 'var(--yellow)' : 'var(--green)' ?>; padding: 0.5rem; border-radius: 8px; display: flex; flex-shrink: 0;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
           </div>
         </div>
         <div style="font-size:0.78rem;color:var(--muted);margin-top:0.5rem;">
-          <?= $hasToken ? __('update_token_ready', 'Listo para buscar') : __('update_token_configure_below', 'Configúralo abajo') ?>
+          <?= $hasToken ? 'Token de desarrollo activo' : 'Actualización transparente activa' ?>
         </div>
       </div>
 
@@ -108,7 +108,7 @@ admin_header(__('update_title', 'Actualizaciones'), 'update');
             <?= __('update_check_desc', 'Consulta el repositorio de GitHub para verificar si hay una nueva versión disponible.') ?>
           </div>
         </div>
-        <button class="btn btn-primary" id="btn-check" type="button" onclick="cmsUpdateCheck()" <?= $hasToken ? '' : 'disabled title="Configura el token primero"' ?>>
+        <button class="btn btn-primary" id="btn-check" type="button" onclick="cmsUpdateCheck()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: middle;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <?= __('update_check_btn', 'Buscar actualizaciones') ?>
         </button>
@@ -169,19 +169,19 @@ admin_header(__('update_title', 'Actualizaciones'), 'update');
       </div>
     </div>
 
-    <!-- Configuración del Token -->
+    <!-- Configuración del Token (Opcional) -->
     <div class="card" style="margin-bottom: 2rem;">
-      <div class="card-header"><span class="card-title"><?= __('update_token_settings_title', 'Token de Acceso de GitHub') ?></span></div>
+      <div class="card-header"><span class="card-title"><?= __('update_token_settings_title', 'Token de Acceso de GitHub') ?> <span style="font-size: 11px; font-weight: normal; color: var(--muted); margin-left: 6px;">(Opcional · Solo desarrollo)</span></span></div>
       <div class="card-body">
         <form id="form-token" onsubmit="cmsSaveToken(event)">
           <div class="form-group">
             <label class="form-label" for="update_token_input"><?= __('update_token_field', 'Token Personal de GitHub (PAT)') ?></label>
             <div style="display: flex; gap: 0.5rem;">
-              <input type="password" id="update_token_input" value="<?= htmlspecialchars(cms_setting('update_github_token', '')) ?>" placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" style="flex: 1;">
+              <input type="password" id="update_token_input" value="<?= htmlspecialchars(cms_setting('update_github_token', '')) ?>" placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (dejar vacío para usar KutStudio Cloud)" style="flex: 1;">
               <button type="submit" class="btn btn-primary" id="btn-save-token"><?= __('save', 'Guardar') ?></button>
             </div>
             <div style="font-size: 12px; color: var(--muted); margin-top: 0.5rem;">
-              <?= __('update_token_hint', 'Se requiere un Token de Acceso Personal para poder consultar los releases del repositorio privado en GitHub.') ?>
+              Por defecto, KutBlog se actualiza automáticamente a través de los servidores de KutStudio sin requerir token. Si eres desarrollador y deseas descargar directamente desde tu repositorio privado de GitHub, introduce tu token aquí.
               <a href="https://github.com/settings/tokens" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;"><?= __('update_token_create_link', 'Crear token en GitHub ↗') ?></a>
             </div>
           </div>
