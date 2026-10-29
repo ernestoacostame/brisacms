@@ -59,7 +59,7 @@ if ($mastodon_url): ?>
 <body>
 
 <header class="site-header">
-  <div class="site-column header-inner">
+  <div class="header-container header-inner">
     <!-- Brand / Logo -->
     <a href="<?= $base ?>/" class="brand" aria-label="<?= htmlspecialchars($site_title) ?>">
       <?php if (!empty($site_logo)): ?>
@@ -126,9 +126,9 @@ if ($mastodon_url): ?>
     </div>
   </div>
 
-  <!-- Search Popdown in Single Column -->
+  <!-- Search Popdown -->
   <div class="search-drawer" id="search-drawer" aria-hidden="true">
-    <div class="site-column">
+    <div class="header-container">
       <form class="search-form" action="<?= $base ?>/search" method="GET">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" class="search-icon">
           <circle cx="11" cy="11" r="8"></circle>
@@ -142,7 +142,7 @@ if ($mastodon_url): ?>
 
   <!-- Mobile Drawer -->
   <div class="mobile-drawer" id="mobile-drawer" aria-hidden="true">
-    <div class="site-column">
+    <div class="header-container">
       <nav class="mobile-nav" aria-label="Menú móvil">
         <a href="<?= $base ?>/" class="mobile-nav-item">Inicio</a>
         <?php foreach ($nav_pages['items'] as $np): ?>
@@ -155,4 +155,3 @@ if ($mastodon_url): ?>
 
 <main class="site-main">
   <div class="site-column">
-

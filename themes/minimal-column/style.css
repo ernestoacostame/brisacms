@@ -11,6 +11,7 @@
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   --column-width: 720px;
+  --container-wide: 1240px;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
@@ -110,10 +111,19 @@ button, input {
   font: inherit;
 }
 
-/* ── 3. Single Column Layout Grid ───────────────────────────────────────── */
+/* ── 3. Layout Containers ────────────────────────────────────────────────── */
 .site-column {
   width: 100%;
   max-width: var(--column-width);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+.header-container, .footer-container {
+  width: 100%;
+  max-width: var(--container-wide);
   margin-left: auto;
   margin-right: auto;
   padding-left: 1.25rem;
@@ -124,6 +134,10 @@ button, input {
   .site-column {
     padding-left: 1.5rem;
     padding-right: 1.5rem;
+  }
+  .header-container, .footer-container {
+    padding-left: 2rem;
+    padding-right: 2rem;
   }
 }
 
@@ -170,6 +184,7 @@ button, input {
   letter-spacing: -0.02em;
   color: var(--text);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .brand:hover {
@@ -199,8 +214,7 @@ button, input {
 }
 
 .brand-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Navigation: Desktop */

@@ -2,7 +2,7 @@
 </main><!-- /.site-main -->
 
 <footer class="site-footer">
-  <div class="site-column footer-inner">
+  <div class="footer-container footer-inner">
     <div class="footer-meta">
       <nav class="footer-links" aria-label="Navegación del pie">
         <a href="<?= $base ?>/">Inicio</a>
@@ -119,4 +119,3 @@
 </script>
 </body>
 </html>
-
