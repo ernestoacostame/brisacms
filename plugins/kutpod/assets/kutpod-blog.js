@@ -82,7 +82,20 @@
 
       if (iframe && embedSrc) {
         const sep = embedSrc.includes('?') ? '&' : '?';
-        iframe.src = embedSrc + sep + 'autoplay=1';
+        const targetSrc = embedSrc + sep + 'autoplay=1';
+        
+        if (iframe.src === targetSrc || iframe.src.indexOf(embedSrc) !== -1) {
+          try {
+            iframe.contentWindow.postMessage({ action: 'play' }, '*');
+          } catch (e) {}
+        } else {
+          iframe.src = targetSrc;
+          iframe.onload = function () {
+            try {
+              iframe.contentWindow.postMessage({ action: 'play' }, '*');
+            } catch (e) {}
+          };
+        }
       }
       if (titleEl && title) {
         titleEl.textContent = title;
