@@ -265,28 +265,30 @@ function kutpod_upsert_article_from_episode(array $ep, array $cfg): string {
 /**
  * Resuelve la URL de la portada para que sea absoluta y accesible desde cualquier navegador
  */
-function kutpod_resolve_cover_url(?string $cover, array $cfg, array $ep = []): string {
-    if (empty($cover)) return '';
-    $cover = trim($cover);
-    if (preg_match('#^https?://#i', $cover)) {
-        return $cover;
-    }
-    // Si viene una ruta relativa como /media/covers/...
-    $base = '';
-    if (!empty($ep['instance_url'])) {
-        $base = rtrim($ep['instance_url'], '/');
-    } elseif (!empty($cfg['instance_url'])) {
-        $base = rtrim($cfg['instance_url'], '/');
-    } elseif (!empty($ep['audio_url']) && preg_match('#^https?://#i', $ep['audio_url'])) {
-        $parts = parse_url($ep['audio_url']);
-        if (!empty($parts['scheme']) && !empty($parts['host'])) {
-            $base = $parts['scheme'] . '://' . $parts['host'] . (!empty($parts['port']) && !in_array((int)$parts['port'], [80, 443]) ? ':' . $parts['port'] : '');
+if (!function_exists('kutpod_resolve_cover_url')) {
+    function kutpod_resolve_cover_url(?string $cover, array $cfg, array $ep = []): string {
+        if (empty($cover)) return '';
+        $cover = trim($cover);
+        if (preg_match('#^https?://#i', $cover)) {
+            return $cover;
         }
+        // Si viene una ruta relativa como /media/covers/...
+        $base = '';
+        if (!empty($ep['instance_url'])) {
+            $base = rtrim($ep['instance_url'], '/');
+        } elseif (!empty($cfg['instance_url'])) {
+            $base = rtrim($cfg['instance_url'], '/');
+        } elseif (!empty($ep['audio_url']) && preg_match('#^https?://#i', $ep['audio_url'])) {
+            $parts = parse_url($ep['audio_url']);
+            if (!empty($parts['scheme']) && !empty($parts['host'])) {
+                $base = $parts['scheme'] . '://' . $parts['host'] . (!empty($parts['port']) && !in_array((int)$parts['port'], [80, 443]) ? ':' . $parts['port'] : '');
+            }
+        }
+        if (!$base) {
+            $base = 'http://localhost:8000';
+        }
+        return $base . (str_starts_with($cover, '/') ? '' : '/') . $cover;
     }
-    if (!$base) {
-        $base = 'http://localhost:8000';
-    }
-    return $base . (str_starts_with($cover, '/') ? '' : '/') . $cover;
 }
 
 /**

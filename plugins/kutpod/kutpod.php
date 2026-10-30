@@ -150,6 +150,65 @@ function kutpod_parse_episode_url(string $url): ?array {
 }
 
 /**
+ * Resuelve la URL de la portada para que sea absoluta y accesible desde cualquier navegador
+ */
+if (!function_exists('kutpod_resolve_cover_url')) {
+    function kutpod_resolve_cover_url(?string $cover, array $cfg, array $ep = []): string {
+        if (empty($cover)) return '';
+        $cover = trim($cover);
+        if (preg_match('#^https?://#i', $cover)) {
+            return $cover;
+        }
+        $base = '';
+        if (!empty($ep['instance_url'])) {
+            $base = rtrim($ep['instance_url'], '/');
+        } elseif (!empty($cfg['instance_url'])) {
+            $base = rtrim($cfg['instance_url'], '/');
+        } elseif (!empty($ep['audio_url']) && preg_match('#^https?://#i', $ep['audio_url'])) {
+            $parts = parse_url($ep['audio_url']);
+            if (!empty($parts['scheme']) && !empty($parts['host'])) {
+                $base = $parts['scheme'] . '://' . $parts['host'] . (!empty($parts['port']) && !in_array((int)$parts['port'], [80, 443]) ? ':' . $parts['port'] : '');
+            }
+        }
+        if (!$base) {
+            $base = 'http://localhost:8000';
+        }
+        return $base . (str_starts_with($cover, '/') ? '' : '/') . $cover;
+    }
+}
+
+/**
+ * Obtiene la ruta al archivo de base de datos SQLite de KutPod resolviendo variaciones comunes
+ */
+function kutpod_db_path(): ?string {
+    $cfg = kutpod_config();
+    $candidates = [];
+    if (!empty($cfg['local_db_path'])) {
+        $candidates[] = $cfg['local_db_path'];
+        // Variaciones de mayúsculas/minúsculas para Linux
+        $candidates[] = str_ireplace('/kutpod/storage/', '/KutPod/storage/', $cfg['local_db_path']);
+        $candidates[] = str_ireplace('/KutPod/storage/', '/kutpod/storage/', $cfg['local_db_path']);
+    }
+    // Ubicaciones estándar en la estructura KutStudio
+    $candidates[] = ROOT_PATH . '/../KutPod/storage/kutpod.db';
+    $candidates[] = ROOT_PATH . '/../kutpod/storage/kutpod.db';
+    $candidates[] = dirname(ROOT_PATH) . '/KutPod/storage/kutpod.db';
+    $candidates[] = dirname(ROOT_PATH) . '/kutpod/storage/kutpod.db';
+
+    foreach ($candidates as $cand) {
+        if (!empty($cand) && file_exists($cand) && is_readable($cand) && filesize($cand) > 0) {
+            return $cand;
+        }
+    }
+    foreach ($candidates as $cand) {
+        if (!empty($cand) && file_exists($cand) && is_readable($cand)) {
+            return $cand;
+        }
+    }
+    return null;
+}
+
+/**
  * Conexión opcional a la base de datos local SQLite de KutPod
  */
 function kutpod_db(): ?PDO {
@@ -158,9 +217,12 @@ function kutpod_db(): ?PDO {
     if ($attempted) return $pdo;
     $attempted = true;
 
-    $cfg = kutpod_config();
-    $dbPath = $cfg['local_db_path'] ?? '';
-    if (!file_exists($dbPath) || !extension_loaded('pdo_sqlite')) {
+    if (!extension_loaded('pdo_sqlite')) {
+        return null;
+    }
+
+    $dbPath = kutpod_db_path();
+    if (!$dbPath) {
         return null;
     }
 
@@ -518,31 +580,304 @@ function kutpod_filter_content(string $content, array $post): string {
 }
 
 /**
+ * Busca episodios directamente en KutPod (vía SQLite local o REST API remota)
+ * y los puntúa según etiquetas, categorías y palabras clave del post.
+ */
+function kutpod_search_episodes_direct(array $postTags, array $postCats, array $titleKeywords, array $cfg): array {
+    $instanceUrl = rtrim($cfg['instance_url'] ?: 'http://localhost:8000', '/');
+    $db = kutpod_db();
+    $episodes = [];
+
+    $sql = "
+        SELECT e.id, e.slug, e.title, e.cover, e.duration_secs, e.notes_md, e.custom_tags as ep_tags,
+               e.audio_url, e.published_at, e.created_at,
+               p.slug AS podcast_slug, p.title AS podcast_title, p.category, p.subcategory, 
+               p.custom_tags AS podcast_tags, p.cover AS podcast_cover
+        FROM episodes e
+        JOIN podcasts p ON p.id = e.podcast_id
+        WHERE e.hidden = 0 AND e.status = 'published' AND p.hidden = 0
+        ORDER BY COALESCE(e.published_at, e.created_at) DESC
+    ";
+
+    // 1. Consulta directa a la base de datos SQLite si está disponible (PDO)
+    if ($db) {
+        try {
+            $stmt = $db->query($sql);
+            $rows = $stmt ? $stmt->fetchAll() : [];
+            foreach ($rows as $row) {
+                $episodes[] = [
+                    'id'            => (int)$row['id'],
+                    'slug'          => $row['slug'],
+                    'title'         => $row['title'],
+                    'cover'         => $row['cover'] ?: ($row['podcast_cover'] ?? ''),
+                    'duration_secs' => (int)($row['duration_secs'] ?? 0),
+                    'notes_md'      => $row['notes_md'] ?? '',
+                    'custom_tags'   => trim(($row['ep_tags'] ?? '') . ',' . ($row['podcast_tags'] ?? ''), ','),
+                    'podcast_slug'  => $row['podcast_slug'],
+                    'podcast_title' => $row['podcast_title'],
+                    'category'      => trim(($row['category'] ?? '') . ' ' . ($row['subcategory'] ?? '')),
+                    'audio_url'     => $row['audio_url'] ?? '',
+                    'published_at'  => $row['published_at'] ?: $row['created_at'],
+                ];
+            }
+        } catch (\Throwable $e) {}
+    }
+
+    // 1b. Fallback por CLI sqlite3 si pdo_sqlite no está cargado en PHP
+    if (empty($episodes)) {
+        $dbPath = kutpod_db_path();
+        if ($dbPath && function_exists('shell_exec')) {
+            try {
+                $rawJson = @shell_exec("sqlite3 " . escapeshellarg($dbPath) . " -json " . escapeshellarg($sql));
+                if ($rawJson) {
+                    $cliRows = @json_decode($rawJson, true);
+                    if (is_array($cliRows)) {
+                        foreach ($cliRows as $row) {
+                            $episodes[] = [
+                                'id'            => (int)$row['id'],
+                                'slug'          => $row['slug'],
+                                'title'         => $row['title'],
+                                'cover'         => $row['cover'] ?: ($row['podcast_cover'] ?? ''),
+                                'duration_secs' => (int)($row['duration_secs'] ?? 0),
+                                'notes_md'      => $row['notes_md'] ?? '',
+                                'custom_tags'   => trim(($row['ep_tags'] ?? '') . ',' . ($row['podcast_tags'] ?? ''), ','),
+                                'podcast_slug'  => $row['podcast_slug'],
+                                'podcast_title' => $row['podcast_title'],
+                                'category'      => trim(($row['category'] ?? '') . ' ' . ($row['subcategory'] ?? '')),
+                                'audio_url'     => $row['audio_url'] ?? '',
+                                'published_at'  => $row['published_at'] ?: $row['created_at'],
+                            ];
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {}
+        }
+    }
+
+    // 2. Si no hubo SQLite local o no arrojó resultados, consultar vía HTTP a la instancia KutPod
+    if (empty($episodes)) {
+        $cacheDir = CONTENT_PATH . '/cache';
+        if (!is_dir($cacheDir)) @mkdir($cacheDir, 0755, true);
+        $cacheFile = $cacheDir . '/kutpod_remote_eps.json';
+
+        $cached = null;
+        if (file_exists($cacheFile) && (time() - filemtime($cacheFile) < 300)) {
+            $cached = @json_decode(file_get_contents($cacheFile), true);
+            if (is_array($cached) && !empty($cached)) {
+                $episodes = $cached;
+            }
+        }
+
+        if (empty($episodes) && $instanceUrl) {
+            $urlsToTry = [
+                $instanceUrl . '/api/episodes',
+                $instanceUrl . '/episodes?json=1',
+                $instanceUrl . '/site.php?r=episodes&json=1'
+            ];
+            $ctx = stream_context_create([
+                'http' => [
+                    'timeout' => 3,
+                    'header'  => "User-Agent: KutBlog-KutPod/1.0\r\nAccept: application/json\r\n"
+                ]
+            ]);
+            foreach ($urlsToTry as $u) {
+                $raw = @file_get_contents($u, false, $ctx);
+                if ($raw) {
+                    $json = @json_decode($raw, true);
+                    if (!empty($json['items']) && is_array($json['items'])) {
+                        $episodes = $json['items'];
+                        @file_put_contents($cacheFile, json_encode($episodes));
+                        break;
+                    }
+                }
+            }
+            if (empty($episodes) && file_exists($cacheFile)) {
+                $episodes = @json_decode(file_get_contents($cacheFile), true) ?: [];
+            }
+        }
+    }
+
+    if (empty($episodes)) {
+        return [];
+    }
+
+    // 3. Evaluar y puntuar coincidencias
+    $scored = [];
+    foreach ($episodes as $row) {
+        $epTitleLower = mb_strtolower($row['title'] ?? '', 'UTF-8');
+        $epNotesLower = mb_strtolower(strip_tags($row['notes_md'] ?? ''), 'UTF-8');
+        $rawTags = array_map('trim', explode(',', mb_strtolower($row['custom_tags'] ?? '', 'UTF-8')));
+        $epTags = array_filter($rawTags);
+        $pCatLower = mb_strtolower($row['category'] ?? '', 'UTF-8');
+        $pTitleLower = mb_strtolower($row['podcast_title'] ?? '', 'UTF-8');
+
+        $score = 0;
+
+        // Coincidencia por etiquetas del post
+        foreach ($postTags as $tag) {
+            if ($tag === '') continue;
+            if (in_array($tag, $epTags, true)) {
+                $score += 15;
+            }
+            if (str_contains($epTitleLower, $tag)) {
+                $score += 12;
+            }
+            if (str_contains($pTitleLower, $tag)) {
+                $score += 8;
+            }
+            if (str_contains($pCatLower, $tag)) {
+                $score += 6;
+            }
+            if (str_contains($epNotesLower, $tag)) {
+                $score += 4;
+            }
+        }
+
+        // Coincidencia por categorías del post
+        foreach ($postCats as $cat) {
+            if ($cat === '') continue;
+            if (str_contains($pCatLower, $cat)) {
+                $score += 10;
+            }
+            if (str_contains($pTitleLower, $cat)) {
+                $score += 8;
+            }
+            if (str_contains($epTitleLower, $cat)) {
+                $score += 6;
+            }
+            if (in_array($cat, $epTags, true)) {
+                $score += 8;
+            }
+        }
+
+        // Palabras clave del título del post
+        foreach ($titleKeywords as $kw) {
+            if ($kw === '') continue;
+            if (str_contains($epTitleLower, $kw)) {
+                $score += 5;
+            }
+            if (str_contains($pTitleLower, $kw)) {
+                $score += 3;
+            }
+            if (str_contains($epNotesLower, $kw)) {
+                $score += 2;
+            }
+        }
+
+        if ($score >= 4) {
+            $pSlug = $row['podcast_slug'] ?: 'default';
+            $epSlug = $row['slug'] ?: ($row['id'] ?? '');
+            $coverUrl = kutpod_resolve_cover_url($row['cover'] ?? '', $cfg, [
+                'podcast_slug' => $pSlug,
+                'instance_url' => $instanceUrl
+            ]);
+
+            $durSecs = (int)($row['duration_secs'] ?? 0);
+            $durFmt = $durSecs > 0 ? gmdate($durSecs >= 3600 ? 'H:i:s' : 'i:s', $durSecs) : ($row['duration'] ?? '');
+
+            $url = $instanceUrl . '/@' . rawurlencode($pSlug) . '/' . rawurlencode($epSlug);
+            $theme = $cfg['player_theme'] ?? 'auto';
+            $embedSrc = $instanceUrl . '/embed/@' . rawurlencode($pSlug) . '/' . rawurlencode($epSlug) . '?theme=' . urlencode($theme);
+
+            $scored[] = [
+                'score'              => $score,
+                'title'              => $row['title'],
+                'slug'               => $epSlug,
+                'cover'              => $coverUrl,
+                'featured_image'     => $coverUrl,
+                'url'                => $url,
+                'embed_src'          => $embedSrc,
+                'is_external_kutpod' => true,
+                'podcast_meta'       => [
+                    'is_podcast'    => true,
+                    'podcast_slug'  => $pSlug,
+                    'podcast_title' => $row['podcast_title'] ?? '',
+                    'episode_slug'  => $epSlug,
+                    'episode_id'    => (int)($row['id'] ?? 0),
+                    'duration_secs' => $durSecs,
+                    'duration_fmt'  => $durFmt,
+                    'audio_url'     => $row['audio_url'] ?? '',
+                    'instance_url'  => $instanceUrl
+                ]
+            ];
+        }
+    }
+
+    usort($scored, fn($a, $b) => $b['score'] <=> $a['score']);
+    return $scored;
+}
+
+/**
  * Busca un episodio relacionado con este artículo según categorías o etiquetas
  */
 function kutpod_find_related_episode(array $post): ?array {
-    $postCats = array_map('strtolower', $post['categories'] ?? []);
-    $postTags = array_map('strtolower', $post['tags'] ?? []);
-    if (empty($postCats) && empty($postTags)) return null;
+    $cfg = kutpod_config();
+    $postCats = array_values(array_filter(array_map('trim', array_map('strtolower', $post['categories'] ?? []))));
+    $postTags = array_values(array_filter(array_map('trim', array_map('strtolower', $post['tags'] ?? []))));
+    $postTitle = trim($post['title'] ?? '');
 
+    // Palabras clave del título (longitud >= 3, omitiendo stop-words comunes)
+    $titleKeywords = [];
+    if (!empty($postTitle)) {
+        $words = preg_split('/[\s,\.\-_:;\?!=\(\)\[\]"\'\/]+/u', mb_strtolower($postTitle, 'UTF-8'));
+        $stopWords = ['para', 'como', 'este', 'esta', 'estos', 'estas', 'sobre', 'desde', 'hacia', 'hasta', 'entre', 'donde', 'cuando', 'quien', 'cual', 'with', 'from', 'that', 'this', 'your', 'have', 'more', 'con', 'las', 'los', 'del', 'una', 'uno', 'unos', 'unas'];
+        foreach ($words as $w) {
+            $w = trim($w);
+            if (mb_strlen($w, 'UTF-8') >= 3 && !in_array($w, $stopWords, true)) {
+                $titleKeywords[] = $w;
+            }
+        }
+    }
+
+    if (empty($postCats) && empty($postTags) && empty($titleKeywords)) {
+        return null;
+    }
+
+    // 1. Primero: Buscar entre artículos de podcast ya importados en KutBlog (si existen)
     $all = list_content('articles', true, 1, 9999)['items'] ?? [];
+    $bestLocal = null;
+    $bestLocalScore = 0;
+
     foreach ($all as $item) {
-        if (empty($item['podcast_meta']['is_podcast']) && empty($item['podcast_meta']['audio_url'])) {
+        if (empty($item['podcast_meta']['is_podcast']) && empty($item['podcast_meta']['audio_url']) && empty($item['kutpod_url'])) {
             continue;
         }
         if (($item['slug'] ?? '') === ($post['slug'] ?? '')) continue;
 
         $itemCats = array_map('strtolower', $item['categories'] ?? []);
         $itemTags = array_map('strtolower', $item['tags'] ?? []);
+        $itemTitle = mb_strtolower($item['title'] ?? '', 'UTF-8');
 
-        $commonCats = array_intersect($postCats, $itemCats);
-        $commonTags = array_intersect($postTags, $itemTags);
+        $score = 0;
+        foreach ($postTags as $t) {
+            if (in_array($t, $itemTags, true)) $score += 15;
+            elseif (str_contains($itemTitle, $t)) $score += 10;
+        }
+        foreach ($postCats as $c) {
+            if (in_array($c, $itemCats, true)) $score += 8;
+            elseif (str_contains($itemTitle, $c)) $score += 6;
+        }
+        foreach ($titleKeywords as $kw) {
+            if (str_contains($itemTitle, $kw)) $score += 4;
+        }
 
-        if (!empty($commonCats) || !empty($commonTags)) {
-            return $item;
+        if ($score > $bestLocalScore) {
+            $bestLocalScore = $score;
+            $bestLocal = $item;
         }
     }
-    return null;
+
+    if ($bestLocal && $bestLocalScore >= 8) {
+        return $bestLocal;
+    }
+
+    // 2. Segundo: Buscar directamente en KutPod (SQLite o REST API)
+    $direct = kutpod_search_episodes_direct($postTags, $postCats, $titleKeywords, $cfg);
+    if (!empty($direct)) {
+        return $direct[0];
+    }
+
+    return $bestLocal;
 }
 
 /**
@@ -553,29 +888,54 @@ function kutpod_render_related_box(array $ep, array $cfg): string {
     $instanceUrl = rtrim($cfg['instance_url'] ?: 'http://localhost:8000', '/');
     $meta = $ep['podcast_meta'] ?? [];
     $pSlug = $meta['podcast_slug'] ?? 'default';
-    $epSlug = $meta['episode_slug'] ?? $ep['slug'];
-    $durFmt = $meta['duration_fmt'] ?: ($meta['duration_secs'] ? gmdate('H:i:s', $meta['duration_secs']) : '');
-    $cover = $ep['featured_image'] ?: ($base . '/plugins/kutpod/assets/cover-placeholder.png');
-    $embedSrc = $instanceUrl . "/embed/@" . rawurlencode($pSlug) . "/" . rawurlencode($epSlug) . "?theme=auto";
+    $epSlug = $meta['episode_slug'] ?? ($ep['slug'] ?? '');
+    
+    $durSecs = (int)($meta['duration_secs'] ?? 0);
+    $durFmt = $meta['duration_fmt'] ?: ($durSecs > 0 ? gmdate($durSecs >= 3600 ? 'H:i:s' : 'i:s', $durSecs) : '');
+
+    $rawCover = $ep['cover'] ?? ($ep['featured_image'] ?? '');
+    $cover = kutpod_resolve_cover_url($rawCover, $cfg, [
+        'podcast_slug' => $pSlug,
+        'instance_url' => $instanceUrl
+    ]);
+    if (empty($cover)) {
+        $cover = $base . '/plugins/kutpod/assets/cover-placeholder.png';
+    }
+
+    $isExternal = !empty($ep['is_external_kutpod']);
+    $listenUrl = $isExternal 
+        ? (!empty($ep['url']) ? $ep['url'] : ($instanceUrl . '/@' . rawurlencode($pSlug) . '/' . rawurlencode($epSlug)))
+        : ($base . '/article/' . htmlspecialchars($ep['slug']));
+    
+    $listenText = $isExternal ? 'Escuchar en KutPod ↗' : 'Escuchar y ver notas completas →';
+    $targetAttr = $isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
+
+    $theme = $cfg['player_theme'] ?? 'auto';
+    $embedSrc = !empty($ep['embed_src']) 
+        ? $ep['embed_src'] 
+        : ($instanceUrl . "/embed/@" . rawurlencode($pSlug) . "/" . rawurlencode($epSlug) . "?theme=" . urlencode($theme));
+
+    $showName = !empty($meta['podcast_title']) ? htmlspecialchars($meta['podcast_title']) : '';
 
     return '
     <div class="kutpod-related-card">
       <div class="kutpod-related-header">
         <span>🎙️ ¿Te apasiona este tema? Escucha el episodio en nuestro Podcast</span>
+        ' . ($showName !== '' ? '<span class="kutpod-related-showname" style="font-weight:500; opacity:0.8; font-size:0.8rem; margin-left:auto;">' . $showName . '</span>' : '') . '
       </div>
       <div class="kutpod-related-content">
-        <img src="' . htmlspecialchars($cover) . '" alt="' . htmlspecialchars($ep['title']) . '" class="kutpod-related-cover">
+        <img src="' . htmlspecialchars($cover) . '" alt="' . htmlspecialchars($ep['title']) . '" class="kutpod-related-cover" onerror="this.src=\'' . $base . '/plugins/kutpod/assets/cover-placeholder.png\'">
         <div class="kutpod-related-info">
           <h4 class="kutpod-related-title">
-            <a href="' . $base . '/article/' . htmlspecialchars($ep['slug']) . '">' . htmlspecialchars($ep['title']) . '</a>
+            <a href="' . htmlspecialchars($listenUrl) . '"' . $targetAttr . '>' . htmlspecialchars($ep['title']) . '</a>
           </h4>
           <div class="kutpod-related-meta">
             ' . ($durFmt ? '⏱️ ' . htmlspecialchars($durFmt) . ' · ' : '') . '
-            <a href="' . $base . '/article/' . htmlspecialchars($ep['slug']) . '" style="color:var(--kp-accent, #ff5f7e); font-weight:600; text-decoration:none;">Escuchar y ver notas completas →</a>
+            <a href="' . htmlspecialchars($listenUrl) . '"' . $targetAttr . ' style="color:var(--kp-accent, #ff5f7e); font-weight:600; text-decoration:none;">' . $listenText . '</a>
           </div>
         </div>
       </div>
-      <div style="margin-top:12px; border-radius:10px; overflow:hidden;">
+      <div style="margin-top:14px; border-radius:10px; overflow:hidden;">
         <iframe src="' . htmlspecialchars($embedSrc) . '" style="width:100%; height:135px; border:none;" allow="autoplay" loading="lazy"></iframe>
       </div>
     </div>';
