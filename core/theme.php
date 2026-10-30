@@ -46,6 +46,10 @@ function render_theme(string $template, array $vars = []): void {
         if (cms_plugin_is_active('kutpod') && function_exists('kutpod_filter_content')) {
             $vars['post']['content'] = kutpod_filter_content($vars['post']['content'], $vars['post']);
         }
+        if ($template === 'single' && ($vars['type'] ?? '') !== 'pages' && file_exists(ROOT_PATH . '/core/newsletter.php')) {
+            require_once ROOT_PATH . '/core/newsletter.php';
+            $vars['post']['content'] .= newsletter_render_box();
+        }
     }
     extract($vars);
     $config = cms_config();

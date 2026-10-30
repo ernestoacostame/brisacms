@@ -74,6 +74,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ap_delete_article($slug);
                     }
                 }
+
+                // Envío de Newsletter al publicar
+                if ($post['status'] === 'published' && !empty($_POST['newsletter_broadcast'])) {
+                    require_once dirname(__DIR__) . '/core/newsletter.php';
+                    $nRes = newsletter_broadcast_post($post, !empty($_POST['newsletter_resend']));
+                    if (!empty($nRes['sent'])) {
+                        $msg .= ' · Boletín enviado a ' . $nRes['sent'] . ' suscriptores';
+                    }
+                }
             }
         }
     }
@@ -560,6 +569,41 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
             </div>
           </div>
           <?php endif; endif; ?>
+
+          <?php if ($type === 'articles'): 
+              require_once dirname(__DIR__) . '/core/newsletter.php';
+              $newsSubs = newsletter_get_subscribers();
+              $activeSubsCount = count(array_filter($newsSubs, fn($s) => ($s['status'] ?? '') === 'confirmed'));
+              $newsSentAt = $post['newsletter_sent_at'] ?? '';
+          ?>
+          <div class="sheet-group">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+              <label class="sheet-label" style="margin-bottom:0">✉️ Newsletter</label>
+              <?php if ($newsSentAt): ?>
+                <span class="badge" style="background:rgba(16,185,129,0.12); color:#10b981; font-size:0.7rem; border:1px solid rgba(16,185,129,0.25);">Enviado</span>
+              <?php endif; ?>
+            </div>
+
+            <?php if ($newsSentAt): ?>
+              <div style="font-size:0.75rem; color:var(--muted); margin-bottom:0.6rem;">
+                Enviado a suscriptores el <?= date('d/m/Y H:i', strtotime($newsSentAt)) ?>.
+              </div>
+              <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.82rem; color:var(--text)">
+                <input type="checkbox" name="newsletter_resend" value="1" style="width:auto; margin:0">
+                <strong>Reenviar a los suscriptores</strong>
+              </label>
+              <input type="hidden" name="newsletter_broadcast" value="1">
+            <?php else: ?>
+              <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.82rem; color:var(--text)">
+                <input type="checkbox" name="newsletter_broadcast" value="1" style="width:auto; margin:0">
+                <span>Enviar a suscriptores al publicar</span>
+              </label>
+              <div class="sheet-hint">
+                Se enviará en formato boletín a <?= $activeSubsCount ?> lectores confirmados.
+              </div>
+            <?php endif; ?>
+          </div>
+          <?php endif; ?>
 
           <?php if ($post): ?>
           <div class="sheet-group">
