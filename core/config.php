@@ -1,6 +1,6 @@
 <?php
 // KutBlog - Configuration
-define('CMS_VERSION', '2.1.16');
+define('CMS_VERSION', '2.1.17');
 define('CMS_NAME', 'KutBlog');
 define('ROOT_PATH', dirname(__DIR__));
 define('CONTENT_PATH', ROOT_PATH . '/content');
