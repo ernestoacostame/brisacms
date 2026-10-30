@@ -44,6 +44,30 @@
     if (hiddenTA) hiddenTA.value = content;
 
     if (fmtInput) fmtInput.value = 'html'; // Always HTML format
+
+    // Sync any pending text in tag and category inputs
+    const tagIn = document.getElementById('tag-input');
+    const tagHid = document.getElementById('tag-hidden');
+    if (tagIn && tagHid && tagIn.value.trim()) {
+      const curTags = tagHid.value.split(',').map((v) => v.trim()).filter(Boolean);
+      const toAdd = tagIn.value.trim();
+      if (!curTags.includes(toAdd)) {
+        curTags.push(toAdd);
+        tagHid.value = curTags.join(', ');
+      }
+      tagIn.value = '';
+    }
+    const catIn = document.getElementById('cat-input');
+    const catHid = document.getElementById('cat-hidden');
+    if (catIn && catHid && catIn.value.trim()) {
+      const curCats = catHid.value.split(',').map((v) => v.trim()).filter(Boolean);
+      const toAdd = catIn.value.trim();
+      if (!curCats.includes(toAdd)) {
+        curCats.push(toAdd);
+        catHid.value = curCats.join(', ');
+      }
+      catIn.value = '';
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -411,13 +435,17 @@
     const chips   = document.getElementById(chipsId);
     const hidden  = document.getElementById(hiddenId);
     const sugArea = document.getElementById(suggestionsId);
-    if (!input) return;
+    if (!input || !chips || !hidden) return;
 
-    let values = hidden.value
+    const initialValues = hidden.value
       .split(',')
       .map((v) => v.trim())
       .filter(Boolean);
-    values.forEach((v) => addChip(v));
+    let values = [];
+
+    function updateHidden() {
+      hidden.value = values.join(', ');
+    }
 
     function addChip(val) {
       val = val.trim();
@@ -447,9 +475,8 @@
       }
     }
 
-    function updateHidden() {
-      hidden.value = values.join(', ');
-    }
+    // Populate initial chips
+    initialValues.forEach((v) => addChip(v));
 
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ',') {
@@ -459,9 +486,14 @@
       } else if (e.key === 'Backspace' && !input.value && values.length) {
         const last = chips.lastElementChild;
         if (last) {
-          values.pop();
+          const removed = values.pop();
           last.remove();
           updateHidden();
+          if (sugArea && removed) {
+            sugArea.querySelectorAll('.tag-sug').forEach((s) => {
+              if (s.textContent.trim() === removed) s.classList.remove('used');
+            });
+          }
         }
       }
     });
@@ -499,30 +531,32 @@
     const dropdown = document.getElementById('tag-dropdown');
     const dropList = document.getElementById('tag-dropdown-list');
     const dataEl   = document.getElementById('all-tags-data');
-    if (!input) return;
+    if (!input || !chips || !hidden) return;
 
     const allTags = dataEl
-      ? Array.from(dataEl.querySelectorAll('span')).map((s) => s.textContent)
+      ? Array.from(dataEl.querySelectorAll('span')).map((s) => s.textContent.trim()).filter(Boolean)
       : [];
 
-    let values = hidden.value
+    const initialValues = hidden.value
       .split(',')
       .map((v) => v.trim())
       .filter(Boolean);
+    let values = [];
     let focusedIdx = -1;
 
-    values.forEach((v) => addChip(v, false));
+    function updateHidden() {
+      hidden.value = values.join(', ');
+    }
 
-    function addChip(val, updateList) {
-      if (updateList === undefined) updateList = true;
+    function addChip(val) {
       val = val.trim();
       if (!val || values.includes(val)) return;
-      if (updateList) values.push(val);
+      values.push(val);
       updateHidden();
 
       const chip = document.createElement('span');
       chip.className = 'tag-chip';
-      chip.innerHTML = escHtml(val) + '<button type="button">×</button>';
+      chip.innerHTML = escHtml(val) + '<button type="button" title="Eliminar">×</button>';
       chip.querySelector('button').addEventListener('click', () => {
         values = values.filter((v) => v !== val);
         chip.remove();
@@ -531,9 +565,8 @@
       chips.appendChild(chip);
     }
 
-    function updateHidden() {
-      hidden.value = values.join(', ');
-    }
+    // Populate initial tags from saved draft / article
+    initialValues.forEach((v) => addChip(v));
 
     function showDropdown(query) {
       const q = query.toLowerCase().trim();
@@ -585,7 +618,13 @@
 
     input.addEventListener('input', () => showDropdown(input.value));
     input.addEventListener('focus', () => { if (input.value) showDropdown(input.value); });
-    input.addEventListener('blur', () => setTimeout(hideDropdown, 150));
+    input.addEventListener('blur', () => {
+      if (input.value.trim()) {
+        addChip(input.value);
+        input.value = '';
+      }
+      setTimeout(hideDropdown, 150);
+    });
 
     input.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowDown') { e.preventDefault(); moveFocus(1); return; }
