@@ -92,9 +92,10 @@ $label = $type === 'articles' ? __raw('nav_articles') : __raw('nav_pages');
 $content_format = 'html'; // Always HTML format now
 admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article')), $type);
 ?>
-      <script src="<?= base_url() ?>/admin/assets/js/prosemirror-bundle.min.js"></script>
     </div>
   </div>
+  <link rel="stylesheet" href="assets/css/editor.css">
+  <script src="assets/js/prosemirror-bundle.min.js"></script>
   <div class="page-body">
     <?php if ($msg): ?><div class="alert alert-success">✓ <?= htmlspecialchars($msg) ?></div><?php endif; ?>
     <?php if ($error): ?><div class="alert alert-error">⚠ <?= htmlspecialchars($error) ?></div><?php endif; ?>
@@ -786,6 +787,159 @@ mark.find-match.current {
   background: rgba(var(--accent-rgb), 0.08);
   font-size: 0.95rem;
   color: var(--text);
+}
+
+.desk-layout,
+.editor-layout {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 330px !important;
+  gap: 1.5rem !important;
+  align-items: start !important;
+  width: 100% !important;
+}
+
+@media (max-width: 1024px) {
+  .desk-layout,
+  .editor-layout {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+.desk-main {
+  min-width: 0 !important;
+}
+
+.desk-sheet {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
+  padding: 2.25rem 3rem 5rem !important;
+  min-height: calc(100vh - 120px) !important;
+  position: relative !important;
+}
+
+@media (max-width: 768px) {
+  .desk-sheet {
+    padding: 1.5rem 1.25rem 4rem !important;
+  }
+}
+
+.desk-chrome {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding-bottom: 1.25rem !important;
+  margin-bottom: 2rem !important;
+  border-bottom: 1px solid var(--border) !important;
+  gap: 1rem !important;
+  flex-wrap: wrap !important;
+}
+
+.desk-chrome-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.75rem !important;
+}
+
+.desk-chrome-back {
+  color: var(--muted) !important;
+  text-decoration: none !important;
+  font-size: 0.85rem !important;
+  font-weight: 500 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+  padding: 4px 8px !important;
+  border-radius: 6px !important;
+  transition: all 0.12s !important;
+}
+
+.desk-chrome-back:hover {
+  color: var(--text) !important;
+  background: var(--surface2) !important;
+}
+
+.desk-metrics {
+  font-size: 0.8rem !important;
+  color: var(--muted) !important;
+  font-family: var(--font-mono) !important;
+  padding-left: 0.5rem !important;
+  border-left: 1px solid var(--border) !important;
+}
+
+.desk-chrome-right {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+}
+
+.desk-title-input {
+  width: 100% !important;
+  border: none !important;
+  background: transparent !important;
+  outline: none !important;
+  font-family: 'Literata', Georgia, serif !important;
+  font-size: 2.35rem !important;
+  font-weight: 700 !important;
+  line-height: 1.25 !important;
+  letter-spacing: -0.02em !important;
+  color: var(--text) !important;
+  margin-bottom: 1.75rem !important;
+  padding: 0 !important;
+}
+
+.desk-title-input::placeholder {
+  color: var(--muted) !important;
+  opacity: 0.6 !important;
+}
+
+.ProseMirror {
+  outline: none !important;
+  font-family: 'Literata', Georgia, serif !important;
+  font-size: 19px !important;
+  line-height: 1.75 !important;
+  color: var(--text) !important;
+  letter-spacing: -0.003em !important;
+  min-height: 480px !important;
+}
+
+.ProseMirror p {
+  margin: 0 0 1.35rem 0 !important;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder) !important;
+  float: left !important;
+  color: var(--muted) !important;
+  opacity: 0.5 !important;
+  pointer-events: none !important;
+  height: 0 !important;
+}
+
+.editor-sidebar-sheet {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
+  padding: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+  max-height: calc(100vh - 120px) !important;
+  overflow-y: auto !important;
+  position: sticky !important;
+  top: 15px !important;
+  width: 330px !important;
+}
+
+@media (max-width: 1024px) {
+  .editor-sidebar-sheet {
+    width: 100% !important;
+    max-width: 100% !important;
+    position: static !important;
+    max-height: none !important;
+  }
 }
 
 .editor-layout {
@@ -2686,6 +2840,10 @@ del, s, strike {
 
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
+let mode            = 'visual';  // 'visual' | 'raw'
+let slugManuallySet = <?= $is_new ? 'false' : 'true' ?>;
+window.KUTPOD_INSTANCE_URL = <?= json_encode($kutpodInstanceUrl ?? '') ?>;
+
 const rawEditor    = document.getElementById('raw-editor');
 const contentInput = document.getElementById('content-input');
 const fmtInput     = document.getElementById('content-format-input');
@@ -3066,117 +3224,8 @@ const htmlToolbar  = document.getElementById('html-toolbar');
       }
     });
   }
-})();
-      case 'h2':
-        document.execCommand('formatBlock', false, 'h2');
-        break;
-      case 'h3':
-        document.execCommand('formatBlock', false, 'h3');
-        break;
-      case 'quote':
-        document.execCommand('formatBlock', false, 'blockquote');
-        break;
-      case 'callout':
-        document.execCommand('insertHTML', false, '<div class="callout-note"><strong>Nota:</strong> Escribe tu apunte aquí...</div><p><br></p>');
-        break;
-      case 'code':
-        document.execCommand('insertHTML', false, '<pre style="background:var(--surface2); padding:1rem; border-radius:8px; border:1px solid var(--border); overflow-x:auto;"><code>// Escribe tu código aquí\n</code></pre><p><br></p>');
-        break;
-      case 'ul':
-        document.execCommand('insertUnorderedList');
-        break;
-      case 'ol':
-        document.execCommand('insertOrderedList');
-        break;
-      case 'table':
-        document.execCommand('insertHTML', false, `
-          <table style="width:100%; border-collapse:collapse; margin:1.25rem 0; border:1px solid var(--border);">
-            <thead>
-              <tr style="background:var(--surface2);">
-                <th style="border:1px solid var(--border); padding:8px 12px; text-align:left;">Encabezado 1</th>
-                <th style="border:1px solid var(--border); padding:8px 12px; text-align:left;">Encabezado 2</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td style="border:1px solid var(--border); padding:8px 12px;">Dato 1</td>
-                <td style="border:1px solid var(--border); padding:8px 12px;">Dato 2</td>
-              </tr>
-              <tr>
-                <td style="border:1px solid var(--border); padding:8px 12px;">Dato 3</td>
-                <td style="border:1px solid var(--border); padding:8px 12px;">Dato 4</td>
-              </tr>
-            </tbody>
-          </table>
-          <p><br></p>
-        `);
-        break;
-      case 'image':
-        if (typeof window.insertImage === 'function') window.insertImage();
-        else {
-          const url = prompt('URL de la imagen:');
-          if (url) document.execCommand('insertImage', false, url);
-        }
-        break;
-      case 'hr':
-        document.execCommand('insertHorizontalRule');
-        break;
-    }
-    if (typeof window.triggerAutoSave === 'function') window.triggerAutoSave();
-  }
 
-  slashMenu?.querySelectorAll('.slash-item').forEach((item, idx) => {
-    item.addEventListener('click', () => {
-      executeSlashCommand(item.getAttribute('data-cmd'));
-    });
-    item.addEventListener('mouseenter', () => {
-      slashIdx = idx;
-      updateSlashSelection();
-    });
-  });
-
-  visualEditor.addEventListener('keydown', (e) => {
-    if (slashActive) {
-      const items = slashMenu.querySelectorAll('.slash-item');
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        slashIdx = (slashIdx + 1) % items.length;
-        updateSlashSelection();
-        return;
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        slashIdx = (slashIdx - 1 + items.length) % items.length;
-        updateSlashSelection();
-        return;
-      }
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        if (items[slashIdx]) {
-          executeSlashCommand(items[slashIdx].getAttribute('data-cmd'));
-        }
-        return;
-      }
-      if (e.key === 'Escape' || e.key === 'Backspace') {
-        closeSlashMenu();
-        return;
-      }
-    }
-
-    if (e.key === '/' && !slashActive) {
-      setTimeout(() => {
-        openSlashMenu();
-      }, 10);
-    }
-  });
-
-  document.addEventListener('click', (e) => {
-    if (slashActive && !slashMenu.contains(e.target)) {
-      closeSlashMenu();
-    }
-  });
-
-  // 3. FIND & REPLACE (Ctrl+F, Ctrl+H)
+  // 7. FIND & REPLACE (Ctrl+F / Ctrl+H)
   const findInput = document.getElementById('find-input');
   const replaceInput = document.getElementById('replace-input');
   const findCounter = document.getElementById('find-counter');
@@ -3185,11 +3234,13 @@ const htmlToolbar  = document.getElementById('html-toolbar');
   let currentMatchIdx = -1;
 
   function clearFindHighlights() {
-    visualEditor.querySelectorAll('mark.find-match').forEach(m => {
+    const target = pmMount || fallbackEditor;
+    if (!target) return;
+    target.querySelectorAll('mark.find-match').forEach(m => {
       const text = document.createTextNode(m.textContent);
       m.parentNode.replaceChild(text, m);
     });
-    visualEditor.normalize();
+    target.normalize();
     currentMatches = [];
     currentMatchIdx = -1;
     if (findCounter) findCounter.textContent = '0/0';
@@ -3197,31 +3248,35 @@ const htmlToolbar  = document.getElementById('html-toolbar');
 
   function performSearch() {
     clearFindHighlights();
-    const query = findInput.value.trim();
+    const query = findInput ? findInput.value.trim() : '';
     if (!query) return;
 
-    const walker = document.createTreeWalker(visualEditor, NodeFilter.SHOW_TEXT, null, false);
+    const target = pmMount || fallbackEditor;
+    if (!target) return;
+
+    const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT, null, false);
     const nodesToReplace = [];
     let node;
     while ((node = walker.nextNode())) {
-      if (node.parentElement && node.parentElement.closest('mark.find-match')) continue;
-      const idx = node.textContent.toLowerCase().indexOf(query.toLowerCase());
-      if (idx !== -1) {
+      if (node.parentElement && (node.parentElement.tagName === 'SCRIPT' || node.parentElement.tagName === 'STYLE')) continue;
+      const val = node.nodeValue;
+      if (val.toLowerCase().includes(query.toLowerCase())) {
         nodesToReplace.push(node);
       }
     }
 
+    const qLen = query.length;
     nodesToReplace.forEach(textNode => {
+      const val = textNode.nodeValue;
+      const lower = val.toLowerCase();
+      const qLower = query.toLowerCase();
       const parent = textNode.parentNode;
       if (!parent) return;
-      const val = textNode.textContent;
-      const qLen = query.length;
-      let start = 0;
-      let lower = val.toLowerCase();
-      let pos;
 
       const frag = document.createDocumentFragment();
-      while ((pos = lower.indexOf(query.toLowerCase(), start)) !== -1) {
+      let start = 0;
+      let pos;
+      while ((pos = lower.indexOf(qLower, start)) !== -1) {
         if (pos > start) {
           frag.appendChild(document.createTextNode(val.substring(start, pos)));
         }
@@ -3252,7 +3307,7 @@ const htmlToolbar  = document.getElementById('html-toolbar');
     });
     if (currentMatches[currentMatchIdx]) {
       currentMatches[currentMatchIdx].scrollIntoView({ behavior: 'smooth', block: 'center' });
-      findCounter.textContent = `${currentMatchIdx + 1}/${currentMatches.length}`;
+      findCounter.textContent = (currentMatchIdx + 1) + '/' + currentMatches.length;
     }
   }
 
@@ -3260,15 +3315,16 @@ const htmlToolbar  = document.getElementById('html-toolbar');
     if (!findBar) return;
     findBar.style.display = 'flex';
     if (replaceRow) replaceRow.style.display = showReplace ? 'flex' : 'none';
-    findInput.focus();
-    findInput.select();
-    if (findInput.value) performSearch();
+    findInput?.focus();
+    findInput?.select();
+    if (findInput && findInput.value) performSearch();
   }
 
   function closeFindBar() {
     if (findBar) findBar.style.display = 'none';
     clearFindHighlights();
-    visualEditor.focus();
+    if (window.pmEditor) window.pmEditor.commands.focus();
+    else if (fallbackEditor) fallbackEditor.focus();
   }
 
   findInput?.addEventListener('input', performSearch);
@@ -3316,23 +3372,23 @@ const htmlToolbar  = document.getElementById('html-toolbar');
   document.getElementById('replace-one-btn')?.addEventListener('click', () => {
     if (currentMatches.length > 0 && currentMatchIdx >= 0) {
       const cur = currentMatches[currentMatchIdx];
-      const repl = replaceInput.value;
+      const repl = replaceInput?.value || '';
       const textNode = document.createTextNode(repl);
       cur.parentNode.replaceChild(textNode, cur);
       performSearch();
-      if (typeof window.triggerAutoSave === 'function') window.triggerAutoSave();
+      markDirty();
     }
   });
 
   document.getElementById('replace-all-btn')?.addEventListener('click', () => {
-    const repl = replaceInput.value;
+    const repl = replaceInput?.value || '';
     currentMatches.forEach(m => {
       const textNode = document.createTextNode(repl);
       m.parentNode.replaceChild(textNode, m);
     });
     clearFindHighlights();
     performSearch();
-    if (typeof window.triggerAutoSave === 'function') window.triggerAutoSave();
+    markDirty();
   });
 
   window.addEventListener('keydown', (e) => {
@@ -3347,37 +3403,20 @@ const htmlToolbar  = document.getElementById('html-toolbar');
     }
   });
 
-  // 4. DYNAMIC ACTION BUTTON & DIRTY STATE
-  let originalContent = visualEditor.innerHTML;
-  let isDirty = false;
-  const publishBtn = document.getElementById('publish-btn');
-
-  function checkDirtyState() {
-    const cur = visualEditor.innerHTML;
-    const dirty = (cur !== originalContent);
-    if (dirty !== isDirty) {
-      isDirty = dirty;
-      if (publishBtn) {
-        const curStatus = document.getElementById('status-select')?.value || 'draft';
-        if (curStatus === 'published') {
-          publishBtn.textContent = isDirty ? 'Actualizar' : 'Actualizado ✓';
-          publishBtn.style.opacity = isDirty ? '1' : '0.82';
-        } else {
-          publishBtn.textContent = 'Publicar';
-          publishBtn.style.opacity = '1';
+  // 8. DESK SHEET CLICK-TO-FOCUS
+  const deskSheet = document.querySelector('.desk-sheet');
+  if (deskSheet) {
+    deskSheet.addEventListener('click', (e) => {
+      if (e.target === deskSheet || e.target.classList.contains('desk-canvas-wrap')) {
+        if (window.pmEditor) {
+          window.pmEditor.commands.focus('end');
+        } else if (fallbackEditor) {
+          fallbackEditor.focus();
         }
       }
-    }
+    });
   }
-
-  visualEditor.addEventListener('input', checkDirtyState);
-  document.getElementById('post-title')?.addEventListener('input', () => { isDirty = true; checkDirtyState(); });
 })();
-
-let mode       = 'visual';  // 'visual' | 'raw'
-let slugManuallySet = <?= $is_new ? 'false' : 'true' ?>;
-window.KUTPOD_INSTANCE_URL = <?= json_encode($kutpodInstanceUrl ?? '') ?>;
-
 
 // ── Submit sync ────────────────────────────────────────────────────────────
 document.getElementById('editor-form').addEventListener('submit', function(e) {

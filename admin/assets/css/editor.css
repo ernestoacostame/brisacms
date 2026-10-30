@@ -866,6 +866,14 @@ body.focus-mode .focus-exit-hint {
 .sheet-group:last-child {
   border-bottom: none;
 }
+.sheet-group textarea,
+.sheet-group input[type="text"],
+.sheet-group select {
+  width: 100%;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  box-sizing: border-box;
+}
 .sheet-label {
   display: block;
   font-size: 0.8rem;
