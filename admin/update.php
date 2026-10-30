@@ -169,6 +169,36 @@ admin_header(__('update_title', 'Actualizaciones'), 'update');
       </div>
     </div>
 
+    <!-- Actualización manual desde archivo ZIP -->
+    <div class="card" style="margin-bottom: 2rem;" id="manual-upload-card">
+      <div class="card-header">
+        <div>
+          <span class="card-title" style="font-size: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            Subir paquete de actualización (.zip)
+          </span>
+          <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
+            Si prefieres actualizar manualmente o tu servidor no tiene acceso saliente a GitHub, sube el archivo <code>.zip</code> descargado directamente desde los <a href="https://github.com/ernestoacostame/KutBlog/releases" target="_blank" rel="noopener" style="color: var(--accent);">Releases de GitHub</a>.
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <form id="form-manual-upload" onsubmit="cmsManualUpdateUpload(event)">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px;">
+            <input type="file" id="manual-zip-input" accept=".zip,application/zip" style="flex: 1; min-width: 240px; padding: 8px 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text);" required>
+            <button class="btn btn-primary" id="btn-manual-upload" type="submit">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: middle;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+              Subir e instalar actualización
+            </button>
+          </div>
+          <div style="font-size: 11.5px; color: var(--muted); margin-top: 8px;">
+            ℹ Se creará una copia de seguridad automática antes de aplicar los ficheros del archivo ZIP.
+          </div>
+        </form>
+        <div id="manual-upload-status" style="display: none; margin-top: 1rem; padding: 1rem; border-radius: 6px; font-size: 13.5px;"></div>
+      </div>
+    </div>
+
     <!-- Configuración del Token (Opcional) -->
     <div class="card" style="margin-bottom: 2rem;">
       <div class="card-header"><span class="card-title"><?= __('update_token_settings_title', 'Token de Acceso de GitHub') ?> <span style="font-size: 11px; font-weight: normal; color: var(--muted); margin-left: 6px;">(Opcional · Solo desarrollo)</span></span></div>
@@ -551,6 +581,79 @@ function cmsDeleteBackup() {
       status.innerHTML = '❌ Error: ' + e.message;
       btn.disabled = false;
     });
+}
+
+function cmsManualUpdateUpload(e) {
+  e.preventDefault();
+  const fileInput = document.getElementById('manual-zip-input');
+  const btn = document.getElementById('btn-manual-upload');
+  const status = document.getElementById('manual-upload-status');
+
+  if (!fileInput.files || !fileInput.files[0]) {
+    alert('Por favor selecciona un archivo .zip.');
+    return;
+  }
+
+  const file = fileInput.files[0];
+  if (!file.name.toLowerCase().endsWith('.zip')) {
+    alert('El archivo seleccionado debe ser un .zip.');
+    return;
+  }
+
+  if (!confirm('¿Deseas aplicar la actualización manual desde "' + file.name + '"?\n\nSe creará un respaldo de seguridad previo de forma automática.')) {
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: middle; animation: spin 1s linear infinite;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg> Instalando actualización...';
+  status.style.display = 'block';
+  status.style.background = 'var(--surface2)';
+  status.style.color = 'var(--text)';
+  status.innerHTML = '<div style="font-weight: 600; margin-bottom: 4px;">Subiendo e instalando paquete...</div>'
+    + '<div style="font-size: 12px; color: var(--muted);">Desempaquetando archivos, creando copia de seguridad y actualizando core...</div>';
+
+  const formData = new FormData();
+  formData.append('action', 'upload');
+  formData.append('zip_file', file);
+
+  fetch('<?= base_url() ?>/api/update.php', {
+    method: 'POST',
+    body: formData
+  })
+  .then(async r => {
+    const text = await r.text();
+    try {
+      return JSON.parse(text);
+    } catch(err) {
+      throw new Error('Respuesta inválida del servidor (HTTP ' + r.status + '): ' + text.substring(0, 150));
+    }
+  })
+  .then(data => {
+    if (data.error) {
+      status.style.background = 'rgba(248, 113, 113, 0.1)';
+      status.style.color = 'var(--red)';
+      status.innerHTML = '<strong>❌ Error al actualizar:</strong><div style="margin-top: 6px; font-size: 13px;">' + data.error + '</div>';
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: middle;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> Subir e instalar actualización';
+      return;
+    }
+
+    status.style.background = 'rgba(52, 211, 153, 0.1)';
+    status.style.color = 'var(--green)';
+    status.innerHTML = '<div style="font-size: 15px; font-weight: 700;">🎉 ¡KutBlog actualizado con éxito!</div>'
+      + '<div style="margin-top: 6px; font-size: 13px; color: var(--text);">Actualizado de v' + data.from + ' a <strong>v' + data.to + '</strong> (' + data.files_updated + ' ficheros copiados).</div>'
+      + '<div style="margin-top: 12px;"><button class="btn btn-primary btn-sm" onclick="window.location.reload()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: middle;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg> Recargar página</button></div>';
+    fileInput.value = '';
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: middle;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> Subir e instalar actualización';
+  })
+  .catch(err => {
+    status.style.background = 'rgba(248, 113, 113, 0.1)';
+    status.style.color = 'var(--red)';
+    status.innerHTML = '<strong>❌ Error de conexión:</strong><div style="margin-top: 6px; font-size: 13px;">' + err.message + '</div>';
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: middle;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> Subir e instalar actualización';
+  });
 }
 </script>
 <style>

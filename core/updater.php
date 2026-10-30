@@ -321,6 +321,58 @@ function cms_update_apply(string $zipPath, string $newVersion): array {
   return ['success' => true, 'from' => CMS_VERSION, 'to' => $newVersion, 'files_updated' => $copied];
 }
 
+/**
+ * Aplica una actualización desde un archivo ZIP local (manual o descargado)
+ * detectando automáticamente la nueva versión desde core/config.php o version.php.
+ */
+function cms_update_apply_zip(string $zipPath, ?string $manualVersion = null): array {
+  if (!file_exists($zipPath)) return ['error' => 'El fichero ZIP no existe.'];
+  if (!class_exists('ZipArchive')) return ['error' => 'La extensión ZipArchive de PHP no está instalada.'];
+
+  $zip = new ZipArchive();
+  $res = $zip->open($zipPath);
+  if ($res !== true) {
+    @unlink($zipPath);
+    return ['error' => 'No se pudo abrir el archivo ZIP (código: ' . $res . '). Verifica que sea un archivo ZIP válido.'];
+  }
+
+  // Buscar core/config.php o version.php dentro del ZIP para auto-detectar la versión
+  $detectedVersion = '';
+  for ($i = 0; $i < $zip->numFiles; $i++) {
+    $stat = $zip->statIndex($i);
+    $name = $stat['name'] ?? '';
+    if (preg_match('#(?:^|/)core/config\.php$#i', $name)) {
+      $content = $zip->getFromIndex($i);
+      if ($content && preg_match("/define\('CMS_VERSION',\s*'([^']+)'\)/", $content, $m)) {
+        $detectedVersion = trim($m[1]);
+        break;
+      }
+    } elseif (preg_match('#(?:^|/)version\.php$#i', $name)) {
+      $content = $zip->getFromIndex($i);
+      if ($content && preg_match("/CMS_VERSION',\s*'([^']+)'/", $content, $m)) {
+        $detectedVersion = trim($m[1]);
+        break;
+      }
+    }
+  }
+  $zip->close();
+
+  $versionToApply = $manualVersion ?: $detectedVersion;
+  if (!$versionToApply) {
+    // Si no se encontró en el archivo, intentar extraer del nombre de archivo (ej: kutblog-v2.1.16.zip)
+    if (preg_match('/(?:v|kutblog-v?)([0-9]+\.[0-9]+\.[0-9]+)/i', basename($zipPath), $vm)) {
+      $versionToApply = $vm[1];
+    }
+  }
+
+  if (!$versionToApply) {
+    @unlink($zipPath);
+    return ['error' => 'No se pudo determinar la versión de KutBlog dentro del ZIP. Asegúrate de subir un archivo de release oficial de KutBlog.'];
+  }
+
+  return cms_update_apply($zipPath, $versionToApply);
+}
+
 // Revertir a versión seleccionada o anterior
 function cms_update_rollback(?string $specificFilename = null): array {
   if ($specificFilename !== null) {

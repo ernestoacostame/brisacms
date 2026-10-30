@@ -43,9 +43,9 @@ switch ($action) {
             break;
         }
 
-        // Validar que la URL sea de GitHub
-        if (!preg_match('#^https://(?:api\.)?github\.com/#i', $zipUrl)) {
-            echo json_encode(['error' => 'URL de descarga no válida. Solo se permiten URLs de GitHub.']);
+        // Validar que la URL pertenezca a GitHub o al servidor oficial KutStudio
+        if (!preg_match('#^https://(?:(?:api\.)?github\.com/|(?:www\.)?kutstudio\.(?:org|com)/)#i', $zipUrl)) {
+            echo json_encode(['error' => 'URL de descarga no válida. Solo se permiten URLs de GitHub o KutStudio.']);
             break;
         }
 
@@ -78,6 +78,44 @@ switch ($action) {
         $newVersion = preg_replace('/[^0-9.]/', '', $newVersion);
 
         $result = cms_update_apply($zipPath, $newVersion);
+        echo json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        break;
+
+    // Subida manual de archivo ZIP para actualizar
+    case 'upload':
+        set_time_limit(300);
+        ini_set('memory_limit', '256M');
+
+        if (empty($_FILES['zip_file']) || $_FILES['zip_file']['error'] !== UPLOAD_ERR_OK) {
+            $errCode = $_FILES['zip_file']['error'] ?? UPLOAD_ERR_NO_FILE;
+            $errMap = [
+                UPLOAD_ERR_INI_SIZE   => 'El archivo supera upload_max_filesize en php.ini.',
+                UPLOAD_ERR_FORM_SIZE  => 'El archivo supera el tamaño máximo permitido.',
+                UPLOAD_ERR_PARTIAL    => 'El archivo solo se subió parcialmente.',
+                UPLOAD_ERR_NO_FILE    => 'No se seleccionó ningún archivo.',
+                UPLOAD_ERR_NO_TMP_DIR => 'Falta la carpeta temporal en el servidor.',
+                UPLOAD_ERR_CANT_WRITE => 'Error al escribir el archivo en disco.',
+                UPLOAD_ERR_EXTENSION  => 'Una extensión de PHP detuvo la subida.',
+            ];
+            echo json_encode(['error' => $errMap[$errCode] ?? 'Error al subir el archivo (código ' . $errCode . ').']);
+            break;
+        }
+
+        $uploaded = $_FILES['zip_file'];
+        $origName = $uploaded['name'] ?? '';
+        if (!str_ends_with(strtolower($origName), '.zip')) {
+            echo json_encode(['error' => 'El archivo subido debe tener extensión .zip']);
+            break;
+        }
+
+        $destDir = cms_update_dir();
+        $destPath = $destDir . '/manual-' . date('Ymd_His') . '.zip';
+        if (!move_uploaded_file($uploaded['tmp_name'], $destPath)) {
+            echo json_encode(['error' => 'No se pudo mover el archivo ZIP a ' . $destDir . '. Verifica permisos de escritura.']);
+            break;
+        }
+
+        $result = cms_update_apply_zip($destPath);
         echo json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         break;
 
