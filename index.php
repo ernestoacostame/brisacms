@@ -47,6 +47,18 @@ if ($path === 'api/mastodon') {
     exit;
 }
 
+// ── Cookie-Free Analytics Beacon API ──────────────────────────────────────
+if ($path === 'api/track' || $path === 'api/track.php') {
+    require __DIR__ . '/api/track.php';
+    exit;
+}
+
+// ── Newsletter Subscription & Opt-In API ──────────────────────────────────
+if ($path === 'api/subscribe' || $path === 'api/subscribe.php') {
+    require __DIR__ . '/api/subscribe.php';
+    exit;
+}
+
 // ── Image Cache & Optimization API ────────────────────────────────────────
 if ($path === 'api/img' || $path === 'api/img.php') {
     require __DIR__ . '/api/img.php';

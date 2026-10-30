@@ -73,6 +73,12 @@ function render_theme(string $template, array $vars = []): void {
     }
     $footer_file = theme_file('footer.php');
     if (file_exists($footer_file)) include $footer_file;
+
+    // Cookie-free native analytics tracking
+    if (file_exists(ROOT_PATH . '/core/analytics.php')) {
+        require_once ROOT_PATH . '/core/analytics.php';
+        analytics_render_tracker();
+    }
 }
 
 function theme_asset_url(string $asset): string {
