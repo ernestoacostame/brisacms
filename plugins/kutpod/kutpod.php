@@ -509,7 +509,7 @@ function kutpod_filter_content(string $content, array $post): string {
         // Construir HTML del reproductor
         $playerHtml = '
         <div class="kutpod-player-container">
-          <iframe id="kutpod-player-frame" src="' . htmlspecialchars($embedSrc) . '" class="kutpod-player-frame" allow="autoplay" loading="lazy"></iframe>
+          <iframe id="kutpod-player-frame" src="' . htmlspecialchars($embedSrc) . '" class="kutpod-player-frame" style="width:100%; height:175px; min-height:175px; border:none;" allow="autoplay" loading="lazy"></iframe>
           ' . $statsBar . '
         </div>';
 
@@ -935,8 +935,8 @@ function kutpod_render_related_box(array $ep, array $cfg): string {
           </div>
         </div>
       </div>
-      <div style="margin-top:14px; border-radius:10px; overflow:hidden;">
-        <iframe src="' . htmlspecialchars($embedSrc) . '" style="width:100%; height:135px; border:none;" allow="autoplay" loading="lazy"></iframe>
+      <div style="margin-top:14px; border-radius:12px; overflow:hidden;">
+        <iframe src="' . htmlspecialchars($embedSrc) . '" class="kutpod-player-frame" style="width:100%; height:175px; min-height:175px; border:none;" allow="autoplay" loading="lazy"></iframe>
       </div>
     </div>';
 }

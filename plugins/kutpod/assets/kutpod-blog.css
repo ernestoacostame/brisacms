@@ -38,7 +38,8 @@
 
 .kutpod-player-frame {
   width: 100%;
-  height: 155px;
+  height: 175px;
+  min-height: 175px;
   border: none;
   display: block;
   background: transparent;

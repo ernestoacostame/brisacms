@@ -124,7 +124,7 @@ $instanceUrl = rtrim($cfg['instance_url'] ?: 'http://localhost:8000', '/');
 
         <!-- Reproductor incrustado directo -->
         <div style="margin-top: auto; border-radius: 12px; overflow: hidden; border: 1px solid var(--kp-border, rgba(0,0,0,0.08));">
-          <iframe src="<?= htmlspecialchars($embedSrc) ?>" class="kutpod-player-frame" style="height: 140px; width: 100%; border: none;" allow="autoplay" loading="lazy"></iframe>
+          <iframe src="<?= htmlspecialchars($embedSrc) ?>" class="kutpod-player-frame" style="height: 175px; min-height: 175px; width: 100%; border: none;" allow="autoplay" loading="lazy"></iframe>
         </div>
 
         <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 6px;">
