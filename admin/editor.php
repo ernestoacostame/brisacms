@@ -198,32 +198,60 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
           
         </div>
 
-        <!-- Sidebar panel -->
-        <div class="editor-sidebar">
-          <div class="panel">
-            <div class="panel-title">Status</div>
-            <select name="status" id="status-select">
-              <option value="draft" <?= ($post['status'] ?? 'draft') === 'draft' ? 'selected' : '' ?>><?= __("status_draft") ?></option>
-              <option value="published" <?= ($post['status'] ?? '') === 'published' ? 'selected' : '' ?>><?= __("status_published") ?></option>
-            </select>
+        <!-- Attributes Inspector Sheet (quireINK Aesthetic) -->
+        <aside class="editor-sidebar editor-sidebar-sheet">
+          <div class="sheet-head">
+            <span class="sheet-head-title">Propiedades</span>
+            <span class="sheet-status-pill <?= ($post['status'] ?? 'draft') === 'published' ? 'pub' : 'draft' ?>" id="sheet-header-pill">
+              <?= ($post['status'] ?? 'draft') === 'published' ? 'Publicado' : 'Borrador' ?>
+            </span>
           </div>
 
-          <div class="panel">
-            <div class="panel-title">URL Slug</div>
-            <input type="text" name="custom_slug" id="custom-slug"
-              value="<?= htmlspecialchars($post['slug'] ?? '') ?>"
-              placeholder="<?= __raw("panel_slug") ?>">
-            <div class="panel-hint"><?= __("panel_slug_hint") ?></div>
+          <!-- 1. Estado de publicación (Segmented Control) -->
+          <div class="sheet-group">
+            <label class="sheet-label">Estado de publicación</label>
+            <div class="sheet-segmented">
+              <label class="sheet-seg-item <?= ($post['status'] ?? 'draft') === 'draft' ? 'active' : '' ?>">
+                <input type="radio" name="status_radio" value="draft" <?= ($post['status'] ?? 'draft') === 'draft' ? 'checked' : '' ?> class="sheet-seg-radio">
+                <span class="sheet-dot draft"></span>
+                <span><?= __("status_draft") ?></span>
+              </label>
+              <label class="sheet-seg-item <?= ($post['status'] ?? '') === 'published' ? 'active' : '' ?>">
+                <input type="radio" name="status_radio" value="published" <?= ($post['status'] ?? '') === 'published' ? 'checked' : '' ?> class="sheet-seg-radio">
+                <span class="sheet-dot pub"></span>
+                <span><?= __("status_published") ?></span>
+              </label>
+            </div>
+            <!-- Campo oculto sincronizado para compatibilidad con form submit y scripts -->
+            <input type="hidden" name="status" id="status-select" value="<?= htmlspecialchars($post['status'] ?? 'draft') ?>">
           </div>
 
-          <div class="panel">
-            <div class="panel-title">Excerpt</div>
-            <textarea name="excerpt" rows="3" placeholder="<?= __raw("panel_excerpt_ph") ?>"><?= htmlspecialchars($post['excerpt'] ?? '') ?></textarea>
+          <!-- 2. URL Slug -->
+          <div class="sheet-group">
+            <label class="sheet-label" for="custom-slug">Slug de enlace</label>
+            <div class="sheet-field-prefix">
+              <span class="sheet-prefix-text">/<?= $type === 'articles' ? 'article' : 'page' ?>/</span>
+              <input type="text" name="custom_slug" id="custom-slug"
+                value="<?= htmlspecialchars($post['slug'] ?? '') ?>"
+                placeholder="<?= __raw("panel_slug") ?>">
+            </div>
+            <div class="sheet-hint"><?= __("panel_slug_hint") ?></div>
+          </div>
+
+          <!-- 3. Extracto / Excerpt -->
+          <div class="sheet-group">
+            <div class="sheet-label-split">
+              <label class="sheet-label" for="post-excerpt">Extracto</label>
+              <span class="sheet-count" id="excerpt-counter"><?= mb_strlen($post['excerpt'] ?? '') ?>/200</span>
+            </div>
+            <textarea name="excerpt" id="post-excerpt" rows="3" maxlength="200" placeholder="<?= __raw("panel_excerpt_ph") ?>"><?= htmlspecialchars($post['excerpt'] ?? '') ?></textarea>
+            <div class="sheet-hint">Breve resumen visible en listados y tarjetas sociales.</div>
           </div>
 
           <?php if ($type === 'articles'): ?>
-          <div class="panel">
-            <div class="panel-title">Categorías</div>
+          <!-- 4. Categorías -->
+          <div class="sheet-group">
+            <label class="sheet-label">Categorías</label>
             <div class="tag-input-wrap" id="cat-wrap">
               <div class="tag-chips" id="cat-chips"></div>
               <input type="text" id="cat-input" placeholder="<?= __raw("panel_cat_ph") ?>" autocomplete="off">
@@ -233,33 +261,43 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
             <?php if (!empty($all_cats)): ?>
             <div class="tag-suggestions" id="cat-suggestions">
               <?php foreach ($all_cats as $c): ?>
-              <span class="tag-sug" data-target="cat"><?= htmlspecialchars($c) ?></span>
+              <span class="tag-sug" data-target="cat">+ <?= htmlspecialchars($c) ?></span>
               <?php endforeach; ?>
             </div>
             <?php endif; ?>
           </div>
-          <div class="panel">
-            <div class="panel-title">Etiquetas</div>
+
+          <!-- 5. Etiquetas -->
+          <div class="sheet-group">
+            <label class="sheet-label">Etiquetas</label>
             <div class="tag-input-wrap" id="tag-wrap" style="position:relative">
               <div class="tag-chips" id="tag-chips"></div>
               <input type="text" id="tag-input" placeholder="<?= __raw("panel_tag_ph") ?>" autocomplete="off">
               <input type="hidden" name="tags" id="tag-hidden"
                 value="<?= htmlspecialchars(implode(', ', $post['tags'] ?? [])) ?>">
             </div>
-            <!-- Inline autocomplete dropdown (hidden by default) -->
+            <!-- Inline autocomplete dropdown -->
             <div id="tag-dropdown" class="tag-dropdown" style="display:none">
               <div id="tag-dropdown-list"></div>
             </div>
-            <div class="panel-hint">Escribe y selecciona de las sugerencias o presiona Enter para añadir.</div>
+            <div class="sheet-hint">Escribe y presiona Enter para añadir.</div>
             <!-- Hidden data list for JS -->
             <div id="all-tags-data" style="display:none"><?php
               foreach ($all_tags_list as $t) echo '<span>' . htmlspecialchars($t) . '</span>';
             ?></div>
+            <?php if (!empty($all_tags_list)): ?>
+            <div class="tag-suggestions" id="tag-quick-suggestions">
+              <?php foreach (array_slice($all_tags_list, 0, 8) as $t): ?>
+              <span class="tag-sug tag-quick-sug">+ <?= htmlspecialchars($t) ?></span>
+              <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
           </div>
           <?php endif; ?>
 
-          <div class="panel">
-            <div class="panel-title">Imagen Destacada</div>
+          <!-- 6. Imagen Destacada (Picture Slot) -->
+          <div class="sheet-group">
+            <label class="sheet-label">Imagen Destacada</label>
             <?php
               $featuredRaw = $post['featured_image'] ?? '';
               $featuredPreview = $featuredRaw;
@@ -272,43 +310,49 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
                   }
               }
             ?>
-            <input type="text" name="featured_image" id="featured_image_input" placeholder="https://…"
-              value="<?= htmlspecialchars($featuredRaw) ?>">
-            <div style="margin-top:0.5rem;display:flex;gap:0.5rem;align-items:center">
-              <label class="btn btn-secondary btn-sm" style="cursor:pointer;font-size:0.78rem">
-                <?= __("panel_featured_upload") ?>
-                <input type="file" id="feat-upload" accept="image/*" style="display:none">
-              </label>
-              <span style="font-size:0.72rem;color:var(--muted)"><?= __("panel_featured_or") ?></span>
+            <div class="sheet-picture-slot">
+              <div id="featured-preview" class="sheet-picture-frame" style="<?= empty($featuredRaw) ? 'display:none;' : '' ?>">
+                <img src="<?= htmlspecialchars($featuredPreview) ?>" alt="" id="featured-img" class="sheet-picture-img">
+              </div>
+              <div id="featured-empty-slot" class="sheet-picture-empty" style="<?= empty($featuredRaw) ? '' : 'display:none;' ?>">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                <span>Sin imagen seleccionada</span>
+              </div>
+              <div class="sheet-picture-actions">
+                <label class="btn btn-secondary btn-sm" style="cursor:pointer">
+                  <span>Elegir archivo</span>
+                  <input type="file" id="feat-upload" accept="image/*" style="display:none">
+                </label>
+                <button type="button" id="feat-drop-btn" class="btn btn-danger btn-sm" style="<?= empty($featuredRaw) ? 'display:none;' : '' ?>">Quitar</button>
+              </div>
+              <input type="text" name="featured_image" id="featured_image_input" placeholder="O pega una URL: https://…"
+                value="<?= htmlspecialchars($featuredRaw) ?>" style="font-size:0.82rem;">
+              <div id="feat-upload-progress" style="display:none;font-size:0.78rem;color:var(--muted);margin-top:0.35rem"></div>
             </div>
-            <div id="featured-preview" style="<?= empty($featuredRaw) ? 'display:none' : '' ?>">
-              <img src="<?= htmlspecialchars($featuredPreview) ?>" style="width:100%;border-radius:6px;margin-top:0.6rem;max-height:120px;object-fit:cover;" alt="" id="featured-img">
-            </div>
-            <div id="feat-upload-progress" style="display:none;font-size:0.78rem;color:var(--muted);margin-top:0.35rem"></div>
           </div>
 
           <?php if (!cms_plugin_is_active('fediverse')): ?>
-          <div class="panel">
-            <div class="panel-title">URL de Mastodon</div>
+          <div class="sheet-group">
+            <label class="sheet-label">URL de Mastodon</label>
             <input type="text" name="mastodon_url" placeholder="<?= __raw("panel_mastodon_ph") ?>"
               value="<?= htmlspecialchars($post['mastodon_url'] ?? '') ?>">
-            <div class="panel-hint"><?= __("panel_mastodon_hint") ?></div>
+            <div class="sheet-hint"><?= __("panel_mastodon_hint") ?></div>
           </div>
           <?php endif; ?>
 
           <?php if (cms_plugin_is_active('kutpod')): 
               $kpMeta = $post['podcast_meta'] ?? null;
           ?>
-          <div class="panel">
-            <div class="panel-title" style="display:flex; align-items:center; gap:6px;">
-              <span>🎙️ KutPod Podcast</span>
+          <div class="sheet-group">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+              <label class="sheet-label" style="margin-bottom:0">🎙️ KutPod Podcast</label>
               <?php if ($kpMeta): ?>
-                <span style="background:rgba(255,95,126,0.15); color:#ff3b61; font-size:0.7rem; padding:2px 6px; border-radius:10px; margin-left:auto;">Sincronizado</span>
+                <span class="badge badge-green" style="font-size:0.7rem; padding:1px 6px;">Sincronizado</span>
               <?php endif; ?>
             </div>
             
             <?php if ($kpMeta): ?>
-              <div style="font-size:0.83rem; margin-bottom:0.75rem; background:rgba(0,0,0,0.03); padding:8px 10px; border-radius:6px;">
+              <div style="font-size:0.82rem; margin-bottom:0.75rem; background:var(--surface2); border:1px solid var(--border); padding:8px 10px; border-radius:6px;">
                 <div style="font-weight:600; color:var(--text);"><?= htmlspecialchars($kpMeta['podcast_title'] ?: 'Podcast') ?></div>
                 <div style="color:var(--muted); margin-top:2px;">
                   Temp <?= $kpMeta['season'] ?? 1 ?> · Ep <?= $kpMeta['number'] ?? 0 ?> · <?= htmlspecialchars($kpMeta['duration_fmt'] ?? '') ?>
@@ -321,7 +365,7 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 
             <input type="text" name="kutpod_url" placeholder="https://kutpod.com/@show/ep"
               value="<?= htmlspecialchars($post['kutpod_url'] ?? '') ?>">
-            <div class="panel-hint">Pega aquí la URL pública del episodio para incrustar el reproductor en este post.</div>
+            <div class="sheet-hint">Pega aquí la URL pública del episodio para incrustar el reproductor en este post.</div>
           </div>
           <?php endif; ?>
 
@@ -329,29 +373,28 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
               require_once dirname(__DIR__) . '/plugins/fediverse/activitypub.php';
               $status = ap_get_post_delivery_status($post['slug']);
           ?>
-          <div class="panel">
-            <div class="panel-title">Fediverso (ActivityPub)</div>
-            
-            <div style="margin-bottom:0.75rem; border-bottom:1px solid var(--border2); padding-bottom:0.75rem">
+          <div class="sheet-group">
+            <label class="sheet-label">Fediverso (ActivityPub)</label>
+            <div style="margin-bottom:0.75rem; padding-bottom:0.75rem; border-bottom:1px solid var(--border)">
               <?php if (!$status): ?>
-                <div style="font-size:0.85rem; color:var(--muted)">Este artículo aún no ha sido federado.</div>
+                <div style="font-size:0.82rem; color:var(--muted)">Este artículo aún no ha sido federado.</div>
               <?php else: ?>
-                <div style="display:flex; flex-direction:column; gap:0.4rem; font-size:0.85rem">
+                <div style="display:flex; flex-direction:column; gap:0.35rem; font-size:0.82rem">
                   <?php if ($status['total'] === 0): ?>
                     <div style="color:var(--text); display:flex; align-items:center; gap:0.35rem">
-                      <span style="font-size:1.1rem">📢</span> Publicado en Outbox local (sin seguidores).
+                      <span style="font-size:1rem">📢</span> Publicado en Outbox local (sin seguidores).
                     </div>
                   <?php elseif ($status['pending'] > 0): ?>
-                    <div style="color:var(--orange); display:flex; align-items:center; gap:0.35rem">
-                      <span style="font-size:1.1rem">⏳</span> Enviando: <strong><?= $status['delivered'] ?> / <?= $status['total'] ?></strong>
+                    <div style="color:var(--yellow); display:flex; align-items:center; gap:0.35rem">
+                      <span style="font-size:1rem">⏳</span> Enviando: <strong><?= $status['delivered'] ?> / <?= $status['total'] ?></strong>
                     </div>
                   <?php elseif ($status['failed'] > 0 && $status['delivered'] === 0): ?>
                     <div style="color:var(--red); display:flex; align-items:center; gap:0.35rem">
-                      <span style="font-size:1.1rem">⚠</span> Envío fallido.
+                      <span style="font-size:1rem">⚠</span> Envío fallido.
                     </div>
                   <?php else: ?>
                     <div style="color:var(--green); display:flex; align-items:center; gap:0.35rem">
-                      <span style="font-size:1.1rem">✓</span> Compartido con éxito en <strong><?= $status['delivered'] ?></strong> servidores.
+                      <span style="font-size:1rem">✓</span> Compartido con éxito en <strong><?= $status['delivered'] ?></strong> servidores.
                     </div>
                   <?php endif; ?>
                   <div style="font-size:0.72rem; color:var(--muted)">
@@ -361,12 +404,12 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
               <?php endif; ?>
             </div>
 
-            <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.85rem; color:var(--text); margin-bottom:0.25rem">
+            <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.82rem; color:var(--text)">
               <input type="checkbox" name="fediverse_resend" value="1" style="width:auto; margin:0">
               <strong>Reenviar al Fediverso</strong>
             </label>
-            <div class="panel-hint">
-              Vuelve a compartir este artículo con tus seguidores (generará una nueva publicación).
+            <div class="sheet-hint">
+              Vuelve a compartir este artículo con tus seguidores.
             </div>
           </div>
           <?php endif; ?>
@@ -374,29 +417,29 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
           <?php if ($post && function_exists('get_content_backups')): 
               $backups = get_content_backups($type, $slug);
               if (!empty($backups)): ?>
-          <div class="panel" id="panel-version-history">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem">
-              <div class="panel-title" style="color:var(--accent);margin-bottom:0">Version History</div>
-              <button type="button" class="btn btn-secondary btn-sm" onclick="clearAllBackups('<?= htmlspecialchars($type) ?>', '<?= htmlspecialchars($slug) ?>')" style="padding:0.15rem 0.5rem;font-size:0.72rem;color:var(--red)" title="Limpiar todas las versiones">
+          <div class="sheet-group" id="panel-version-history">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.35rem">
+              <label class="sheet-label" style="margin-bottom:0">Historial de versiones</label>
+              <button type="button" class="btn btn-danger btn-sm" onclick="clearAllBackups('<?= htmlspecialchars($type) ?>', '<?= htmlspecialchars($slug) ?>')" style="padding:0.15rem 0.5rem;font-size:0.7rem;" title="Limpiar todas las versiones">
                 Limpiar todo
               </button>
             </div>
-            <div style="font-size:0.8rem; color:var(--muted); margin-bottom:0.5rem">
+            <div class="sheet-hint" style="margin-bottom:0.5rem">
               Últimas 10 versiones guardadas.
             </div>
-            <div id="backup-list-container" style="max-height:220px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:0.25rem;">
+            <div id="backup-list-container" style="max-height:200px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:0.25rem;">
               <?php foreach ($backups as $backup): ?>
-              <div id="backup-item-<?= htmlspecialchars($backup['timestamp']) ?>" style="padding:0.45rem 0.5rem; border-bottom:1px solid var(--border2); font-size:0.8rem; display:flex; justify-content:space-between; align-items:center; gap:0.4rem;">
-                <span style="font-family:monospace;font-size:0.75rem"><?= htmlspecialchars($backup['date']) ?></span>
+              <div id="backup-item-<?= htmlspecialchars($backup['timestamp']) ?>" style="padding:0.4rem 0.5rem; border-bottom:1px solid var(--border2); font-size:0.78rem; display:flex; justify-content:space-between; align-items:center; gap:0.4rem;">
+                <span style="font-family:var(--font-mono);font-size:0.72rem"><?= htmlspecialchars($backup['date']) ?></span>
                 <div style="display:flex;gap:0.3rem;align-items:center">
                   <button type="button" class="btn btn-secondary btn-sm" 
                           onclick="previewBackup('<?= htmlspecialchars($backup['timestamp']) ?>', '<?= htmlspecialchars($type) ?>', '<?= htmlspecialchars($slug) ?>')"
-                          style="padding:0.15rem 0.45rem; font-size:0.7rem;">
-                    Preview
+                          style="padding:0.15rem 0.45rem; font-size:0.68rem;">
+                    Ver
                   </button>
                   <button type="button" class="btn btn-danger btn-sm" 
                           onclick="deleteBackup('<?= htmlspecialchars($backup['timestamp']) ?>', '<?= htmlspecialchars($type) ?>', '<?= htmlspecialchars($slug) ?>')"
-                          style="padding:0.15rem 0.4rem; font-size:0.7rem;" title="Eliminar este respaldo">
+                          style="padding:0.15rem 0.4rem; font-size:0.68rem;" title="Eliminar este respaldo">
                     ✕
                   </button>
                 </div>
@@ -407,16 +450,16 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
           <?php endif; endif; ?>
 
           <?php if ($post): ?>
-          <div class="panel">
-            <div class="panel-title" style="color:var(--red)">Danger Zone</div>
+          <div class="sheet-group">
+            <label class="sheet-label" style="color:var(--ink-danger)">Zona de peligro</label>
             <a href="<?= base_url() ?>/admin/delete.php?type=<?= $type ?>&slug=<?= htmlspecialchars($slug) ?>&csrf=<?= $csrf ?>"
                class="btn btn-danger" style="width:100%;justify-content:center"
                onclick="return confirm('<?= __raw("confirm_delete_article") ?>')">
-              Delete <?= $label ?>
+              Eliminar <?= $label ?>
             </a>
           </div>
           <?php endif; ?>
-        </div>
+        </aside>
       </div>
     </form>
   </div>
@@ -1210,37 +1253,39 @@ body.focus-mode .floating-buttons-container { display: none !important; }
 
 /* ── Tag chips ── */
 .tag-input-wrap {
-  background: var(--bg); border: 1px solid var(--border2); border-radius: 7px;
-  padding: 0.4rem 0.5rem; min-height: 38px; display: flex; flex-wrap: wrap; gap: 0.3rem;
-  align-items: center; cursor: text;
+  background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-sm);
+  padding: 0.35rem 0.5rem; min-height: 36px; display: flex; flex-wrap: wrap; gap: 0.3rem;
+  align-items: center; cursor: text; box-shadow: inset 0 1px 1.5px rgba(0,0,0,0.1);
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
-.tag-input-wrap:focus-within { border-color: var(--accent); }
+.tag-input-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.18), inset 0 1px 1.5px rgba(0,0,0,0.1); }
 .tag-chip {
-  display: inline-flex; align-items: center; gap: 0.3rem;
-  background: rgba(var(--accent-rgb),0.15); color: var(--accent);
-  padding: 0.15rem 0.5rem; border-radius: 20px; font-size: 0.78rem; font-weight: 500;
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  background: var(--text); color: var(--bg);
+  padding: 2px 7px; border-radius: 9999px; font-size: 0.74rem; font-weight: 600;
+  letter-spacing: -0.01em;
 }
-.tag-chip button { background: none; border: none; color: inherit; cursor: pointer; font-size: 0.9rem; line-height: 1; padding: 0; opacity: 0.7; }
+.tag-chip button { background: none; border: none; color: inherit; cursor: pointer; font-size: 0.85rem; line-height: 1; padding: 0 0 0 2px; opacity: 0.65; }
 .tag-chip button:hover { opacity: 1; }
-.tag-input-wrap input { background: none; border: none; outline: none; font-family: inherit; font-size: 0.85rem; color: var(--text); padding: 0; min-width: 80px; flex: 1; }
-.tag-suggestions { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.5rem; }
-.tag-sug { background: var(--surface2); border: 1px solid var(--border2); color: var(--text2); padding: 0.15rem 0.55rem; border-radius: 20px; font-size: 0.75rem; cursor: pointer; transition: all 0.15s; }
-.tag-sug:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
-.tag-sug.used { opacity: 0.35; pointer-events: none; }
+.tag-input-wrap input { background: none; border: none; outline: none; font-family: inherit; font-size: 0.84rem; color: var(--text); padding: 0; min-width: 80px; flex: 1; box-shadow: none !important; }
+.tag-suggestions { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.45rem; }
+.tag-sug { background: var(--surface2); border: 1px solid var(--border); color: var(--text2); padding: 2px 7px; border-radius: 9999px; font-size: 0.73rem; cursor: pointer; transition: all 0.15s; line-height: 1.3; }
+.tag-sug:hover { background: var(--border); color: var(--text); border-color: var(--border2); }
+.tag-sug.used { display: none; }
 
 /* Tag autocomplete dropdown */
 .tag-dropdown {
-  background: var(--surface2); border: 1px solid var(--border2);
+  background: var(--surface); border: 1px solid var(--border2);
   border-radius: 0 0 7px 7px; max-height: 180px; overflow-y: auto;
-  margin-top: -1px;
+  margin-top: -1px; box-shadow: 0 4px 14px rgba(0,0,0,0.15);
 }
 .tag-dropdown-item {
   padding: 0.45rem 0.75rem; font-size: 0.82rem; cursor: pointer;
-  color: var(--text2); transition: background 0.1s;
+  color: var(--text); transition: background 0.1s;
   display: flex; align-items: center; justify-content: space-between;
 }
 .tag-dropdown-item:hover, .tag-dropdown-item.focused {
-  background: rgba(var(--accent-rgb), 0.15); color: var(--accent);
+  background: var(--surface2); color: var(--accent);
 }
 .tag-dropdown-item .tag-count {
   font-size: 0.7rem; color: var(--muted); background: var(--bg);
@@ -1250,41 +1295,217 @@ body.focus-mode .floating-buttons-container { display: none !important; }
   padding: 0.5rem 0.75rem; font-size: 0.8rem; color: var(--muted); font-style: italic;
 }
 
-/* ── Sidebar panels ── */
-.editor-sidebar { 
+/* ── quireINK Inspired Attributes Inspector Sheet ── */
+.editor-sidebar-sheet { 
   display: flex; 
   flex-direction: column; 
-  gap: 0.75rem; 
-  max-height: calc(100vh - 150px); /* Limit sidebar height */
-  overflow-y: auto; /* Enable scrolling */
+  gap: 0; 
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  padding: 0;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
   position: sticky;
-  top: 20px; /* Stick to top with some offset */
+  top: 15px;
 }
+.editor-sidebar-sheet::-webkit-scrollbar { width: 5px; }
+.editor-sidebar-sheet::-webkit-scrollbar-track { background: transparent; }
+.editor-sidebar-sheet::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.editor-sidebar-sheet::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+.editor-sidebar-sheet { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
 
-/* Custom scrollbar for sidebar */
-.editor-sidebar::-webkit-scrollbar {
-  width: 6px;
+.sheet-head {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 5;
 }
-
-.editor-sidebar::-webkit-scrollbar-track {
+.sheet-head-title {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.sheet-status-pill {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  letter-spacing: 0.02em;
+}
+.sheet-status-pill.draft {
   background: var(--surface2);
-  border-radius: 3px;
+  color: var(--text2);
+  border: 1px solid var(--border2);
+}
+.sheet-status-pill.pub {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.25);
 }
 
-.editor-sidebar::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 3px;
+.sheet-group {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.sheet-group:last-child {
+  border-bottom: none;
+}
+.sheet-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+  letter-spacing: -0.01em;
+}
+.sheet-label-split {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.sheet-label-split .sheet-label {
+  margin-bottom: 0;
+}
+.sheet-count {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.sheet-hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.4;
+  margin-top: 5px;
 }
 
-.editor-sidebar::-webkit-scrollbar-thumb:hover {
-  background: var(--accent);
+/* Status Segmented Control (Draft vs Published) */
+.sheet-segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  background: var(--surface2);
+  padding: 3px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+}
+.sheet-seg-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.sheet-seg-item:hover { color: var(--text); }
+.sheet-seg-item.active {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+.sheet-seg-radio {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.sheet-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.sheet-dot.draft { background: var(--muted); }
+.sheet-dot.pub { background: #10b981; }
+
+/* URL Slug Affix Input */
+.sheet-field-prefix {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: inset 0 1px 1.5px rgba(0,0,0,0.1);
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.sheet-field-prefix:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.18), inset 0 1px 1.5px rgba(0,0,0,0.1);
+}
+.sheet-prefix-text {
+  padding: 0 6px 0 9px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  user-select: none;
+  font-family: var(--font-mono);
+}
+.sheet-field-prefix input {
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0.5rem 0.65rem 0.5rem 0 !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  font-family: var(--font-mono);
+  font-size: 0.82rem !important;
 }
 
-/* For Firefox */
-.editor-sidebar {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) var(--surface2);
+/* Picture Slot (16:9 Image Preview) */
+.sheet-picture-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
+.sheet-picture-frame {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  border-radius: 7px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  position: relative;
+}
+.sheet-picture-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.sheet-picture-empty {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  border-radius: 7px;
+  border: 1.5px dashed var(--border2);
+  background: rgba(0,0,0,0.02);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.sheet-picture-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; }
 .panel-title { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 0.65rem; }
 .panel-hint { font-size: 0.75rem; color: var(--muted); margin-top: 0.4rem; }
@@ -2642,21 +2863,88 @@ titleInput.addEventListener('input', () => {
 });
 slugInput.addEventListener('input', () => { slugManuallySet = true; });
 
-// ── Featured image preview ─────────────────────────────────────────────────
-document.getElementById('featured_image_input').addEventListener('input', function() {
+// ── Segmented status controller (quireINK style) ────────────────────────
+document.querySelectorAll('input[name="status_radio"]').forEach(radio => {
+  radio.addEventListener('change', function() {
+    const val = this.value;
+    const statusSelect = document.getElementById('status-select');
+    if (statusSelect) statusSelect.value = val;
+    
+    document.querySelectorAll('.sheet-seg-item').forEach(item => {
+      const r = item.querySelector('input[type="radio"]');
+      if (r && r.value === val) item.classList.add('active');
+      else item.classList.remove('active');
+    });
+    
+    const pill = document.getElementById('sheet-header-pill');
+    if (pill) {
+      pill.className = 'sheet-status-pill ' + (val === 'published' ? 'pub' : 'draft');
+      pill.textContent = val === 'published' ? 'Publicado' : 'Borrador';
+    }
+    
+    const pubBtn = document.getElementById('publish-btn');
+    if (pubBtn) {
+      pubBtn.textContent = val === 'published' 
+        ? <?= json_encode(($post && ($post['status'] ?? '') === 'published') ? __raw("editor_update") : __raw("editor_publish")) ?>
+        : 'Guardar borrador';
+    }
+  });
+});
+
+// ── Excerpt character counter ──────────────────────────────────────────────
+const excerptArea = document.getElementById('post-excerpt');
+const excerptCount = document.getElementById('excerpt-counter');
+if (excerptArea && excerptCount) {
+  excerptArea.addEventListener('input', () => {
+    excerptCount.textContent = `${excerptArea.value.length}/200`;
+  });
+}
+
+// ── Featured image preview & drop (Picture slot) ───────────────────────────
+const featEmpty = document.getElementById('featured-empty-slot');
+const featDropBtn = document.getElementById('feat-drop-btn');
+
+function updateFeaturedPreviewState(url) {
   const preview = document.getElementById('featured-preview');
   const img = document.getElementById('featured-img');
-  let val = (this.value || '').trim();
-  if (val) {
-    if (val.startsWith('/media/covers/') && window.KUTPOD_INSTANCE_URL) {
-      img.src = window.KUTPOD_INSTANCE_URL.replace(/\/+$/, '') + val;
+  url = (url || '').trim();
+  if (url) {
+    if (url.startsWith('/media/covers/') && window.KUTPOD_INSTANCE_URL) {
+      img.src = window.KUTPOD_INSTANCE_URL.replace(/\/+$/, '') + url;
     } else {
-      img.src = val;
+      img.src = url;
     }
-    preview.style.display = '';
+    if (preview) preview.style.display = '';
+    if (featEmpty) featEmpty.style.display = 'none';
+    if (featDropBtn) featDropBtn.style.display = '';
   } else {
-    preview.style.display = 'none';
+    if (preview) preview.style.display = 'none';
+    if (featEmpty) featEmpty.style.display = '';
+    if (featDropBtn) featDropBtn.style.display = 'none';
   }
+}
+
+document.getElementById('featured_image_input')?.addEventListener('input', function() {
+  updateFeaturedPreviewState(this.value);
+});
+
+featDropBtn?.addEventListener('click', function() {
+  const input = document.getElementById('featured_image_input');
+  if (input) input.value = '';
+  updateFeaturedPreviewState('');
+});
+
+// Quick tag suggestions click
+document.querySelectorAll('.tag-quick-sug').forEach(btn => {
+  btn.addEventListener('click', function() {
+    const term = this.textContent.replace(/^\+\s*/, '').trim();
+    const tagInput = document.getElementById('tag-input');
+    if (tagInput && term) {
+      tagInput.value = term;
+      const enterEvt = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+      tagInput.dispatchEvent(enterEvt);
+    }
+  });
 });
 
 function escHtml(s) {
@@ -2891,8 +3179,7 @@ if (featUpload) {
       const data = await res.json();
       if (data.url) {
         featInput.value = data.url;
-        document.getElementById('featured-img').src = data.url;
-        document.getElementById('featured-preview').style.display = '';
+        updateFeaturedPreviewState(data.url);
         featProgress.textContent = '✓ Subida correctamente';
         setTimeout(() => featProgress.style.display = 'none', 2000);
       } else {
