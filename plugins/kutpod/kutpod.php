@@ -570,9 +570,9 @@ function kutpod_filter_content(string $content, array $post): string {
 
     // 2. Caso Artículo Estándar (No Podcast) -> Mostrar Episodio Relacionado al pie
     if (!empty($cfg['enable_related'])) {
-        $related = kutpod_find_related_episode($post);
-        if ($related) {
-            $content .= kutpod_render_related_box($related, $cfg);
+        $relatedList = kutpod_find_related_episodes($post, 4);
+        if (!empty($relatedList)) {
+            $content .= kutpod_render_related_box($relatedList, $cfg);
         }
     }
 
@@ -808,9 +808,9 @@ function kutpod_search_episodes_direct(array $postTags, array $postCats, array $
 }
 
 /**
- * Busca un episodio relacionado con este artículo según categorías o etiquetas
+ * Busca hasta $limit episodios relacionados con este artículo según categorías o etiquetas
  */
-function kutpod_find_related_episode(array $post): ?array {
+function kutpod_find_related_episodes(array $post, int $limit = 4): array {
     $cfg = kutpod_config();
     $postCats = array_values(array_filter(array_map('trim', array_map('strtolower', $post['categories'] ?? []))));
     $postTags = array_values(array_filter(array_map('trim', array_map('strtolower', $post['tags'] ?? []))));
@@ -830,14 +830,14 @@ function kutpod_find_related_episode(array $post): ?array {
     }
 
     if (empty($postCats) && empty($postTags) && empty($titleKeywords)) {
-        return null;
+        return [];
     }
+
+    $results = [];
+    $seenSlugs = [];
 
     // 1. Primero: Buscar entre artículos de podcast ya importados en KutBlog (si existen)
     $all = list_content('articles', true, 1, 9999)['items'] ?? [];
-    $bestLocal = null;
-    $bestLocalScore = 0;
-
     foreach ($all as $item) {
         if (empty($item['podcast_meta']['is_podcast']) && empty($item['podcast_meta']['audio_url']) && empty($item['kutpod_url'])) {
             continue;
@@ -861,39 +861,62 @@ function kutpod_find_related_episode(array $post): ?array {
             if (str_contains($itemTitle, $kw)) $score += 4;
         }
 
-        if ($score > $bestLocalScore) {
-            $bestLocalScore = $score;
-            $bestLocal = $item;
+        if ($score >= 6) {
+            $epSlug = $item['podcast_meta']['episode_slug'] ?? $item['slug'];
+            $itemCopy = $item;
+            $itemCopy['score'] = $score;
+            $itemCopy['is_external_kutpod'] = false;
+            $results[] = $itemCopy;
+            $seenSlugs[strtolower($epSlug)] = true;
+            $seenSlugs[strtolower($item['slug'])] = true;
         }
-    }
-
-    if ($bestLocal && $bestLocalScore >= 8) {
-        return $bestLocal;
     }
 
     // 2. Segundo: Buscar directamente en KutPod (SQLite o REST API)
     $direct = kutpod_search_episodes_direct($postTags, $postCats, $titleKeywords, $cfg);
-    if (!empty($direct)) {
-        return $direct[0];
+    foreach ($direct as $ep) {
+        $epSlug = strtolower($ep['slug'] ?? '');
+        if (!empty($seenSlugs[$epSlug])) {
+            continue; // Ya incluido como artículo local
+        }
+        $seenSlugs[$epSlug] = true;
+        $results[] = $ep;
     }
 
-    return $bestLocal;
+    usort($results, fn($a, $b) => $b['score'] <=> $a['score']);
+    return array_slice($results, 0, $limit);
 }
 
 /**
- * Renderiza el bloque de episodio relacionado
+ * Busca un único episodio más relacionado (compatibilidad)
  */
-function kutpod_render_related_box(array $ep, array $cfg): string {
+function kutpod_find_related_episode(array $post): ?array {
+    $matches = kutpod_find_related_episodes($post, 1);
+    return !empty($matches) ? $matches[0] : null;
+}
+
+/**
+ * Renderiza el bloque de episodio relacionado (con reproductor principal y mini-playlist interactiva si hay más de uno)
+ */
+function kutpod_render_related_box($episodesOrSingle, array $cfg): string {
     $base = base_url();
     $instanceUrl = rtrim($cfg['instance_url'] ?: 'http://localhost:8000', '/');
-    $meta = $ep['podcast_meta'] ?? [];
+
+    if (empty($episodesOrSingle)) return '';
+
+    // Soporte tanto para un único episodio como para una lista de episodios
+    $episodes = isset($episodesOrSingle['title']) ? [$episodesOrSingle] : $episodesOrSingle;
+    $main = $episodes[0];
+    $others = array_slice($episodes, 1);
+
+    $meta = $main['podcast_meta'] ?? [];
     $pSlug = $meta['podcast_slug'] ?? 'default';
-    $epSlug = $meta['episode_slug'] ?? ($ep['slug'] ?? '');
+    $epSlug = $meta['episode_slug'] ?? ($main['slug'] ?? '');
     
     $durSecs = (int)($meta['duration_secs'] ?? 0);
     $durFmt = $meta['duration_fmt'] ?: ($durSecs > 0 ? gmdate($durSecs >= 3600 ? 'H:i:s' : 'i:s', $durSecs) : '');
 
-    $rawCover = $ep['cover'] ?? ($ep['featured_image'] ?? '');
+    $rawCover = $main['cover'] ?? ($main['featured_image'] ?? '');
     $cover = kutpod_resolve_cover_url($rawCover, $cfg, [
         'podcast_slug' => $pSlug,
         'instance_url' => $instanceUrl
@@ -902,20 +925,86 @@ function kutpod_render_related_box(array $ep, array $cfg): string {
         $cover = $base . '/plugins/kutpod/assets/cover-placeholder.png';
     }
 
-    $isExternal = !empty($ep['is_external_kutpod']);
+    $isExternal = !empty($main['is_external_kutpod']);
     $listenUrl = $isExternal 
-        ? (!empty($ep['url']) ? $ep['url'] : ($instanceUrl . '/@' . rawurlencode($pSlug) . '/' . rawurlencode($epSlug)))
-        : ($base . '/article/' . htmlspecialchars($ep['slug']));
+        ? (!empty($main['url']) ? $main['url'] : ($instanceUrl . '/@' . rawurlencode($pSlug) . '/' . rawurlencode($epSlug)))
+        : ($base . '/article/' . htmlspecialchars($main['slug']));
     
     $listenText = $isExternal ? 'Escuchar en KutPod ↗' : 'Escuchar y ver notas completas →';
     $targetAttr = $isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
 
     $theme = $cfg['player_theme'] ?? 'auto';
-    $embedSrc = !empty($ep['embed_src']) 
-        ? $ep['embed_src'] 
+    $embedSrc = !empty($main['embed_src']) 
+        ? $main['embed_src'] 
         : ($instanceUrl . "/embed/@" . rawurlencode($pSlug) . "/" . rawurlencode($epSlug) . "?theme=" . urlencode($theme));
 
     $showName = !empty($meta['podcast_title']) ? htmlspecialchars($meta['podcast_title']) : '';
+
+    // Construir Mini Playlist si hay más episodios
+    $playlistHtml = '';
+    if (!empty($others)) {
+        $playlistHtml = '
+        <div class="kutpod-related-playlist">
+          <div class="kutpod-playlist-header">
+            <span class="kutpod-playlist-title">Más episodios recomendados</span>
+            <span class="kutpod-playlist-count">' . count($others) . ' más</span>
+          </div>
+          <div class="kutpod-playlist-list">';
+
+        foreach ($others as $other) {
+            $oMeta = $other['podcast_meta'] ?? [];
+            $oPSlug = $oMeta['podcast_slug'] ?? 'default';
+            $oEpSlug = $oMeta['episode_slug'] ?? ($other['slug'] ?? '');
+            $oSecs = (int)($oMeta['duration_secs'] ?? 0);
+            $oDurFmt = $oMeta['duration_fmt'] ?: ($oSecs > 0 ? gmdate($oSecs >= 3600 ? 'H:i:s' : 'i:s', $oSecs) : '');
+            
+            $oRawCover = $other['cover'] ?? ($other['featured_image'] ?? '');
+            $oCover = kutpod_resolve_cover_url($oRawCover, $cfg, [
+                'podcast_slug' => $oPSlug,
+                'instance_url' => $instanceUrl
+            ]);
+            if (empty($oCover)) {
+                $oCover = $base . '/plugins/kutpod/assets/cover-placeholder.png';
+            }
+
+            $oIsExt = !empty($other['is_external_kutpod']);
+            $oListenUrl = $oIsExt 
+                ? (!empty($other['url']) ? $other['url'] : ($instanceUrl . '/@' . rawurlencode($oPSlug) . '/' . rawurlencode($oEpSlug)))
+                : ($base . '/article/' . htmlspecialchars($other['slug']));
+            $oListenText = $oIsExt ? 'Escuchar en KutPod ↗' : 'Escuchar y ver notas completas →';
+            $oTargetAttr = $oIsExt ? ' target="_blank" rel="noopener noreferrer"' : '';
+
+            $oEmbed = !empty($other['embed_src']) 
+                ? $other['embed_src'] 
+                : ($instanceUrl . "/embed/@" . rawurlencode($oPSlug) . "/" . rawurlencode($oEpSlug) . "?theme=" . urlencode($theme));
+            $oShow = !empty($oMeta['podcast_title']) ? htmlspecialchars($oMeta['podcast_title']) : '';
+
+            $playlistHtml .= '
+            <div class="kutpod-playlist-item" 
+                 data-embed-src="' . htmlspecialchars($oEmbed) . '" 
+                 data-title="' . htmlspecialchars($other['title']) . '" 
+                 data-url="' . htmlspecialchars($oListenUrl) . '" 
+                 data-listen-text="' . htmlspecialchars($oListenText) . '" 
+                 data-cover="' . htmlspecialchars($oCover) . '" 
+                 data-meta="' . htmlspecialchars($oDurFmt ? '⏱️ ' . $oDurFmt : '') . '" 
+                 data-showname="' . htmlspecialchars($oShow) . '">
+              <button type="button" class="kutpod-playlist-item-play" aria-label="Reproducir">▶</button>
+              <img src="' . htmlspecialchars($oCover) . '" alt="" class="kutpod-playlist-item-cover" onerror="this.src=\'' . $base . '/plugins/kutpod/assets/cover-placeholder.png\'">
+              <div class="kutpod-playlist-item-details">
+                <h5 class="kutpod-playlist-item-title">' . htmlspecialchars($other['title']) . '</h5>
+                <div class="kutpod-playlist-item-meta">
+                  ' . ($oDurFmt ? '<span>⏱️ ' . htmlspecialchars($oDurFmt) . '</span>' : '') . '
+                  ' . ($oShow ? '<span>· ' . $oShow . '</span>' : '') . '
+                </div>
+              </div>
+              <a href="' . htmlspecialchars($oListenUrl) . '"' . $oTargetAttr . ' class="kutpod-playlist-item-link" title="Abrir en KutPod" onclick="event.stopPropagation()">↗</a>
+            </div>';
+        }
+
+        $playlistHtml .= '
+          </div>
+        </div>';
+    }
 
     return '
     <div class="kutpod-related-card">
@@ -924,10 +1013,10 @@ function kutpod_render_related_box(array $ep, array $cfg): string {
         ' . ($showName !== '' ? '<span class="kutpod-related-showname" style="font-weight:500; opacity:0.8; font-size:0.8rem; margin-left:auto;">' . $showName . '</span>' : '') . '
       </div>
       <div class="kutpod-related-content">
-        <img src="' . htmlspecialchars($cover) . '" alt="' . htmlspecialchars($ep['title']) . '" class="kutpod-related-cover" onerror="this.src=\'' . $base . '/plugins/kutpod/assets/cover-placeholder.png\'">
+        <img src="' . htmlspecialchars($cover) . '" alt="' . htmlspecialchars($main['title']) . '" class="kutpod-related-cover" onerror="this.src=\'' . $base . '/plugins/kutpod/assets/cover-placeholder.png\'">
         <div class="kutpod-related-info">
           <h4 class="kutpod-related-title">
-            <a href="' . htmlspecialchars($listenUrl) . '"' . $targetAttr . '>' . htmlspecialchars($ep['title']) . '</a>
+            <a href="' . htmlspecialchars($listenUrl) . '"' . $targetAttr . '>' . htmlspecialchars($main['title']) . '</a>
           </h4>
           <div class="kutpod-related-meta">
             ' . ($durFmt ? '⏱️ ' . htmlspecialchars($durFmt) . ' · ' : '') . '
@@ -938,6 +1027,7 @@ function kutpod_render_related_box(array $ep, array $cfg): string {
       <div style="margin-top:14px; border-radius:12px; overflow:hidden;">
         <iframe src="' . htmlspecialchars($embedSrc) . '" class="kutpod-player-frame" style="width:100%; height:175px; min-height:175px; border:none;" allow="autoplay" loading="lazy"></iframe>
       </div>
+      ' . $playlistHtml . '
     </div>';
 }
 

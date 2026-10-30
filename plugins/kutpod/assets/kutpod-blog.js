@@ -52,6 +52,55 @@
         highlightActiveChapter(currentSec);
       }
     });
+
+    // 3. Mini Playlist switcher para episodios relacionados
+    document.addEventListener('click', function (e) {
+      const item = e.target.closest('.kutpod-playlist-item');
+      if (!item) return;
+      if (e.target.closest('.kutpod-playlist-item-link')) return; // permitir abrir enlace externo directamente
+
+      const card = item.closest('.kutpod-related-card');
+      if (!card) return;
+
+      const iframe = card.querySelector('iframe.kutpod-player-frame');
+      const titleEl = card.querySelector('.kutpod-related-title a');
+      const coverEl = card.querySelector('.kutpod-related-cover');
+      const metaContainer = card.querySelector('.kutpod-related-meta');
+      const showEl = card.querySelector('.kutpod-related-showname');
+
+      // Marcar activo en la playlist
+      card.querySelectorAll('.kutpod-playlist-item').forEach(it => it.classList.remove('is-active'));
+      item.classList.add('is-active');
+
+      const embedSrc = item.getAttribute('data-embed-src');
+      const title = item.getAttribute('data-title');
+      const url = item.getAttribute('data-url');
+      const cover = item.getAttribute('data-cover');
+      const meta = item.getAttribute('data-meta');
+      const listenText = item.getAttribute('data-listen-text') || 'Escuchar en KutPod ↗';
+      const showname = item.getAttribute('data-showname');
+
+      if (iframe && embedSrc) {
+        const sep = embedSrc.includes('?') ? '&' : '?';
+        iframe.src = embedSrc + sep + 'autoplay=1';
+      }
+      if (titleEl && title) {
+        titleEl.textContent = title;
+        if (url) titleEl.href = url;
+      }
+      if (coverEl && cover) {
+        coverEl.src = cover;
+        coverEl.alt = title || '';
+      }
+      if (showEl && showname) {
+        showEl.textContent = showname;
+      }
+      if (metaContainer && url) {
+        metaContainer.innerHTML = (meta ? meta + ' · ' : '') + '<a href="' + url + '" target="_blank" rel="noopener noreferrer" style="color:var(--kp-accent, #ff5f7e); font-weight:600; text-decoration:none;">' + listenText + '</a>';
+      }
+
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
   }
 
   function highlightActiveChapter(currentSec) {
