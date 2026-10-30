@@ -5,7 +5,7 @@
 /* ── Editor Layout ─────────────────────────────────────────────────────── */
 .editor-layout {
   display: grid;
-  grid-template-columns: 1fr 260px;
+  grid-template-columns: minmax(0, 1fr) 330px;
   gap: 1.5rem;
   align-items: start;
   flex: 1;

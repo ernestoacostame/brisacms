@@ -389,8 +389,13 @@
   document.getElementById('featured_image_input')?.addEventListener('input', function () {
     const preview = document.getElementById('featured-preview');
     const img = document.getElementById('featured-img');
-    if (this.value) {
-      img.src = this.value;
+    let val = (this.value || '').trim();
+    if (val) {
+      if (val.startsWith('/media/covers/') && window.KUTPOD_INSTANCE_URL) {
+        img.src = window.KUTPOD_INSTANCE_URL.replace(/\/+$/, '') + val;
+      } else {
+        img.src = val;
+      }
       preview.style.display = '';
     } else {
       preview.style.display = 'none';
@@ -1175,6 +1180,45 @@ h1{font-family:'Roboto Condensed',sans-serif;font-size:clamp(1.5rem,4vw,2.2rem);
         console.error('Error:', error);
         alert('Error loading backup');
       });
+  };
+
+  window.deleteBackup = function(timestamp, type, slug) {
+    if (!confirm('¿Eliminar esta copia de seguridad?')) return;
+    const base = window.KUTBLOG ? KUTBLOG.baseUrl : '';
+    const csrf = window.KUTBLOG ? KUTBLOG.csrf : '';
+    fetch(`${base}/admin/backup_preview.php?action=delete&type=${encodeURIComponent(type)}&slug=${encodeURIComponent(slug)}&timestamp=${encodeURIComponent(timestamp)}&csrf=${encodeURIComponent(csrf)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          const el = document.getElementById('backup-item-' + timestamp);
+          if (el) el.remove();
+          const list = document.getElementById('backup-list-container');
+          if (list && list.children.length === 0) {
+            const panel = document.getElementById('panel-version-history');
+            if (panel) panel.remove();
+          }
+        } else {
+          alert('Error: ' + (data.error || 'No se pudo eliminar el backup'));
+        }
+      })
+      .catch(() => alert('Error al eliminar la copia de seguridad.'));
+  };
+
+  window.clearAllBackups = function(type, slug) {
+    if (!confirm('¿Eliminar todo el historial de copias de seguridad de este artículo?')) return;
+    const base = window.KUTBLOG ? KUTBLOG.baseUrl : '';
+    const csrf = window.KUTBLOG ? KUTBLOG.csrf : '';
+    fetch(`${base}/admin/backup_preview.php?action=clear_all&type=${encodeURIComponent(type)}&slug=${encodeURIComponent(slug)}&csrf=${encodeURIComponent(csrf)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          const panel = document.getElementById('panel-version-history');
+          if (panel) panel.remove();
+        } else {
+          alert('Error: ' + (data.error || 'No se pudo limpiar el historial'));
+        }
+      })
+      .catch(() => alert('Error al limpiar las copias de seguridad.'));
   };
 
   // ═══════════════════════════════════════════════════════════════════════════

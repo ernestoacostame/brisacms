@@ -140,3 +140,72 @@ function media_delete_meta(string $rel_or_url): bool {
     file_put_contents($file, json_encode($all, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
     return true;
 }
+
+/**
+ * Renames a media file on disk and updates its metadata key.
+ */
+function media_rename_file(string $old_rel_or_url, string $new_name): array {
+    $old_rel = media_normalize_rel($old_rel_or_url);
+    if (!$old_rel) return ['error' => 'Ruta de archivo inválida.'];
+
+    $old_path = MEDIA_PATH . '/' . $old_rel;
+    if (!file_exists($old_path) || !is_file($old_path)) {
+        return ['error' => 'El archivo no existe en disco.'];
+    }
+
+    $old_ext = strtolower(pathinfo($old_path, PATHINFO_EXTENSION));
+    $dir = dirname($old_rel);
+
+    // Sanitize new name
+    $new_name = trim($new_name);
+    // Remove directory traversal characters
+    $new_name = str_replace(['/', '\\', '..'], '', $new_name);
+
+    $clean_base = preg_replace('/[^a-zA-Z0-9_\-]/', '-', pathinfo($new_name, PATHINFO_FILENAME));
+    $clean_base = trim(preg_replace('/-+/', '-', $clean_base), '-');
+    if (!$clean_base) {
+        return ['error' => 'El nombre del archivo no es válido.'];
+    }
+    $new_filename = $clean_base . '.' . $old_ext;
+
+    $new_rel = ($dir === '.' || $dir === '') ? $new_filename : ($dir . '/' . $new_filename);
+
+    if ($new_rel === $old_rel) {
+        return [
+            'success'  => true,
+            'rel'      => $old_rel,
+            'filename' => basename($old_rel),
+            'url'      => base_url() . '/media/' . $old_rel,
+            'renamed'  => false
+        ];
+    }
+
+    $new_path = MEDIA_PATH . '/' . $new_rel;
+    if (file_exists($new_path)) {
+        return ['error' => 'Ya existe un archivo con ese nombre en esta carpeta.'];
+    }
+
+    if (!@rename($old_path, $new_path)) {
+        return ['error' => 'No se pudo renombrar el archivo en el servidor.'];
+    }
+
+    // Migrate metadata
+    $meta_file = media_meta_file();
+    if (file_exists($meta_file)) {
+        $raw = @file_get_contents($meta_file);
+        $all = json_decode($raw, true) ?: [];
+        if (isset($all[$old_rel])) {
+            $all[$new_rel] = $all[$old_rel];
+            unset($all[$old_rel]);
+            file_put_contents($meta_file, json_encode($all, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
+        }
+    }
+
+    return [
+        'success'  => true,
+        'rel'      => $new_rel,
+        'filename' => $new_filename,
+        'url'      => base_url() . '/media/' . $new_rel,
+        'renamed'  => true
+    ];
+}

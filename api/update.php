@@ -127,7 +127,7 @@ switch ($action) {
         echo json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         break;
 
-    // Eliminar copia de seguridad
+    // Eliminar copia de seguridad individual
     case 'delete_backup':
         $backupFile = $_POST['backup_file'] ?? '';
         if (!$backupFile) {
@@ -136,6 +136,42 @@ switch ($action) {
         }
         $result = cms_update_delete_backup($backupFile);
         echo json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        break;
+
+    // Eliminar copias de seguridad en lote
+    case 'delete_backups_bulk':
+        $rawFiles = $_POST['backup_files'] ?? '';
+        $files = is_array($rawFiles) ? $rawFiles : (json_decode($rawFiles, true) ?: array_filter(explode(',', $rawFiles)));
+        if (empty($files)) {
+            echo json_encode(['error' => 'No se especificaron archivos de respaldo.']);
+            break;
+        }
+        $deleted = 0;
+        foreach ($files as $f) {
+            $f = trim($f);
+            if ($f && cms_update_delete_backup($f)['success'] ?? false) {
+                $deleted++;
+            }
+        }
+        echo json_encode(['success' => true, 'deleted_count' => $deleted], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        break;
+
+    // Eliminar todos los respaldos de rollback
+    case 'delete_all_backups':
+        $rollbacks = cms_update_get_available_rollbacks();
+        $deleted = 0;
+        foreach ($rollbacks as $rb) {
+            if (cms_update_delete_backup($rb['filename'])['success'] ?? false) {
+                $deleted++;
+            }
+        }
+        echo json_encode(['success' => true, 'deleted_count' => $deleted], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        break;
+
+    // Limpiar historial de actualizaciones
+    case 'clear_history':
+        cms_set_setting('update_history', []);
+        echo json_encode(['success' => true], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         break;
 
     default:

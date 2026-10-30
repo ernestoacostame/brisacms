@@ -38,12 +38,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
             $msg = 'Archivo eliminado.';
         }
     } elseif ($action === 'save_meta') {
-        // Save alt text, title, caption, description
+        // Save alt text, title, caption, description and rename file
         $rel = ltrim(str_replace(['..','//'], '', $_POST['file'] ?? ''), '/');
         $alt = trim($_POST['alt'] ?? '');
         $title = trim($_POST['title'] ?? '');
         $caption = trim($_POST['caption'] ?? '');
         $description = trim($_POST['description'] ?? '');
+        $newFilename = trim($_POST['filename'] ?? '');
+
+        $renamedInfo = null;
+        if (!empty($newFilename)) {
+            $renamedInfo = media_rename_file($rel, $newFilename);
+            if (!empty($renamedInfo['error'])) {
+                if (!empty($_POST['ajax'])) {
+                    header('Content-Type: application/json');
+                    echo json_encode(['ok' => false, 'error' => $renamedInfo['error']]);
+                    exit;
+                }
+                $error = $renamedInfo['error'];
+            } elseif (!empty($renamedInfo['rel'])) {
+                $rel = $renamedInfo['rel'];
+            }
+        }
 
         $saved = media_save_meta($rel, [
             'alt'         => $alt,
@@ -56,7 +72,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
             header('Content-Type: application/json');
             echo json_encode([
                 'ok' => $saved,
-                'meta' => media_get_meta($rel)
+                'meta' => media_get_meta($rel),
+                'renamed' => $renamedInfo
             ]);
             exit;
         }
@@ -299,6 +316,16 @@ admin_header(__("media_title"), 'media');
             <input type="hidden" name="action" value="save_meta">
 
             <div class="form-group" style="margin-bottom:1.15rem">
+              <label for="modal-input-filename" class="form-label" style="font-weight:700">
+                <?= __('media_filename', 'Nombre del archivo') ?>
+              </label>
+              <input type="text" id="modal-input-filename" name="filename" class="form-control" placeholder="nombre-del-archivo.jpg" style="font-size:0.95rem">
+              <small style="display:block;margin-top:0.35rem;color:var(--muted);font-size:0.8rem">
+                Puedes renombrar el archivo en el servidor. La extensión original se conserva de forma segura.
+              </small>
+            </div>
+
+            <div class="form-group" style="margin-bottom:1.15rem">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem">
                 <label for="modal-input-alt" class="form-label" style="margin-bottom:0;font-weight:700">
                   <?= __('media_alt') ?>
@@ -514,6 +541,7 @@ function openMediaModal(itemEl) {
   document.getElementById('modal-date').textContent = date;
 
   document.getElementById('modal-input-rel').value = rel;
+  document.getElementById('modal-input-filename').value = name;
   document.getElementById('modal-input-alt').value = alt;
   document.getElementById('modal-input-title').value = title;
   document.getElementById('modal-input-caption').value = caption;
@@ -565,6 +593,24 @@ function saveMediaMetadata(e) {
       fb.style.display = 'inline';
       setTimeout(() => fb.style.display = 'none', 3000);
 
+      // Handle rename update
+      if (data.renamed && data.renamed.renamed) {
+        if (currentModalItem) {
+          currentModalItem.dataset.rel = data.renamed.rel;
+          currentModalItem.dataset.name = data.renamed.filename;
+          currentModalItem.dataset.url = data.renamed.url;
+          const nameEl = currentModalItem.querySelector('.media-name');
+          if (nameEl) {
+            nameEl.textContent = data.renamed.filename;
+            nameEl.title = data.renamed.filename;
+          }
+        }
+        document.getElementById('modal-filename').textContent = data.renamed.filename;
+        document.getElementById('modal-rel-path').textContent = data.renamed.rel;
+        document.getElementById('modal-input-rel').value = data.renamed.rel;
+        document.getElementById('modal-input-filename').value = data.renamed.filename;
+      }
+
       // Update data attributes in DOM element
       if (currentModalItem) {
         currentModalItem.dataset.alt = data.meta.alt || '';
@@ -590,6 +636,8 @@ function saveMediaMetadata(e) {
         }
       }
       showToast('✓ Metadatos guardados correctamente');
+    } else {
+      alert(data.error || 'Error al guardar los metadatos.');
     }
   })
   .catch(err => {

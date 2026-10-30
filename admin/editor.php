@@ -260,8 +260,20 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 
           <div class="panel">
             <div class="panel-title">Imagen Destacada</div>
+            <?php
+              $featuredRaw = $post['featured_image'] ?? '';
+              $featuredPreview = $featuredRaw;
+              $kutpodInstanceUrl = '';
+              if (cms_plugin_is_active('kutpod') && function_exists('kutpod_config')) {
+                  $kpCfg = kutpod_config();
+                  $kutpodInstanceUrl = rtrim($kpCfg['instance_url'] ?? '', '/');
+                  if ($kutpodInstanceUrl && str_starts_with($featuredPreview, '/media/covers/')) {
+                      $featuredPreview = $kutpodInstanceUrl . $featuredPreview;
+                  }
+              }
+            ?>
             <input type="text" name="featured_image" id="featured_image_input" placeholder="https://…"
-              value="<?= htmlspecialchars($post['featured_image'] ?? '') ?>">
+              value="<?= htmlspecialchars($featuredRaw) ?>">
             <div style="margin-top:0.5rem;display:flex;gap:0.5rem;align-items:center">
               <label class="btn btn-secondary btn-sm" style="cursor:pointer;font-size:0.78rem">
                 <?= __("panel_featured_upload") ?>
@@ -269,8 +281,8 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
               </label>
               <span style="font-size:0.72rem;color:var(--muted)"><?= __("panel_featured_or") ?></span>
             </div>
-            <div id="featured-preview" style="<?= empty($post['featured_image']) ? 'display:none' : '' ?>">
-              <img src="<?= htmlspecialchars($post['featured_image'] ?? '') ?>" style="width:100%;border-radius:6px;margin-top:0.6rem;max-height:120px;object-fit:cover;" alt="" id="featured-img">
+            <div id="featured-preview" style="<?= empty($featuredRaw) ? 'display:none' : '' ?>">
+              <img src="<?= htmlspecialchars($featuredPreview) ?>" style="width:100%;border-radius:6px;margin-top:0.6rem;max-height:120px;object-fit:cover;" alt="" id="featured-img">
             </div>
             <div id="feat-upload-progress" style="display:none;font-size:0.78rem;color:var(--muted);margin-top:0.35rem"></div>
           </div>
@@ -362,20 +374,30 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
           <?php if ($post && function_exists('get_content_backups')): 
               $backups = get_content_backups($type, $slug);
               if (!empty($backups)): ?>
-          <div class="panel">
-            <div class="panel-title" style="color:var(--accent)">Version History</div>
-            <div style="font-size:0.8rem; color:var(--muted); margin-bottom:0.5rem">
-              Last 10 backups are kept. Click to preview.
+          <div class="panel" id="panel-version-history">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem">
+              <div class="panel-title" style="color:var(--accent);margin-bottom:0">Version History</div>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="clearAllBackups('<?= htmlspecialchars($type) ?>', '<?= htmlspecialchars($slug) ?>')" style="padding:0.15rem 0.5rem;font-size:0.72rem;color:var(--red)" title="Limpiar todas las versiones">
+                Limpiar todo
+              </button>
             </div>
-            <div style="max-height:200px; overflow-y:auto; border:1px solid var(--border); border-radius:4px; padding:0.5rem;">
+            <div style="font-size:0.8rem; color:var(--muted); margin-bottom:0.5rem">
+              Últimas 10 versiones guardadas.
+            </div>
+            <div id="backup-list-container" style="max-height:220px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:0.25rem;">
               <?php foreach ($backups as $backup): ?>
-              <div style="padding:0.5rem; border-bottom:1px solid var(--border2); font-size:0.8rem;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                  <span><?= htmlspecialchars($backup['date']) ?></span>
+              <div id="backup-item-<?= htmlspecialchars($backup['timestamp']) ?>" style="padding:0.45rem 0.5rem; border-bottom:1px solid var(--border2); font-size:0.8rem; display:flex; justify-content:space-between; align-items:center; gap:0.4rem;">
+                <span style="font-family:monospace;font-size:0.75rem"><?= htmlspecialchars($backup['date']) ?></span>
+                <div style="display:flex;gap:0.3rem;align-items:center">
                   <button type="button" class="btn btn-secondary btn-sm" 
                           onclick="previewBackup('<?= htmlspecialchars($backup['timestamp']) ?>', '<?= htmlspecialchars($type) ?>', '<?= htmlspecialchars($slug) ?>')"
-                          style="padding:0.1rem 0.5rem; font-size:0.7rem;">
+                          style="padding:0.15rem 0.45rem; font-size:0.7rem;">
                     Preview
+                  </button>
+                  <button type="button" class="btn btn-danger btn-sm" 
+                          onclick="deleteBackup('<?= htmlspecialchars($backup['timestamp']) ?>', '<?= htmlspecialchars($type) ?>', '<?= htmlspecialchars($slug) ?>')"
+                          style="padding:0.15rem 0.4rem; font-size:0.7rem;" title="Eliminar este respaldo">
+                    ✕
                   </button>
                 </div>
               </div>
@@ -404,7 +426,7 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 <style>
 .editor-layout {
   display: grid;
-  grid-template-columns: 1fr 260px;
+  grid-template-columns: minmax(0, 1fr) 330px;
   gap: 1.5rem;
   align-items: start;
 }
@@ -829,7 +851,7 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 
 .editor-layout {
   display: grid;
-  grid-template-columns: 1fr 260px;
+  grid-template-columns: minmax(0, 1fr) 330px;
   gap: 1.5rem;
   align-items: start;
   flex: 1;
@@ -2131,6 +2153,7 @@ const htmlToolbar  = document.getElementById('html-toolbar');
 
 let mode       = 'visual';  // 'visual' | 'raw'
 let slugManuallySet = <?= $is_new ? 'false' : 'true' ?>;
+window.KUTPOD_INSTANCE_URL = <?= json_encode($kutpodInstanceUrl ?? '') ?>;
 
 
 // ── Submit sync ────────────────────────────────────────────────────────────
@@ -2599,8 +2622,13 @@ slugInput.addEventListener('input', () => { slugManuallySet = true; });
 document.getElementById('featured_image_input').addEventListener('input', function() {
   const preview = document.getElementById('featured-preview');
   const img = document.getElementById('featured-img');
-  if (this.value) {
-    img.src = this.value;
+  let val = (this.value || '').trim();
+  if (val) {
+    if (val.startsWith('/media/covers/') && window.KUTPOD_INSTANCE_URL) {
+      img.src = window.KUTPOD_INSTANCE_URL.replace(/\/+$/, '') + val;
+    } else {
+      img.src = val;
+    }
     preview.style.display = '';
   } else {
     preview.style.display = 'none';
@@ -3374,6 +3402,41 @@ function previewBackup(timestamp, type, slug) {
             console.error('Error:', error);
             alert('Error loading backup');
         });
+}
+
+function deleteBackup(timestamp, type, slug) {
+    if (!confirm('¿Eliminar esta copia de seguridad?')) return;
+    fetch(`<?= base_url() ?>/admin/backup_preview.php?action=delete&type=${encodeURIComponent(type)}&slug=${encodeURIComponent(slug)}&timestamp=${encodeURIComponent(timestamp)}&csrf=<?= $csrf ?>`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const el = document.getElementById('backup-item-' + timestamp);
+                if (el) el.remove();
+                const list = document.getElementById('backup-list-container');
+                if (list && list.children.length === 0) {
+                    const panel = document.getElementById('panel-version-history');
+                    if (panel) panel.remove();
+                }
+            } else {
+                alert('Error: ' + (data.error || 'No se pudo eliminar el backup'));
+            }
+        })
+        .catch(() => alert('Error al eliminar la copia de seguridad.'));
+}
+
+function clearAllBackups(type, slug) {
+    if (!confirm('¿Eliminar todo el historial de copias de seguridad de este artículo?')) return;
+    fetch(`<?= base_url() ?>/admin/backup_preview.php?action=clear_all&type=${encodeURIComponent(type)}&slug=${encodeURIComponent(slug)}&csrf=<?= $csrf ?>`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const panel = document.getElementById('panel-version-history');
+                if (panel) panel.remove();
+            } else {
+                alert('Error: ' + (data.error || 'No se pudo limpiar el historial'));
+            }
+        })
+        .catch(() => alert('Error al limpiar las copias de seguridad.'));
 }
 
 // Keyboard resize listener removed – no longer needed.

@@ -237,9 +237,9 @@ admin_header(__("settings_title"), 'settings');
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             <span><?= __("settings_general") ?></span>
           </a>
-          <a href="#appearance" class="settings-nav-item <?= $active_section === 'appearance' ? 'active' : '' ?>" onclick="switchSection('appearance', event)">
+          <a href="<?= base_url() ?>/admin/themes.php?tab=appearance" class="settings-nav-item">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
-            <span><?= __("settings_appearance") ?></span>
+            <span><?= __("settings_appearance") ?> ↗</span>
           </a>
           <a href="#profile" class="settings-nav-item <?= $active_section === 'profile' ? 'active' : '' ?>" onclick="switchSection('profile', event)">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -315,6 +315,13 @@ admin_header(__("settings_title"), 'settings');
           <div class="card">
             <div class="card-header"><span class="card-title"><?= __("settings_appearance") ?></span></div>
             <div class="card-body">
+              <div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1.5rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+                <div>
+                  <strong style="color:var(--text);font-size:0.95rem">🎨 Sección unificada</strong>
+                  <div style="color:var(--text2);font-size:0.85rem;margin-top:2px">La apariencia, logotipo, esquemas y temas se gestionan conjuntamente desde la sección <strong>Temas</strong>.</div>
+                </div>
+                <a href="<?= base_url() ?>/admin/themes.php?tab=appearance" class="btn btn-primary btn-sm">Ir a Temas y Apariencia →</a>
+              </div>
               <form method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="csrf" value="<?= $csrf ?>">
                 <input type="hidden" name="action" value="appearance">

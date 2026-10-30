@@ -220,48 +220,85 @@ admin_header(__('update_title', 'Actualizaciones'), 'update');
       </div>
     </div>
 
-    <!-- Rollback -->
+    <!-- Rollback & Backups Management -->
     <?php if ($hasAnyRollback): ?>
     <div class="card" style="margin-bottom: 2rem;">
-      <div class="card-header"><span class="card-title"><?= __('update_revert_title', 'Revertir actualización') ?></span></div>
-      <div class="card-body">
-        <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1rem;">
-          <div style="flex: 1; min-width: 250px;">
-            <div style="font-size: 12.5px; color: var(--text2); line-height: 1.5; margin-bottom: 1rem;">
-              <?= __('update_revert_subtitle', 'Restaura una versión previamente guardada de KutBlog. Tus artículos, páginas y configuración no se verán afectados.') ?>
-            </div>
-            <div>
-              <label class="form-label" for="rollback-select"><?= __('update_select_backup', 'Seleccionar copia de seguridad:') ?></label>
-              <select id="rollback-select" style="max-width: 100%; width: 320px;">
-                <?php foreach ($rollbacks as $rb): 
-                  $isSelected = ($hasRollback && $rb['path'] === $rollbackPath) ? 'selected' : '';
-                ?>
-                  <option value="<?= htmlspecialchars($rb['filename']) ?>" <?= $isSelected ?>>
-                    v<?= htmlspecialchars($rb['version']) ?> (<?= htmlspecialchars($rb['date']) ?>)
-                  </option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-          </div>
-          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-            <button class="btn btn-secondary" id="btn-rollback" onclick="cmsUpdateRollback()" style="color: var(--yellow); border-color: rgba(251, 191, 36, 0.3);">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: middle;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-              <?= __('update_revert_btn', 'Revertir a la versión seleccionada') ?>
-            </button>
-            <button class="btn btn-danger" id="btn-delete-backup" onclick="cmsDeleteBackup()">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: middle;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-              <?= __('update_delete_backup_btn', 'Eliminar respaldo') ?>
-            </button>
-          </div>
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem">
+        <span class="card-title"><?= __('update_revert_title', 'Copias de seguridad descargadas & Rollback') ?></span>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="cmsDeleteAllBackups()" style="color:var(--red);border-color:rgba(244,63,94,0.3);font-size:0.8rem">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+          Limpiar todos los respaldos
+        </button>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div style="padding: 1rem 1.5rem 0.5rem; font-size: 12.5px; color: var(--text2); line-height: 1.5;">
+          <?= __('update_revert_subtitle', 'Restaura una versión previamente guardada de KutBlog o gestiona los archivos de respaldo para liberar espacio en disco.') ?>
         </div>
-        <div id="rollback-status" style="display: none; margin-top: 1rem; padding: 0.75rem 1rem; border-radius: 6px; font-size: 13.5px;"></div>
+
+        <!-- Bulk action toolbar -->
+        <div id="backup-bulk-toolbar" style="display:none;padding:0.6rem 1.5rem;background:var(--surface2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+          <span style="font-size:0.85rem;font-weight:600;color:var(--text)" id="backup-bulk-count">0 seleccionados</span>
+          <button type="button" class="btn btn-danger btn-sm" onclick="cmsDeleteBackupsBulk()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+            Eliminar respaldos seleccionados
+          </button>
+        </div>
+
+        <table class="table" style="width:100%;margin-bottom:0">
+          <thead>
+            <tr>
+              <th style="width:40px;padding-left:1.5rem;padding-right:0">
+                <input type="checkbox" id="check-all-backups" style="cursor:pointer;accent-color:var(--accent)" onchange="toggleSelectAllBackups(this)">
+              </th>
+              <th>Versión</th>
+              <th>Fecha de creación</th>
+              <th>Tamaño</th>
+              <th style="text-align:right;padding-right:1.5rem">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($rollbacks as $rb): ?>
+            <tr>
+              <td style="width:40px;padding-left:1.5rem;padding-right:0">
+                <input type="checkbox" value="<?= htmlspecialchars($rb['filename']) ?>" class="backup-check-item" style="cursor:pointer;accent-color:var(--accent)" onchange="updateBackupBulkToolbar()">
+              </td>
+              <td>
+                <span style="font-weight:700;color:var(--text)">v<?= htmlspecialchars($rb['version']) ?></span>
+                <?php if ($rb['path'] === $rollbackPath): ?>
+                  <span class="badge badge-green" style="font-size:0.7rem;padding:0.1rem 0.4rem;margin-left:0.4rem">Último Rollback</span>
+                <?php endif; ?>
+              </td>
+              <td style="color:var(--text2);font-size:13px"><?= htmlspecialchars($rb['date']) ?></td>
+              <td style="color:var(--muted);font-size:12px;font-family:monospace"><?= round($rb['size'] / 1024 / 1024, 2) ?> MB</td>
+              <td style="text-align:right;padding-right:1.5rem">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="cmsUpdateRollbackSpecific('<?= htmlspecialchars($rb['filename']) ?>')" style="color:var(--yellow);border-color:rgba(251,191,36,0.3);margin-right:0.35rem">
+                  Revertir
+                </button>
+                <button type="button" class="btn btn-danger btn-sm" onclick="cmsDeleteBackupFile('<?= htmlspecialchars($rb['filename']) ?>')" title="Eliminar este respaldo">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                </button>
+              </td>
+            </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+
+        <div id="rollback-status" style="display: none; margin: 1rem 1.5rem; padding: 0.75rem 1rem; border-radius: 6px; font-size: 13.5px;"></div>
       </div>
     </div>
     <?php endif; ?>
 
     <!-- Historial -->
     <div class="card">
-      <div class="card-header"><span class="card-title"><?= __('update_history_title', 'Historial de actualizaciones') ?></span></div>
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem">
+        <span class="card-title"><?= __('update_history_title', 'Historial de actualizaciones') ?></span>
+        <?php if (!empty($history)): ?>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="cmsClearUpdateHistory()" style="color:var(--red);border-color:rgba(244,63,94,0.3);font-size:0.8rem">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+          Limpiar historial
+        </button>
+        <?php endif; ?>
+      </div>
       <div class="card-body" style="padding: 0;">
         <?php if (empty($history)): ?>
           <div style="padding: 3rem; text-align: center; color: var(--muted);">
@@ -539,23 +576,81 @@ function cmsUpdateRollback() {
     });
 }
 
-function cmsDeleteBackup() {
-  const select = document.getElementById('rollback-select');
-  const backupFile = select ? select.value : '';
-  if (!backupFile) {
-    alert('Por favor, selecciona una copia de seguridad para eliminar.');
-    return;
+function updateBackupBulkToolbar() {
+  const checked = document.querySelectorAll('.backup-check-item:checked');
+  const total = document.querySelectorAll('.backup-check-item').length;
+  const toolbar = document.getElementById('backup-bulk-toolbar');
+  const countEl = document.getElementById('backup-bulk-count');
+  const master = document.getElementById('check-all-backups');
+
+  if (toolbar && countEl) {
+    if (checked.length > 0) {
+      toolbar.style.display = 'flex';
+      countEl.textContent = checked.length + (checked.length === 1 ? ' respaldo seleccionado' : ' respaldos seleccionados');
+    } else {
+      toolbar.style.display = 'none';
+    }
   }
 
-  if (!confirm('¿Eliminar la copia de seguridad seleccionada (' + backupFile + ')?\n\nEsta acción liberará espacio en disco pero no podrás revertir a esta versión.')) return;
+  if (master) {
+    master.checked = (checked.length === total && total > 0);
+    master.indeterminate = (checked.length > 0 && checked.length < total);
+  }
+}
 
-  const btn = document.getElementById('btn-delete-backup');
+function toggleSelectAllBackups(master) {
+  const items = document.querySelectorAll('.backup-check-item');
+  items.forEach(i => i.checked = master.checked);
+  updateBackupBulkToolbar();
+}
+
+function cmsUpdateRollbackSpecific(backupFile) {
+  if (!confirm('¿Revertir KutBlog a la versión contenida en este respaldo (' + backupFile + ')?')) return;
   const status = document.getElementById('rollback-status');
-  btn.disabled = true;
-  status.style.display = 'block';
-  status.style.background = 'var(--surface2)';
-  status.style.color = 'var(--text2)';
-  status.textContent = 'Eliminando respaldo...';
+  if (status) {
+    status.style.display = 'block';
+    status.style.background = 'var(--surface2)';
+    status.style.color = 'var(--text2)';
+    status.textContent = 'Restaurando copia de seguridad...';
+  }
+
+  fetch('<?= base_url() ?>/api/update.php', {
+    method: 'POST',
+    body: new URLSearchParams({ action: 'rollback', backup_file: backupFile })
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (!status) return;
+      if (data.error) {
+        status.style.background = 'rgba(248, 113, 113, 0.1)';
+        status.style.color = 'var(--red)';
+        status.innerHTML = '❌ ' + data.error;
+      } else if (data.success) {
+        status.style.background = 'rgba(52, 211, 153, 0.1)';
+        status.style.color = 'var(--green)';
+        status.innerHTML = '✅ Rollback completado a v' + data.restored_version + '. Recargando...';
+        setTimeout(() => window.location.reload(), 1500);
+      }
+    })
+    .catch(e => {
+      if (status) {
+        status.style.background = 'rgba(248, 113, 113, 0.1)';
+        status.style.color = 'var(--red)';
+        status.innerHTML = '❌ Error: ' + e.message;
+      }
+    });
+}
+
+function cmsDeleteBackupFile(backupFile) {
+  if (!confirm('¿Eliminar la copia de seguridad (' + backupFile + ')?\n\nEsta acción liberará espacio en disco pero no podrás revertir a esta versión.')) return;
+
+  const status = document.getElementById('rollback-status');
+  if (status) {
+    status.style.display = 'block';
+    status.style.background = 'var(--surface2)';
+    status.style.color = 'var(--text2)';
+    status.textContent = 'Eliminando respaldo...';
+  }
 
   fetch('<?= base_url() ?>/api/update.php', {
     method: 'POST',
@@ -564,23 +659,73 @@ function cmsDeleteBackup() {
     .then(r => r.json())
     .then(data => {
       if (data.error) {
-        status.style.background = 'rgba(248, 113, 113, 0.1)';
-        status.style.color = 'var(--red)';
-        status.innerHTML = '❌ ' + data.error;
-        btn.disabled = false;
+        alert('Error: ' + data.error);
+        if (status) status.style.display = 'none';
       } else if (data.success) {
-        status.style.background = 'rgba(52, 211, 153, 0.1)';
-        status.style.color = 'var(--green)';
-        status.innerHTML = '✅ Copia de seguridad eliminada con éxito. Recargando...';
-        setTimeout(() => window.location.reload(), 1000);
+        window.location.reload();
       }
     })
     .catch(e => {
-      status.style.background = 'rgba(248, 113, 113, 0.1)';
-      status.style.color = 'var(--red)';
-      status.innerHTML = '❌ Error: ' + e.message;
-      btn.disabled = false;
+      alert('Error al eliminar respaldo: ' + e.message);
     });
+}
+
+function cmsDeleteBackupsBulk() {
+  const checked = document.querySelectorAll('.backup-check-item:checked');
+  if (checked.length === 0) return;
+
+  if (!confirm('¿Eliminar los ' + checked.length + ' respaldos seleccionados permanentemente?')) return;
+
+  const files = Array.from(checked).map(c => c.value);
+  fetch('<?= base_url() ?>/api/update.php', {
+    method: 'POST',
+    body: new URLSearchParams({ action: 'delete_backups_bulk', backup_files: JSON.stringify(files) })
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        alert('Error: ' + data.error);
+      } else {
+        window.location.reload();
+      }
+    })
+    .catch(e => alert('Error: ' + e.message));
+}
+
+function cmsDeleteAllBackups() {
+  if (!confirm('¿Estás seguro de que deseas eliminar TODOS los archivos de copias de seguridad de actualización?\n\nEsta acción no se puede deshacer.')) return;
+
+  fetch('<?= base_url() ?>/api/update.php', {
+    method: 'POST',
+    body: new URLSearchParams({ action: 'delete_all_backups' })
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        alert('Error: ' + data.error);
+      } else {
+        window.location.reload();
+      }
+    })
+    .catch(e => alert('Error: ' + e.message));
+}
+
+function cmsClearUpdateHistory() {
+  if (!confirm('¿Deseas limpiar todo el registro del historial de actualizaciones?\n\nSe vaciará la lista de actualizaciones previas.')) return;
+
+  fetch('<?= base_url() ?>/api/update.php', {
+    method: 'POST',
+    body: new URLSearchParams({ action: 'clear_history' })
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        alert('Error: ' + data.error);
+      } else {
+        window.location.reload();
+      }
+    })
+    .catch(e => alert('Error: ' + e.message));
 }
 
 function cmsManualUpdateUpload(e) {

@@ -1,5 +1,5 @@
 <?php
-// KutBlog - Backup Preview endpoint
+// KutBlog - Backup Preview & Management endpoint
 require_once dirname(__DIR__) . '/core/config.php';
 require_once dirname(__DIR__) . '/core/auth.php';
 require_once dirname(__DIR__) . '/core/content.php';
@@ -7,28 +7,66 @@ require_login();
 
 header('Content-Type: application/json; charset=utf-8');
 
-if (!verify_csrf($_GET['csrf'] ?? '')) {
-    echo json_encode(['success' => false, 'error' => 'CSRF error']); exit;
+$csrf = $_REQUEST['csrf'] ?? '';
+if (!verify_csrf($csrf)) {
+    echo json_encode(['success' => false, 'error' => 'Error de verificación CSRF.']); exit;
 }
 
-$type = in_array($_GET['type'] ?? '', ['articles','pages']) ? $_GET['type'] : 'articles';
-$slug = trim($_GET['slug'] ?? '');
-$timestamp = trim($_GET['timestamp'] ?? '');
+$type = in_array($_REQUEST['type'] ?? '', ['articles','pages']) ? $_REQUEST['type'] : 'articles';
+$slug = trim($_REQUEST['slug'] ?? '');
+$action = trim($_REQUEST['action'] ?? 'preview');
 
-if (!$slug || !$timestamp) {
-    echo json_encode(['success' => false, 'error' => 'Missing parameters']); exit;
+if (!$slug) {
+    echo json_encode(['success' => false, 'error' => 'Falta el parámetro slug.']); exit;
 }
 
 $backup_dir = CACHE_PATH . '/content_backups/' . $type;
-$backup_file = $backup_dir . '/' . $slug . '_' . $timestamp . '.json';
 
+// Action: Clear all backups for this slug
+if ($action === 'clear_all') {
+    if (!is_dir($backup_dir)) {
+        echo json_encode(['success' => true, 'count' => 0]); exit;
+    }
+    $files = glob($backup_dir . '/' . $slug . '_*.json');
+    $count = 0;
+    if ($files) {
+        foreach ($files as $f) {
+            if (@unlink($f)) $count++;
+        }
+    }
+    echo json_encode(['success' => true, 'count' => $count]); exit;
+}
+
+// Action: Delete single backup
+if ($action === 'delete') {
+    $timestamp = trim($_REQUEST['timestamp'] ?? '');
+    if (!$timestamp) {
+        echo json_encode(['success' => false, 'error' => 'Falta el timestamp.']); exit;
+    }
+    $backup_file = $backup_dir . '/' . $slug . '_' . $timestamp . '.json';
+    if (!file_exists($backup_file)) {
+        echo json_encode(['success' => false, 'error' => 'Copia de seguridad no encontrada.']); exit;
+    }
+    if (@unlink($backup_file)) {
+        echo json_encode(['success' => true, 'timestamp' => $timestamp]); exit;
+    }
+    echo json_encode(['success' => false, 'error' => 'No se pudo eliminar el archivo.']); exit;
+}
+
+// Action: Preview backup
+$timestamp = trim($_REQUEST['timestamp'] ?? '');
+if (!$timestamp) {
+    echo json_encode(['success' => false, 'error' => 'Falta el timestamp.']); exit;
+}
+
+$backup_file = $backup_dir . '/' . $slug . '_' . $timestamp . '.json';
 if (!file_exists($backup_file)) {
-    echo json_encode(['success' => false, 'error' => 'Backup not found']); exit;
+    echo json_encode(['success' => false, 'error' => 'Copia de seguridad no encontrada.']); exit;
 }
 
 $data = json_decode(file_get_contents($backup_file), true);
 if (!$data) {
-    echo json_encode(['success' => false, 'error' => 'Invalid backup file']); exit;
+    echo json_encode(['success' => false, 'error' => 'Archivo de respaldo corrupto o inválido.']); exit;
 }
 
 echo json_encode([

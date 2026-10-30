@@ -1,0 +1,7 @@
+{
+  "id": "search-replace",
+  "name": "Search & Replace",
+  "description": "Herramienta avanzada para buscar y reemplazar texto, URLs o fragmentos en artículos y páginas de KutBlog con modo simulación y acceso rápido.",
+  "version": "1.0",
+  "author": "KutBlog"
+}

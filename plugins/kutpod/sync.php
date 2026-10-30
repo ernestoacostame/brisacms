@@ -53,6 +53,11 @@ function kutpod_run_sync(): array {
             $rows = $stmt->fetchAll();
 
             foreach ($rows as $row) {
+                $rawCover = $row['cover'] ?: '';
+                $coverUrl = kutpod_resolve_cover_url($rawCover, $cfg, [
+                    'podcast_slug' => $row['podcast_slug'],
+                    'audio_url'    => $row['audio_url'] ?? ''
+                ]);
                 $episodes[] = [
                     'id'            => (int)$row['id'],
                     'guid'          => $row['guid'] ?: ('kutpod-' . $row['id']),
@@ -65,7 +70,8 @@ function kutpod_run_sync(): array {
                     'number'        => (int)($row['number'] ?? 0),
                     'notes_md'      => $row['notes_md'] ?? '',
                     'audio_url'     => $row['audio_url'] ?? '',
-                    'cover'         => $row['cover'] ?: '',
+                    'cover'         => $coverUrl,
+                    'instance_url'  => $cfg['instance_url'] ?? '',
                     'duration_secs' => (int)($row['duration_secs'] ?? 0),
                     'published_at'  => $row['published_at'] ?: $row['created_at'],
                     'downloads'     => (int)($row['downloads'] ?? 0),
@@ -200,6 +206,8 @@ function kutpod_upsert_article_from_episode(array $ep, array $cfg): string {
         'synced_at'      => date('c')
     ];
 
+    $coverUrl = kutpod_resolve_cover_url($ep['cover'] ?? '', $cfg, $ep);
+
     if ($existing && $existingFile) {
         // Actualizar artículo existente
         // Respetamos si el usuario ya modificó el status o el contenido propio
@@ -211,8 +219,9 @@ function kutpod_upsert_article_from_episode(array $ep, array $cfg): string {
             $existing['content'] = $notes;
         }
 
-        if (empty($existing['featured_image']) && !empty($ep['cover'])) {
-            $existing['featured_image'] = $ep['cover'];
+        // Si no tenía imagen o tenía una ruta relativa sin dominio (/media/covers/...), actualizar con la URL resuelta:
+        if ((empty($existing['featured_image']) || str_starts_with($existing['featured_image'], '/media/covers/')) && !empty($coverUrl)) {
+            $existing['featured_image'] = $coverUrl;
         }
 
         file_put_contents($existingFile, json_encode($existing, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
@@ -242,7 +251,7 @@ function kutpod_upsert_article_from_episode(array $ep, array $cfg): string {
             'status'         => $defaultStatus,
             'categories'     => array_values(array_unique($categories)),
             'tags'           => array_values(array_unique($tags)),
-            'featured_image' => $ep['cover'] ?: '',
+            'featured_image' => $coverUrl,
             'created_at'     => date('c', strtotime($ep['published_at'] ?? 'now')),
             'updated_at'     => date('c'),
             'podcast_meta'   => $podcastMeta
@@ -251,6 +260,33 @@ function kutpod_upsert_article_from_episode(array $ep, array $cfg): string {
         file_put_contents($targetFile, json_encode($newArticle, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
         return 'created';
     }
+}
+
+/**
+ * Resuelve la URL de la portada para que sea absoluta y accesible desde cualquier navegador
+ */
+function kutpod_resolve_cover_url(?string $cover, array $cfg, array $ep = []): string {
+    if (empty($cover)) return '';
+    $cover = trim($cover);
+    if (preg_match('#^https?://#i', $cover)) {
+        return $cover;
+    }
+    // Si viene una ruta relativa como /media/covers/...
+    $base = '';
+    if (!empty($ep['instance_url'])) {
+        $base = rtrim($ep['instance_url'], '/');
+    } elseif (!empty($cfg['instance_url'])) {
+        $base = rtrim($cfg['instance_url'], '/');
+    } elseif (!empty($ep['audio_url']) && preg_match('#^https?://#i', $ep['audio_url'])) {
+        $parts = parse_url($ep['audio_url']);
+        if (!empty($parts['scheme']) && !empty($parts['host'])) {
+            $base = $parts['scheme'] . '://' . $parts['host'] . (!empty($parts['port']) && !in_array((int)$parts['port'], [80, 443]) ? ':' . $parts['port'] : '');
+        }
+    }
+    if (!$base) {
+        $base = 'http://localhost:8000';
+    }
+    return $base . (str_starts_with($cover, '/') ? '' : '/') . $cover;
 }
 
 /**

@@ -474,10 +474,12 @@ body.scheme-light .floating-publish-btn {
       <span class="nav-label"><?= __("nav_import_wp") ?></span>
     </a>
     <?php endif; ?>
-    <a href="<?= base_url() ?>/admin/search_replace.php" class="nav-item <?= $active === 'tools' ? 'active' : '' ?>" data-label="Buscar y reemplazar">
+    <?php if (cms_plugin_is_active('search-replace')): ?>
+    <a href="<?= base_url() ?>/admin/plugins.php?action=settings&plugin=search-replace" class="nav-item <?= $active === 'tools' ? 'active' : '' ?>" data-label="Buscar y reemplazar">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <span class="nav-label"><?= __("nav_search_replace") ?></span>
     </a>
+    <?php endif; ?>
     <a href="<?= base_url() ?>/admin/export.php" class="nav-item <?= $active === 'export' ? 'active' : '' ?>" data-label="Exportar">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       <span class="nav-label"><?= __("nav_export") ?></span>

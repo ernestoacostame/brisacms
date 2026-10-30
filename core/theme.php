@@ -24,6 +24,24 @@ function theme_file(string $filename, string $theme = ''): string {
 }
 
 function render_theme(string $template, array $vars = []): void {
+    if (cms_plugin_is_active('kutpod') && function_exists('kutpod_config')) {
+        $kpCfg = kutpod_config();
+        $instBase = rtrim($kpCfg['instance_url'] ?? '', '/');
+        if ($instBase) {
+            if (!empty($vars['post']['featured_image']) && str_starts_with($vars['post']['featured_image'], '/media/covers/')) {
+                $vars['post']['featured_image'] = $instBase . $vars['post']['featured_image'];
+            }
+            if (isset($vars['posts']) && is_array($vars['posts'])) {
+                foreach ($vars['posts'] as &$pItem) {
+                    if (!empty($pItem['featured_image']) && str_starts_with($pItem['featured_image'], '/media/covers/')) {
+                        $pItem['featured_image'] = $instBase . $pItem['featured_image'];
+                    }
+                }
+                unset($pItem);
+            }
+        }
+    }
+
     if (isset($vars['post']['content'])) {
         if (cms_plugin_is_active('kutpod') && function_exists('kutpod_filter_content')) {
             $vars['post']['content'] = kutpod_filter_content($vars['post']['content'], $vars['post']);

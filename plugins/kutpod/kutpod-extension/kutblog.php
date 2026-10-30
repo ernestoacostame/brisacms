@@ -57,6 +57,13 @@ function kp_kutblog_on_published(int $episodeId, int $podcastId, string $title, 
     $p = kp_one("SELECT * FROM podcasts WHERE id = ?", [$podcastId]);
     if (!$ep || !$p) return;
 
+    $base = kp_base_url();
+    $rawCover = $ep['cover'] ?: ($p['cover'] ?? '');
+    $fullCover = $rawCover;
+    if ($fullCover && !preg_match('#^https?://#i', $fullCover)) {
+        $fullCover = $base . (strpos($fullCover, '/') === 0 ? '' : '/') . $fullCover;
+    }
+
     $data = [
         'id'            => (int)$ep['id'],
         'guid'          => $ep['guid'],
@@ -69,7 +76,8 @@ function kp_kutblog_on_published(int $episodeId, int $podcastId, string $title, 
         'number'        => (int)($ep['number'] ?? 0),
         'notes_md'      => $ep['notes_md'] ?? $description,
         'audio_url'     => $ep['audio_url'] ?? '',
-        'cover'         => $ep['cover'] ?: ($p['cover'] ?? ''),
+        'cover'         => $fullCover,
+        'instance_url'  => $base,
         'duration_secs' => (int)($ep['duration_secs'] ?? 0),
         'published_at'  => $ep['published_at'] ?: date('c'),
         'downloads'     => (int)($ep['downloads'] ?? 0),
@@ -86,6 +94,13 @@ function kp_kutblog_on_saved(int $episodeId, array $postData): void {
     $p = kp_one("SELECT * FROM podcasts WHERE id = ?", [$ep['podcast_id']]);
     if (!$p) return;
 
+    $base = kp_base_url();
+    $rawCover = $ep['cover'] ?: ($p['cover'] ?? '');
+    $fullCover = $rawCover;
+    if ($fullCover && !preg_match('#^https?://#i', $fullCover)) {
+        $fullCover = $base . (strpos($fullCover, '/') === 0 ? '' : '/') . $fullCover;
+    }
+
     $data = [
         'id'            => (int)$ep['id'],
         'guid'          => $ep['guid'],
@@ -98,7 +113,8 @@ function kp_kutblog_on_saved(int $episodeId, array $postData): void {
         'number'        => (int)($ep['number'] ?? 0),
         'notes_md'      => $ep['notes_md'] ?? '',
         'audio_url'     => $ep['audio_url'] ?? '',
-        'cover'         => $ep['cover'] ?: ($p['cover'] ?? ''),
+        'cover'         => $fullCover,
+        'instance_url'  => $base,
         'duration_secs' => (int)($ep['duration_secs'] ?? 0),
         'published_at'  => $ep['published_at'] ?: date('c'),
         'downloads'     => (int)($ep['downloads'] ?? 0),
