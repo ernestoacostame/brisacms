@@ -235,6 +235,20 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
                       <span class="slash-desc">Insertar imagen o foto</span>
                     </div>
                   </div>
+                  <div class="slash-item" data-cmd="audio" role="menuitem">
+                    <span class="slash-icon">🎵</span>
+                    <div class="slash-text">
+                      <span class="slash-title">Audio</span>
+                      <span class="slash-desc">Reproductor MP3, podcast o sonido</span>
+                    </div>
+                  </div>
+                  <div class="slash-item" data-cmd="video" role="menuitem">
+                    <span class="slash-icon">🎬</span>
+                    <div class="slash-text">
+                      <span class="slash-title">Video</span>
+                      <span class="slash-desc">YouTube, Vimeo o archivo MP4/WebM</span>
+                    </div>
+                  </div>
                   <div class="slash-item" data-cmd="hr" role="menuitem">
                     <span class="slash-icon">―</span>
                     <div class="slash-text">
@@ -2797,6 +2811,37 @@ body.focus-mode .floating-buttons-container { display: none !important; }
   flex: 1;
 }
 
+/* Video & Embed styling */
+.media-video {
+  margin: 1.5rem 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+  line-height: 0;
+  max-width: 100%;
+}
+.media-video video {
+  width: 100%;
+  display: block;
+  border-radius: 8px;
+}
+.yt-embed {
+  position: relative;
+  padding-bottom: 56.25%;
+  height: 0;
+  overflow: hidden;
+  margin: 1.5rem 0;
+  border-radius: 8px;
+}
+.yt-embed iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
 /* Fix for contenteditable areas */
 #editor del,
 [contenteditable] del {
@@ -3136,6 +3181,26 @@ const htmlToolbar  = document.getElementById('html-toolbar');
       case 'image':
         const url = prompt('Introduce la URL de la imagen:');
         if (url) chain.setImage({ src: url, alt: '' }).run();
+        break;
+      case 'audio':
+        const audioUrl = prompt('Introduce la URL del audio (MP3, OGG, WAV o podcast):');
+        if (audioUrl) {
+          chain.insertContent(`<div class="media-audio"><audio controls src="${audioUrl}" style="width:100%;"></audio></div><p></p>`).run();
+        }
+        break;
+      case 'video':
+        const videoUrl = prompt('Introduce la URL del video (YouTube, Vimeo o archivo MP4/WebM):');
+        if (videoUrl) {
+          const ytMatch = videoUrl.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i);
+          const vmMatch = videoUrl.match(/vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/(?:[^\/]*)\/videos\/|album\/(?:\d+)\/video\/|video\/|)(\d+)/i);
+          if (ytMatch && ytMatch[1]) {
+            chain.insertContent(`<div class="yt-embed"><iframe src="https://www.youtube-nocookie.com/embed/${ytMatch[1]}" allowfullscreen loading="lazy"></iframe></div><p></p>`).run();
+          } else if (vmMatch && vmMatch[1]) {
+            chain.insertContent(`<div class="yt-embed"><iframe src="https://player.vimeo.com/video/${vmMatch[1]}" allowfullscreen loading="lazy"></iframe></div><p></p>`).run();
+          } else {
+            chain.insertContent(`<div class="media-video"><video controls src="${videoUrl}" style="max-width:100%; border-radius:8px;"></video></div><p></p>`).run();
+          }
+        }
         break;
       case 'hr':
         chain.setHorizontalRule().run();
