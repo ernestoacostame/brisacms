@@ -950,34 +950,44 @@ body.focus-mode .focus-exit-hint {
 
 /* URL Slug Affix Input */
 .sheet-field-prefix {
-  display: flex;
-  align-items: center;
-  border: 1px solid var(--border2);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  box-shadow: inset 0 1px 1.5px rgba(0,0,0,0.1);
-  overflow: hidden;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  display: flex !important;
+  align-items: center !important;
+  border: 1px solid var(--border2) !important;
+  border-radius: var(--radius-sm) !important;
+  background: var(--surface) !important;
+  box-shadow: inset 0 1px 1.5px rgba(0,0,0,0.1) !important;
+  overflow: hidden !important;
+  transition: border-color 0.15s, box-shadow 0.15s !important;
+  width: 100% !important;
 }
 .sheet-field-prefix:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.18), inset 0 1px 1.5px rgba(0,0,0,0.1);
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.18), inset 0 1px 1.5px rgba(0,0,0,0.1) !important;
 }
 .sheet-prefix-text {
-  padding: 0 6px 0 9px;
-  font-size: 0.78rem;
-  color: var(--muted);
-  user-select: none;
-  font-family: var(--font-mono);
+  padding: 0 4px 0 9px !important;
+  font-size: 0.8rem !important;
+  color: var(--muted) !important;
+  user-select: none !important;
+  font-family: var(--font-mono) !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  line-height: 1 !important;
 }
 .sheet-field-prefix input {
   border: none !important;
   box-shadow: none !important;
-  padding: 0.5rem 0.65rem 0.5rem 0 !important;
+  padding: 0.5rem 0.65rem 0.5rem 2px !important;
   background: transparent !important;
   border-radius: 0 !important;
-  font-family: var(--font-mono);
+  font-family: var(--font-mono) !important;
   font-size: 0.82rem !important;
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+  width: auto !important;
+  outline: none !important;
 }
 
 /* Picture Slot (16:9 Image Preview) */
