@@ -439,3 +439,4 @@ function analytics_render_tracker(): void {
 </script>
     <?php
 }
+

@@ -1,3 +1,0 @@
-﻿# After a BOM
-
-Body.
