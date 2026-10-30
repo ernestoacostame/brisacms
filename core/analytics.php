@@ -49,9 +49,16 @@ function analytics_visitor_hash(string $ip, string $ua): string {
  */
 function analytics_is_internal_ip(string $ip): bool {
     $ip = trim($ip);
-    if ($ip === '' || $ip === '127.0.0.1' || $ip === '::1') return true;
-    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
-        return true;
+    if ($ip === '') return true;
+
+    // By default, allow localhost / private network so local testing & intranet work.
+    // If analytics_ignore_local is set to true in config.json, ignore internal traffic.
+    $config = function_exists('cms_config') ? cms_config() : [];
+    if (!empty($config['analytics_ignore_local'])) {
+        if ($ip === '127.0.0.1' || $ip === '::1') return true;
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+            return true;
+        }
     }
     return false;
 }
@@ -111,6 +118,16 @@ function analytics_clean_path(string $path): ?string {
     $path = trim(explode('?', explode('#', $path)[0])[0]);
     if ($path === '') return '/';
     if (!str_starts_with($path, '/')) $path = '/' . $path;
+
+    // Strip base_url subpath if installed in a subdirectory
+    if (function_exists('base_url')) {
+        $basePath = parse_url(base_url(), PHP_URL_PATH);
+        if ($basePath && $basePath !== '/' && str_starts_with($path, $basePath)) {
+            $path = substr($path, strlen($basePath));
+            if (!str_starts_with($path, '/')) $path = '/' . $path;
+        }
+    }
+
     if (str_starts_with($path, '/admin') || str_starts_with($path, '/api')) return null;
     return substr($path, 0, 255);
 }
@@ -356,8 +373,10 @@ function analytics_get_stats(string $range = '30d'): array {
  * Injects lightweight anonymous tracker script into theme footer
  */
 function analytics_render_tracker(): void {
-    if (function_exists('is_logged_in') && is_logged_in()) {
-        return; // Don't track logged-in administrators
+    $config = function_exists('cms_config') ? cms_config() : [];
+    $trackAdmin = !empty($config['analytics_track_admin']);
+    if (!$trackAdmin && function_exists('is_logged_in') && is_logged_in()) {
+        return; // Don't track logged-in administrators unless explicitly enabled in config
     }
     $apiTrackUrl = base_url() . '/api/track.php';
     ?>
@@ -366,7 +385,7 @@ function analytics_render_tracker(): void {
 (function(){
   try {
     var path = location.pathname;
-    if (path.indexOf('/admin') === 0 || path.indexOf('/api') === 0) return;
+    if (path.indexOf('/admin') !== -1 || path.indexOf('/api') !== -1) return;
     var trackUrl = <?= json_encode($apiTrackUrl) ?>;
     var ref = (document.referrer && new URL(document.referrer, location.href).host !== location.host) ? document.referrer : '';
     var touch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
