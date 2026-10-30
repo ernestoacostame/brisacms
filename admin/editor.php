@@ -186,8 +186,120 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
               value="<?= htmlspecialchars($post['title'] ?? '') ?>" required autocomplete="off">
           </div>
           
+          <!-- Writing Desk: Find & Replace Bar (Ctrl+F) -->
+          <div id="find-replace-bar" class="writing-find-bar" style="display:none;">
+            <div class="find-row">
+              <div class="find-input-wrap">
+                <input type="text" id="find-input" placeholder="Buscar en el texto (Ctrl+F)..." autocomplete="off" spellcheck="false">
+                <span id="find-counter" class="find-counter">0/0</span>
+              </div>
+              <button type="button" id="find-prev-btn" class="find-btn" title="Anterior (Shift+Enter)">↑</button>
+              <button type="button" id="find-next-btn" class="find-btn" title="Siguiente (Enter)">↓</button>
+              <button type="button" id="find-toggle-replace" class="find-btn" title="Alternar reemplazo">⇄</button>
+              <button type="button" id="find-close-btn" class="find-btn find-close" title="Cerrar (Esc)">✕</button>
+            </div>
+            <div class="replace-row" id="replace-row" style="display:none;">
+              <div class="find-input-wrap">
+                <input type="text" id="replace-input" placeholder="Reemplazar por..." autocomplete="off" spellcheck="false">
+              </div>
+              <button type="button" id="replace-one-btn" class="find-action-btn">Reemplazar</button>
+              <button type="button" id="replace-all-btn" class="find-action-btn">Todo</button>
+            </div>
+          </div>
+
           <!-- Editor panes -->
-          <div class="editor-wrap">
+          <div class="editor-wrap" style="position:relative;">
+            <!-- Writing Desk: Floating Bubble Selection Menu -->
+            <div id="bubble-menu" class="writing-bubble-menu" style="display:none;" role="toolbar" aria-label="Formato de texto">
+              <button type="button" class="bubble-btn" data-cmd="bold" title="Negrita (Ctrl+B)"><b>B</b></button>
+              <button type="button" class="bubble-btn" data-cmd="italic" title="Cursiva (Ctrl+I)"><i>I</i></button>
+              <button type="button" class="bubble-btn" data-cmd="underline" title="Subrayado (Ctrl+U)"><u>U</u></button>
+              <button type="button" class="bubble-btn" data-cmd="strikeThrough" title="Tachado"><s>S</s></button>
+              <button type="button" class="bubble-btn" data-cmd="highlight" title="Resaltador (Highlighter)">
+                <mark class="bubble-pen-mark">A</mark>
+              </button>
+              <button type="button" class="bubble-btn" data-cmd="code" title="Código en línea"><code>&lt;&gt;</code></button>
+              <div class="bubble-sep"></div>
+              <button type="button" class="bubble-btn" data-cmd="link" title="Enlace">🔗</button>
+            </div>
+
+            <!-- Writing Desk: Slash Command Palette (/) -->
+            <div id="slash-menu" class="writing-slash-menu" style="display:none;" role="menu" aria-label="Insertar bloque">
+              <div class="slash-header">Insertar bloque</div>
+              <div class="slash-items">
+                <div class="slash-item active" data-cmd="h2" role="menuitem">
+                  <span class="slash-icon">H2</span>
+                  <div class="slash-text">
+                    <span class="slash-title">Título 2</span>
+                    <span class="slash-desc">Encabezado de sección</span>
+                  </div>
+                </div>
+                <div class="slash-item" data-cmd="h3" role="menuitem">
+                  <span class="slash-icon">H3</span>
+                  <div class="slash-text">
+                    <span class="slash-title">Título 3</span>
+                    <span class="slash-desc">Subencabezado secundario</span>
+                  </div>
+                </div>
+                <div class="slash-item" data-cmd="quote" role="menuitem">
+                  <span class="slash-icon">❝</span>
+                  <div class="slash-text">
+                    <span class="slash-title">Cita</span>
+                    <span class="slash-desc">Bloque de cita o reflexión</span>
+                  </div>
+                </div>
+                <div class="slash-item" data-cmd="callout" role="menuitem">
+                  <span class="slash-icon">💡</span>
+                  <div class="slash-text">
+                    <span class="slash-title">Nota destacada</span>
+                    <span class="slash-desc">Recuadro informativo tipo callout</span>
+                  </div>
+                </div>
+                <div class="slash-item" data-cmd="code" role="menuitem">
+                  <span class="slash-icon">{ }</span>
+                  <div class="slash-text">
+                    <span class="slash-title">Bloque de código</span>
+                    <span class="slash-desc">Fragmento con sintaxis</span>
+                  </div>
+                </div>
+                <div class="slash-item" data-cmd="ul" role="menuitem">
+                  <span class="slash-icon">•</span>
+                  <div class="slash-text">
+                    <span class="slash-title">Lista con viñetas</span>
+                    <span class="slash-desc">Lista desordenada</span>
+                  </div>
+                </div>
+                <div class="slash-item" data-cmd="ol" role="menuitem">
+                  <span class="slash-icon">1.</span>
+                  <div class="slash-text">
+                    <span class="slash-title">Lista numerada</span>
+                    <span class="slash-desc">Lista de pasos ordenada</span>
+                  </div>
+                </div>
+                <div class="slash-item" data-cmd="table" role="menuitem">
+                  <span class="slash-icon">▦</span>
+                  <div class="slash-text">
+                    <span class="slash-title">Tabla</span>
+                    <span class="slash-desc">Insertar tabla 2x3</span>
+                  </div>
+                </div>
+                <div class="slash-item" data-cmd="image" role="menuitem">
+                  <span class="slash-icon">🖼</span>
+                  <div class="slash-text">
+                    <span class="slash-title">Imagen</span>
+                    <span class="slash-desc">Subir o insertar imagen</span>
+                  </div>
+                </div>
+                <div class="slash-item" data-cmd="hr" role="menuitem">
+                  <span class="slash-icon">―</span>
+                  <div class="slash-text">
+                    <span class="slash-title">Separador</span>
+                    <span class="slash-desc">Línea divisoria horizontal</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- HTML visual editor (contentEditable div) -->
             <div id="editor" class="prose-editor" contenteditable="true"><?= $post['content'] ?? '' ?></div>
             <!-- Hidden textarea to store content for form submission -->
@@ -467,6 +579,234 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 
 
 <style>
+/* ── Writing Desk: Floating Bubble Menu ──────────────────────── */
+.writing-bubble-menu {
+  position: absolute;
+  z-index: 1200;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  padding: 3px;
+  gap: 2px;
+  transition: opacity 0.1s ease, transform 0.1s ease;
+  user-select: none;
+}
+.bubble-btn {
+  background: none;
+  border: none;
+  color: var(--text);
+  padding: 4px 7px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  transition: all 0.12s ease;
+}
+.bubble-btn:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+.bubble-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+.bubble-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border2);
+  margin: 0 3px;
+}
+.bubble-pen-mark {
+  background: #d5f856;
+  color: #2c3208;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-weight: 700;
+}
+body[data-theme="dark"] .bubble-pen-mark, .dark .bubble-pen-mark {
+  background: #5e721d;
+  color: #f4f7e2;
+}
+
+/* ── Writing Desk: Slash Command Palette ─────────────────────── */
+.writing-slash-menu {
+  position: absolute;
+  z-index: 1250;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+  width: 290px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 5px;
+  user-select: none;
+}
+.writing-slash-menu::-webkit-scrollbar { width: 5px; }
+.writing-slash-menu::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+.slash-header {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  padding: 6px 10px 4px;
+}
+.slash-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.slash-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.slash-item:hover, .slash-item.active {
+  background: var(--surface2);
+}
+.slash-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.slash-text {
+  min-width: 0;
+}
+.slash-title {
+  display: block;
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.slash-desc {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+/* ── Writing Desk: Find & Replace Bar ────────────────────────── */
+.writing-find-bar {
+  position: absolute;
+  top: 44px;
+  right: 18px;
+  z-index: 1100;
+  width: 360px;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.find-row, .replace-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.find-input-wrap {
+  display: flex;
+  align-items: center;
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: 5px;
+  padding: 0 6px;
+  flex: 1;
+}
+.find-input-wrap input {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 4px 6px !important;
+  font-size: 0.82rem !important;
+  color: var(--text) !important;
+  width: 100% !important;
+  outline: none !important;
+}
+.find-counter {
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+  padding-right: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.find-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 5px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.12s;
+  flex-shrink: 0;
+}
+.find-btn:hover { background: var(--border); }
+.find-close:hover { color: var(--red); }
+.find-action-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+.find-action-btn:hover { background: var(--border); }
+
+/* Highlights for matches */
+mark.find-match {
+  background: #d5f856;
+  color: #2c3208;
+  border-radius: 2px;
+}
+mark.find-match.current {
+  background: #f59e0b;
+  color: #fff;
+  outline: 2px solid #f59e0b;
+}
+
+/* Callouts in editor & rendering */
+.callout-note {
+  margin: 1.25rem 0;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border-left: 3px solid var(--accent);
+  background: rgba(var(--accent-rgb), 0.08);
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
 .editor-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 330px;
@@ -2371,6 +2711,488 @@ const fmtInput     = document.getElementById('content-format-input');
 const titleInput   = document.getElementById('post-title');
 const slugInput    = document.getElementById('custom-slug');
 const htmlToolbar  = document.getElementById('html-toolbar');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WRITING DESK ENHANCEMENTS (QUIREINK INSPIRED)
+// ═══════════════════════════════════════════════════════════════════════════
+
+(function initWritingDesk() {
+  const visualEditor = document.getElementById('editor');
+  const bubbleMenu = document.getElementById('bubble-menu');
+  const slashMenu = document.getElementById('slash-menu');
+  const findBar = document.getElementById('find-replace-bar');
+  if (!visualEditor) return;
+
+  // 1. FLOATING BUBBLE SELECTION MENU
+  function updateBubbleMenu() {
+    if (mode !== 'visual' || !bubbleMenu) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) {
+      bubbleMenu.style.display = 'none';
+      return;
+    }
+
+    const range = sel.getRangeAt(0);
+    if (!visualEditor.contains(range.commonAncestorContainer)) {
+      bubbleMenu.style.display = 'none';
+      return;
+    }
+
+    const text = sel.toString().trim();
+    if (!text) {
+      bubbleMenu.style.display = 'none';
+      return;
+    }
+
+    const rect = range.getBoundingClientRect();
+    const wrapRect = visualEditor.parentElement.getBoundingClientRect();
+
+    const top = (rect.top - wrapRect.top) + visualEditor.parentElement.scrollTop - 44;
+    const left = Math.max(10, Math.min(
+      wrapRect.width - 250,
+      (rect.left - wrapRect.left) + (rect.width / 2) - 120
+    ));
+
+    bubbleMenu.style.top = `${Math.max(4, top)}px`;
+    bubbleMenu.style.left = `${left}px`;
+    bubbleMenu.style.display = 'flex';
+  }
+
+  document.addEventListener('selectionchange', () => {
+    requestAnimationFrame(updateBubbleMenu);
+  });
+
+  visualEditor.addEventListener('scroll', () => {
+    if (bubbleMenu.style.display !== 'none') updateBubbleMenu();
+  });
+
+  bubbleMenu?.querySelectorAll('.bubble-btn').forEach(btn => {
+    btn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const cmd = btn.getAttribute('data-cmd');
+      if (cmd === 'highlight') {
+        const sel = window.getSelection();
+        if (sel && !sel.isCollapsed) {
+          const range = sel.getRangeAt(0);
+          const parentMark = sel.anchorNode?.parentElement?.closest('mark.pen-highlight');
+          if (parentMark) {
+            const textNode = document.createTextNode(parentMark.textContent);
+            parentMark.parentNode.replaceChild(textNode, parentMark);
+          } else {
+            const mark = document.createElement('mark');
+            mark.className = 'pen-highlight';
+            mark.style.cssText = 'background:var(--pen, #d5f856); color:var(--on-pen, #2c3208); border-radius:2px; padding:0 2px;';
+            try {
+              range.surroundContents(mark);
+            } catch (err) {
+              document.execCommand('hiliteColor', false, '#d5f856');
+            }
+          }
+        }
+      } else if (cmd === 'code') {
+        const sel = window.getSelection();
+        if (sel && !sel.isCollapsed) {
+          const range = sel.getRangeAt(0);
+          const parentCode = sel.anchorNode?.parentElement?.closest('code');
+          if (parentCode) {
+            const textNode = document.createTextNode(parentCode.textContent);
+            parentCode.parentNode.replaceChild(textNode, parentCode);
+          } else {
+            const code = document.createElement('code');
+            code.style.cssText = 'background:var(--surface2); padding:2px 5px; border-radius:4px; font-family:var(--font-mono); font-size:0.9em;';
+            try {
+              range.surroundContents(code);
+            } catch (err) {
+              document.execCommand('formatBlock', false, 'pre');
+            }
+          }
+        }
+      } else if (cmd === 'link') {
+        if (typeof window.insertLink === 'function') window.insertLink();
+        else {
+          const url = prompt('Introduce la URL del enlace:');
+          if (url) document.execCommand('createLink', false, url);
+        }
+      } else if (cmd === 'strikeThrough') {
+        if (typeof window.execStrikeThrough === 'function') window.execStrikeThrough();
+        else document.execCommand('strikeThrough');
+      } else {
+        document.execCommand(cmd, false, null);
+      }
+      updateBubbleMenu();
+      if (typeof window.triggerAutoSave === 'function') window.triggerAutoSave();
+    });
+  });
+
+  // 2. SLASH COMMAND PALETTE (/)
+  let slashActive = false;
+  let slashIdx = 0;
+
+  function closeSlashMenu() {
+    slashActive = false;
+    if (slashMenu) slashMenu.style.display = 'none';
+  }
+
+  function getCaretCoordinates() {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return null;
+    const range = sel.getRangeAt(0).cloneRange();
+    range.collapse(true);
+    let rect = range.getClientRects()[0];
+    if (!rect) {
+      const span = document.createElement('span');
+      span.appendChild(document.createTextNode('\u200b'));
+      range.insertNode(span);
+      rect = span.getBoundingClientRect();
+      span.parentNode.removeChild(span);
+    }
+    return rect;
+  }
+
+  function openSlashMenu() {
+    if (!slashMenu) return;
+    const rect = getCaretCoordinates();
+    if (!rect) return;
+    const wrapRect = visualEditor.parentElement.getBoundingClientRect();
+    const top = (rect.bottom - wrapRect.top) + visualEditor.parentElement.scrollTop + 6;
+    const left = Math.max(10, Math.min(wrapRect.width - 300, (rect.left - wrapRect.left)));
+    slashMenu.style.top = `${top}px`;
+    slashMenu.style.left = `${left}px`;
+    slashMenu.style.display = 'block';
+    slashActive = true;
+    slashIdx = 0;
+    updateSlashSelection();
+  }
+
+  function updateSlashSelection() {
+    if (!slashMenu) return;
+    const items = slashMenu.querySelectorAll('.slash-item');
+    items.forEach((it, i) => {
+      it.classList.toggle('active', i === slashIdx);
+      if (i === slashIdx) it.scrollIntoView({ block: 'nearest' });
+    });
+  }
+
+  function executeSlashCommand(cmd) {
+    closeSlashMenu();
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount) {
+      const range = sel.getRangeAt(0);
+      if (range.startOffset > 0) {
+        range.setStart(range.startContainer, range.startOffset - 1);
+        if (range.toString() === '/') {
+          range.deleteContents();
+        }
+      }
+    }
+
+    switch (cmd) {
+      case 'h2':
+        document.execCommand('formatBlock', false, 'h2');
+        break;
+      case 'h3':
+        document.execCommand('formatBlock', false, 'h3');
+        break;
+      case 'quote':
+        document.execCommand('formatBlock', false, 'blockquote');
+        break;
+      case 'callout':
+        document.execCommand('insertHTML', false, '<div class="callout-note"><strong>Nota:</strong> Escribe tu apunte aquí...</div><p><br></p>');
+        break;
+      case 'code':
+        document.execCommand('insertHTML', false, '<pre style="background:var(--surface2); padding:1rem; border-radius:8px; border:1px solid var(--border); overflow-x:auto;"><code>// Escribe tu código aquí\n</code></pre><p><br></p>');
+        break;
+      case 'ul':
+        document.execCommand('insertUnorderedList');
+        break;
+      case 'ol':
+        document.execCommand('insertOrderedList');
+        break;
+      case 'table':
+        document.execCommand('insertHTML', false, `
+          <table style="width:100%; border-collapse:collapse; margin:1.25rem 0; border:1px solid var(--border);">
+            <thead>
+              <tr style="background:var(--surface2);">
+                <th style="border:1px solid var(--border); padding:8px 12px; text-align:left;">Encabezado 1</th>
+                <th style="border:1px solid var(--border); padding:8px 12px; text-align:left;">Encabezado 2</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="border:1px solid var(--border); padding:8px 12px;">Dato 1</td>
+                <td style="border:1px solid var(--border); padding:8px 12px;">Dato 2</td>
+              </tr>
+              <tr>
+                <td style="border:1px solid var(--border); padding:8px 12px;">Dato 3</td>
+                <td style="border:1px solid var(--border); padding:8px 12px;">Dato 4</td>
+              </tr>
+            </tbody>
+          </table>
+          <p><br></p>
+        `);
+        break;
+      case 'image':
+        if (typeof window.insertImage === 'function') window.insertImage();
+        else {
+          const url = prompt('URL de la imagen:');
+          if (url) document.execCommand('insertImage', false, url);
+        }
+        break;
+      case 'hr':
+        document.execCommand('insertHorizontalRule');
+        break;
+    }
+    if (typeof window.triggerAutoSave === 'function') window.triggerAutoSave();
+  }
+
+  slashMenu?.querySelectorAll('.slash-item').forEach((item, idx) => {
+    item.addEventListener('click', () => {
+      executeSlashCommand(item.getAttribute('data-cmd'));
+    });
+    item.addEventListener('mouseenter', () => {
+      slashIdx = idx;
+      updateSlashSelection();
+    });
+  });
+
+  visualEditor.addEventListener('keydown', (e) => {
+    if (slashActive) {
+      const items = slashMenu.querySelectorAll('.slash-item');
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        slashIdx = (slashIdx + 1) % items.length;
+        updateSlashSelection();
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        slashIdx = (slashIdx - 1 + items.length) % items.length;
+        updateSlashSelection();
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (items[slashIdx]) {
+          executeSlashCommand(items[slashIdx].getAttribute('data-cmd'));
+        }
+        return;
+      }
+      if (e.key === 'Escape' || e.key === 'Backspace') {
+        closeSlashMenu();
+        return;
+      }
+    }
+
+    if (e.key === '/' && !slashActive) {
+      setTimeout(() => {
+        openSlashMenu();
+      }, 10);
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (slashActive && !slashMenu.contains(e.target)) {
+      closeSlashMenu();
+    }
+  });
+
+  // 3. FIND & REPLACE (Ctrl+F, Ctrl+H)
+  const findInput = document.getElementById('find-input');
+  const replaceInput = document.getElementById('replace-input');
+  const findCounter = document.getElementById('find-counter');
+  const replaceRow = document.getElementById('replace-row');
+  let currentMatches = [];
+  let currentMatchIdx = -1;
+
+  function clearFindHighlights() {
+    visualEditor.querySelectorAll('mark.find-match').forEach(m => {
+      const text = document.createTextNode(m.textContent);
+      m.parentNode.replaceChild(text, m);
+    });
+    visualEditor.normalize();
+    currentMatches = [];
+    currentMatchIdx = -1;
+    if (findCounter) findCounter.textContent = '0/0';
+  }
+
+  function performSearch() {
+    clearFindHighlights();
+    const query = findInput.value.trim();
+    if (!query) return;
+
+    const walker = document.createTreeWalker(visualEditor, NodeFilter.SHOW_TEXT, null, false);
+    const nodesToReplace = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      if (node.parentElement && node.parentElement.closest('mark.find-match')) continue;
+      const idx = node.textContent.toLowerCase().indexOf(query.toLowerCase());
+      if (idx !== -1) {
+        nodesToReplace.push(node);
+      }
+    }
+
+    nodesToReplace.forEach(textNode => {
+      const parent = textNode.parentNode;
+      if (!parent) return;
+      const val = textNode.textContent;
+      const qLen = query.length;
+      let start = 0;
+      let lower = val.toLowerCase();
+      let pos;
+
+      const frag = document.createDocumentFragment();
+      while ((pos = lower.indexOf(query.toLowerCase(), start)) !== -1) {
+        if (pos > start) {
+          frag.appendChild(document.createTextNode(val.substring(start, pos)));
+        }
+        const mark = document.createElement('mark');
+        mark.className = 'find-match';
+        mark.textContent = val.substring(pos, pos + qLen);
+        frag.appendChild(mark);
+        currentMatches.push(mark);
+        start = pos + qLen;
+      }
+      if (start < val.length) {
+        frag.appendChild(document.createTextNode(val.substring(start)));
+      }
+      parent.replaceChild(frag, textNode);
+    });
+
+    if (currentMatches.length > 0) {
+      currentMatchIdx = 0;
+      highlightCurrentMatch();
+    } else {
+      findCounter.textContent = '0/0';
+    }
+  }
+
+  function highlightCurrentMatch() {
+    currentMatches.forEach((m, idx) => {
+      m.classList.toggle('current', idx === currentMatchIdx);
+    });
+    if (currentMatches[currentMatchIdx]) {
+      currentMatches[currentMatchIdx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      findCounter.textContent = `${currentMatchIdx + 1}/${currentMatches.length}`;
+    }
+  }
+
+  function openFindBar(showReplace = false) {
+    if (!findBar) return;
+    findBar.style.display = 'flex';
+    if (replaceRow) replaceRow.style.display = showReplace ? 'flex' : 'none';
+    findInput.focus();
+    findInput.select();
+    if (findInput.value) performSearch();
+  }
+
+  function closeFindBar() {
+    if (findBar) findBar.style.display = 'none';
+    clearFindHighlights();
+    visualEditor.focus();
+  }
+
+  findInput?.addEventListener('input', performSearch);
+  findInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        if (currentMatches.length) {
+          currentMatchIdx = (currentMatchIdx - 1 + currentMatches.length) % currentMatches.length;
+          highlightCurrentMatch();
+        }
+      } else {
+        if (currentMatches.length) {
+          currentMatchIdx = (currentMatchIdx + 1) % currentMatches.length;
+          highlightCurrentMatch();
+        }
+      }
+    } else if (e.key === 'Escape') {
+      closeFindBar();
+    }
+  });
+
+  document.getElementById('find-next-btn')?.addEventListener('click', () => {
+    if (currentMatches.length) {
+      currentMatchIdx = (currentMatchIdx + 1) % currentMatches.length;
+      highlightCurrentMatch();
+    }
+  });
+
+  document.getElementById('find-prev-btn')?.addEventListener('click', () => {
+    if (currentMatches.length) {
+      currentMatchIdx = (currentMatchIdx - 1 + currentMatches.length) % currentMatches.length;
+      highlightCurrentMatch();
+    }
+  });
+
+  document.getElementById('find-toggle-replace')?.addEventListener('click', () => {
+    if (replaceRow) {
+      replaceRow.style.display = replaceRow.style.display === 'none' ? 'flex' : 'none';
+    }
+  });
+
+  document.getElementById('find-close-btn')?.addEventListener('click', closeFindBar);
+
+  document.getElementById('replace-one-btn')?.addEventListener('click', () => {
+    if (currentMatches.length > 0 && currentMatchIdx >= 0) {
+      const cur = currentMatches[currentMatchIdx];
+      const repl = replaceInput.value;
+      const textNode = document.createTextNode(repl);
+      cur.parentNode.replaceChild(textNode, cur);
+      performSearch();
+      if (typeof window.triggerAutoSave === 'function') window.triggerAutoSave();
+    }
+  });
+
+  document.getElementById('replace-all-btn')?.addEventListener('click', () => {
+    const repl = replaceInput.value;
+    currentMatches.forEach(m => {
+      const textNode = document.createTextNode(repl);
+      m.parentNode.replaceChild(textNode, m);
+    });
+    clearFindHighlights();
+    performSearch();
+    if (typeof window.triggerAutoSave === 'function') window.triggerAutoSave();
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+      e.preventDefault();
+      openFindBar(false);
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === 'h' || e.key === 'H')) {
+      e.preventDefault();
+      openFindBar(true);
+    } else if (e.key === 'Escape' && findBar && findBar.style.display !== 'none') {
+      closeFindBar();
+    }
+  });
+
+  // 4. DYNAMIC ACTION BUTTON & DIRTY STATE
+  let originalContent = visualEditor.innerHTML;
+  let isDirty = false;
+  const publishBtn = document.getElementById('publish-btn');
+
+  function checkDirtyState() {
+    const cur = visualEditor.innerHTML;
+    const dirty = (cur !== originalContent);
+    if (dirty !== isDirty) {
+      isDirty = dirty;
+      if (publishBtn) {
+        const curStatus = document.getElementById('status-select')?.value || 'draft';
+        if (curStatus === 'published') {
+          publishBtn.textContent = isDirty ? 'Actualizar' : 'Actualizado ✓';
+          publishBtn.style.opacity = isDirty ? '1' : '0.82';
+        } else {
+          publishBtn.textContent = 'Publicar';
+          publishBtn.style.opacity = '1';
+        }
+      }
+    }
+  }
+
+  visualEditor.addEventListener('input', checkDirtyState);
+  document.getElementById('post-title')?.addEventListener('input', () => { isDirty = true; checkDirtyState(); });
+})();
 
 let mode       = 'visual';  // 'visual' | 'raw'
 let slugManuallySet = <?= $is_new ? 'false' : 'true' ?>;
