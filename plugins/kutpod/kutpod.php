@@ -1012,20 +1012,8 @@ function kutpod_render_related_box($episodesOrSingle, array $cfg): string {
         <span>🎙️ ¿Te apasiona este tema? Escucha el episodio en nuestro Podcast</span>
         ' . ($showName !== '' ? '<span class="kutpod-related-showname" style="font-weight:500; opacity:0.8; font-size:0.8rem; margin-left:auto;">' . $showName . '</span>' : '') . '
       </div>
-      <div class="kutpod-related-content">
-        <img src="' . htmlspecialchars($cover) . '" alt="' . htmlspecialchars($main['title']) . '" class="kutpod-related-cover" onerror="this.src=\'' . $base . '/plugins/kutpod/assets/cover-placeholder.png\'">
-        <div class="kutpod-related-info">
-          <h4 class="kutpod-related-title">
-            <a href="' . htmlspecialchars($listenUrl) . '"' . $targetAttr . '>' . htmlspecialchars($main['title']) . '</a>
-          </h4>
-          <div class="kutpod-related-meta">
-            ' . ($durFmt ? '⏱️ ' . htmlspecialchars($durFmt) . ' · ' : '') . '
-            <a href="' . htmlspecialchars($listenUrl) . '"' . $targetAttr . ' style="color:var(--kp-accent, #ff5f7e); font-weight:600; text-decoration:none;">' . $listenText . '</a>
-          </div>
-        </div>
-      </div>
-      <div style="margin-top:14px; border-radius:12px; overflow:hidden;">
-        <iframe src="' . htmlspecialchars($embedSrc) . '" class="kutpod-player-frame" style="width:100%; height:175px; min-height:175px; border:none;" allow="autoplay" loading="lazy"></iframe>
+      <div class="kutpod-related-player-wrap" style="border-radius:12px; overflow:hidden;">
+        <iframe src="' . htmlspecialchars($embedSrc) . '" class="kutpod-player-frame" style="width:100%; height:175px; min-height:175px; border:none; display:block;" allow="autoplay" loading="lazy"></iframe>
       </div>
       ' . $playlistHtml . '
     </div>';
