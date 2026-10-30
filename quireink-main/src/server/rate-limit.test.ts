@@ -1,0 +1,241 @@
+import type { Context } from 'hono'
+import { describe, it, expect, vi, beforeEach, afterEach } from '@/test/vitest'
+import { rateLimited, overLimit, recordHit, clientIp, clientCountry, resetLimits } from '@/server/rate-limit'
+import { forgetCloudflareInFront } from '@/store/integration-keys'
+
+/**
+ * Turn the Cloudflare integration on and off for one case.
+ *
+ * `cloudflareInFront` resolves the two zone keys from the row first and the env second, and
+ * this file has no database, so the env is the whole answer here. The cached flag has to be
+ * forgotten on both sides of the case or the previous one decides this one.
+ */
+function withCloudflare<T>(on: boolean, body: () => T): T {
+  const before = [process.env.CLOUDFLARE_API_TOKEN, process.env.CLOUDFLARE_ZONE_ID] as const
+  const set = (k: string, v: string | undefined): void => {
+    if (v === undefined) delete process.env[k]
+    else process.env[k] = v
+  }
+  set('CLOUDFLARE_API_TOKEN', on ? 'token' : undefined)
+  set('CLOUDFLARE_ZONE_ID', on ? 'zone' : undefined)
+  forgetCloudflareInFront()
+  try {
+    return body()
+  } finally {
+    set('CLOUDFLARE_API_TOKEN', before[0])
+    set('CLOUDFLARE_ZONE_ID', before[1])
+    forgetCloudflareInFront()
+  }
+}
+
+describe('rateLimited', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('blocks only after exceeding max within the window', () => {
+    const k = `t-${Math.random()}`
+    expect(rateLimited(k, 2, 1000)).toBe(false) // 1
+    expect(rateLimited(k, 2, 1000)).toBe(false) // 2
+    expect(rateLimited(k, 2, 1000)).toBe(true) // 3 > max
+  })
+
+  it('forgets old hits once the window passes (and evicts the key)', () => {
+    const k = `t-${Math.random()}`
+    rateLimited(k, 1, 1000)
+    expect(rateLimited(k, 1, 1000)).toBe(true)
+    vi.advanceTimersByTime(90_000) // window elapsed, and past the sweep cadence
+    // A hit on a DIFFERENT key triggers the sweep that drops the now-stale key…
+    rateLimited(`other-${Math.random()}`, 1, 1000)
+    // …and the original key starts fresh (not still-blocked).
+    expect(rateLimited(k, 1, 1000)).toBe(false)
+  })
+
+  /**
+   * The regression. Sign-in charges a fifteen-minute window and every public endpoint
+   * charges one minute, into the same map — and the sweep used to apply the CALLER's window
+   * to every key in it, so one ordinary search request ninety seconds later deleted a
+   * lockout that had fourteen minutes left to run.
+   */
+  it('a short window does not sweep away a long one', () => {
+    resetLimits()
+    const locked = `login:ip:${Math.random()}`
+    const FIFTEEN_MIN = 15 * 60_000
+    for (let i = 0; i < 5; i++) recordHit(locked, FIFTEEN_MIN)
+    expect(overLimit(locked, 5, FIFTEEN_MIN)).toBe(true)
+
+    vi.advanceTimersByTime(90_000) // long past the 60s window, nowhere near fifteen minutes
+    rateLimited(`search:${Math.random()}`, 60) // an ordinary public request, default window
+
+    expect(overLimit(locked, 5, FIFTEEN_MIN)).toBe(true)
+  })
+
+  it('still evicts a long-window key once its OWN window has passed', () => {
+    resetLimits()
+    const k = `login:ip:${Math.random()}`
+    recordHit(k, 15 * 60_000)
+    vi.advanceTimersByTime(16 * 60_000)
+    rateLimited(`search:${Math.random()}`, 60) // triggers the sweep
+    expect(overLimit(k, 1, 15 * 60_000)).toBe(false)
+  })
+})
+
+describe('clientIp', () => {
+  /**
+   * A context with a peer address, the way `Bun.serve` supplies one — it passes itself as
+   * the second argument to `fetch`, which Hono surfaces as `c.env`. `peer: null` is the
+   * unit-test shape: an app driven through `app.request()` has no server behind it.
+   */
+  const ctx = (headers: Record<string, string>, peer: string | null): Context => {
+    const raw = new Request('https://x/', { headers })
+    return {
+      req: { raw, header: (n: string) => raw.headers.get(n) ?? undefined },
+      env: peer === null ? {} : { requestIP: () => ({ address: peer }) },
+    } as unknown as Context
+  }
+
+  it('believes a proxy header when the peer is the local reverse proxy', () => {
+    expect(clientIp(ctx({ 'x-forwarded-for': '5.6.7.8' }, '::ffff:127.0.0.1'))).toBe('5.6.7.8')
+  })
+
+  /**
+   * The LAST hop, not the first. The first is whatever the client sent on any proxy that
+   * appends rather than overwrites, which is what nginx's `$proxy_add_x_forwarded_for` does
+   * and what Cloudflare does; the last is the nearest trusted proxy's own view.
+   */
+  it('takes the last hop of X-Forwarded-For, because the first is the client\u2019s', () => {
+    expect(clientIp(ctx({ 'x-forwarded-for': '1.2.3.4, 5.6.7.8' }, '10.0.0.3'))).toBe('5.6.7.8')
+  })
+
+  /**
+   * The measurement behind this pair, taken through a real Caddy 2 in front of the app: 45
+   * requests against a 30-per-minute cap, each carrying a different made-up
+   * `CF-Connecting-IP`, were refused ZERO times. The same 45 without it were refused 16.
+   * Caddy replaces `X-Forwarded-For` with the peer it saw, so that one cannot be forged, and
+   * forwards `CF-Connecting-IP` untouched because to Caddy it is just an unknown header.
+   * Only Cloudflare overwrites it, so only behind Cloudflare does it mean anything.
+   */
+  it('ignores CF-Connecting-IP when Cloudflare is not the front, which is the default', () => {
+    withCloudflare(false, () => {
+      const c = ctx({ 'cf-connecting-ip': '9.9.9.9', 'x-forwarded-for': '5.6.7.8' }, '10.0.0.3')
+      expect(clientIp(c)).toBe('5.6.7.8')
+    })
+  })
+
+  it('believes CF-Connecting-IP once the zone is configured in the admin', () => {
+    withCloudflare(true, () => {
+      const c = ctx({ 'cf-connecting-ip': '9.9.9.9', 'x-forwarded-for': '5.6.7.8' }, '10.0.0.3')
+      expect(clientIp(c)).toBe('9.9.9.9')
+    })
+  })
+
+  /**
+   * The other regression, and the one that measured: a request straight to the origin used
+   * to have its made-up `CF-Connecting-IP` believed, so rotating the value walked through
+   * a 60-per-minute cap 70 times without a single refusal.
+   */
+  it('ignores a forged proxy header from a public peer', () => {
+    const c = ctx({ 'cf-connecting-ip': '9.9.9.9', 'x-forwarded-for': '1.2.3.4' }, '203.0.113.7')
+    expect(clientIp(c)).toBe('203.0.113.7')
+  })
+
+  it('TRUST_PROXY=1 believes the header even from a public peer', () => {
+    const before = process.env.TRUST_PROXY
+    process.env.TRUST_PROXY = '1'
+    try {
+      expect(clientIp(ctx({ 'x-forwarded-for': '9.9.9.9' }, '203.0.113.7'))).toBe('9.9.9.9')
+    } finally {
+      if (before === undefined) delete process.env.TRUST_PROXY
+      else process.env.TRUST_PROXY = before
+    }
+  })
+
+  /**
+   * With no proxy at all every visitor used to share one bucket called 'unknown', so one
+   * person searching rate-limited the whole site. The peer is what separates them now.
+   */
+  it('separates visitors by peer when there is no proxy header', () => {
+    expect(clientIp(ctx({}, '203.0.113.7'))).toBe('203.0.113.7')
+    expect(clientIp(ctx({}, '198.51.100.4'))).toBe('198.51.100.4')
+  })
+
+  it('falls back to unknown only when there is no server and no header', () => {
+    expect(clientIp(ctx({}, null))).toBe('unknown')
+  })
+
+  it('reads no country at all when Cloudflare is not the front', () => {
+    // `/api/track` is an open POST and this value goes straight into the owner's "where they
+    // came from" panel. Believed unconditionally, anyone could fill it with countries nobody
+    // visited from — wrong data that looks right, which is worse than the empty column.
+    withCloudflare(false, () => {
+      expect(clientCountry(ctx({ 'cf-ipcountry': 'JP' }, '10.0.0.3'))).toBe('')
+    })
+  })
+
+  it('reads it once the zone is configured', () => {
+    withCloudflare(true, () => {
+      expect(clientCountry(ctx({ 'cf-ipcountry': 'vn' }, '10.0.0.3'))).toBe('VN')
+      // XX is unknown and T1 is Tor. Both are answers Cloudflare really sends.
+      expect(clientCountry(ctx({ 'cf-ipcountry': 'XX' }, '10.0.0.3'))).toBe('XX')
+      expect(clientCountry(ctx({ 'cf-ipcountry': 'T1' }, '10.0.0.3'))).toBe('T1')
+    })
+  })
+
+  it('ignores it from a public peer even with the zone configured', () => {
+    // Straight to the origin, past the CDN: the header is the caller's own again.
+    withCloudflare(true, () => {
+      expect(clientCountry(ctx({ 'cf-ipcountry': 'JP' }, '203.0.113.7'))).toBe('')
+    })
+  })
+
+  it('refuses anything that was never a country code', () => {
+    withCloudflare(true, () => {
+      for (const junk of ['', 'V', 'VNM', 'V N', '<script>', 'vn;drop']) {
+        expect(clientCountry(ctx({ 'cf-ipcountry': junk }, '10.0.0.3'))).toBe('')
+      }
+    })
+  })
+
+  /**
+   * EVERY range the local-hop test claims, one row each.
+   *
+   * It was pinned by two addresses — `::ffff:127.0.0.1` and `10.0.0.3` — and the other five
+   * branches were reachable by nothing. Measured on 2026-08-30: making the unique-local test
+   * (`fc00::/7`) answer the opposite left all 2377 tests green, and the symptom would have
+   * been the regression this file already records, on the container networks where it is the
+   * normal setup — a proxy on `fd00::` stops being believed, every visitor collapses into the
+   * proxy's own bucket, and one person searching rate-limits the site.
+   */
+  const LOCAL = [
+    ['IPv6 loopback', '::1'],
+    ['IPv4 loopback, as Bun maps it', '::ffff:127.0.0.1'],
+    ['IPv4 loopback', '127.0.0.53'],
+    ['unique-local fc00::/7, the container-network default', 'fd00::1'],
+    ['the other half of fc00::/7', 'fc00::1'],
+    ['IPv6 link-local', 'fe80::1'],
+    ['private 10/8', '10.0.0.3'],
+    ['private 172.16/12, at the bottom', '172.16.0.1'],
+    ['private 172.16/12, at the top', '172.31.255.254'],
+    ['private 192.168/16', '192.168.1.1'],
+    ['IPv4 link-local', '169.254.0.1'],
+  ] as const
+
+  for (const [what, peer] of LOCAL) {
+    it(`believes a proxy header from ${what}`, () => {
+      expect(clientIp(ctx({ 'x-forwarded-for': '9.9.9.9' }, peer))).toBe('9.9.9.9')
+    })
+  }
+
+  // The near misses, so the ranges above are ranges and not "anything starting with 17".
+  const PUBLIC = [
+    ['just below 172.16/12', '172.15.0.1'],
+    ['just above 172.16/12', '172.32.0.1'],
+    ['a public address that starts like a private one', '192.169.1.1'],
+    ['global unicast IPv6', '2001:db8::1'],
+  ] as const
+
+  for (const [what, peer] of PUBLIC) {
+    it(`ignores a forged header from ${what}`, () => {
+      expect(clientIp(ctx({ 'x-forwarded-for': '9.9.9.9' }, peer))).toBe(peer)
+    })
+  }
+})

@@ -1,0 +1,101 @@
+# docs/ — durable truth
+
+## Start here, if you run a blog
+
+| You want to | Read |
+|---|---|
+| Know everything it does, and how it compares | [Quire Ink, in full](overview.md) |
+| Install it, upgrade it, put it behind a CDN | [Self-hosting](self-host.md) · [Docker](self-host-docker.md) · [Environment variables](environment.md) · [Your account](account.md) |
+| Change how the site looks | [Appearance](appearance.md) |
+| Back it up, and restore | [Backups](backups.md) |
+| Let an AI agent write and run it | [MCP](mcp.md) · [Cookbook](agent-cookbook.md) |
+| Read your posts from another program | [Content API](content-api.md) |
+| Be followed from Mastodon | [Fediverse](fediverse.md) |
+| Translate it | [Translations](translations.md) |
+
+Everything below is for the people building it.
+
+## For the people building it
+
+Everything here describes how Quire Ink works **right now**. Out of date here is a bug: fix
+it in place, in the same commit as the behaviour change that made it wrong.
+
+What does not belong here: anything dated (that is a snapshot, not a document), anything
+about what we intend to do, and any rule already stated somewhere else. Snapshots and intent
+are not in this repository at all
+([ADR 0017](decisions/0017-move-state-and-instance-config-private.md)); `check:docs` fails on
+a dated filename in this directory.
+
+One rule lives in exactly ONE file. `CLAUDE.md` is a router and restates nothing, because two
+copies of a rule means one is wrong within a month
+([ADR 0010](decisions/0010-four-homes-doc-layout.md)).
+
+## How it works now
+
+| File | Holds |
+|---|---|
+| [invariants.md](invariants.md) | The 7 load-bearing rules, each with its enforcing code and its guard |
+| [features/reading.md](features/reading.md) | Reading and discovery, footnotes, highlighter and callouts, series, book mode |
+| [features/editing.md](features/editing.md) | The editor, scheduled publishing, per-post SEO, the video library, WordPress import |
+| [features/admin.md](features/admin.md) | Trash, Help, the UI kit, the content dashboard, the activity log, Settings |
+| [features/newsletter.md](features/newsletter.md) | Subscribers, broadcast, the send log, the double-send guard |
+| [features/comments.md](features/comments.md) | The tree, tombstones, the markdown subset, notifications |
+| [features/site.md](features/site.md) | Homepage mode and URL redirects |
+| [features/notes.md](features/notes.md) | The notebook: notes and clips, apart from the posts — reading, writing, API, MCP |
+| [conventions/](conventions/README.md) | One file per surface — [type](conventions/type.md) · [layout](conventions/layout.md) · [colour](conventions/colour.md) · [motion](conventions/motion.md) · [looks](conventions/looks.md) · [i18n](conventions/i18n.md) · [scripts](conventions/scripts.md) · [releases](conventions/releases.md) |
+| [performance.md](performance.md) | The resource-loading law: images, fonts, CSS split, island JS, and the no-inline-script rule |
+| [navigation-speculation.md](navigation-speculation.md) | Prefetch every link, prerender on hover: the journey BETWEEN pages |
+| [install.md](install.md) | Every way to install, on one table: package, file, upgrade, limits |
+| [self-host-cloudflare.md](self-host-cloudflare.md) | Quire Ink on Cloudflare (beta): why Workers Paid, installing from source, upgrading |
+| [runtimes.md](runtimes.md) | Bun and Cloudflare: one codebase, and the seven things each does its own way |
+| [delivery.md](delivery.md) | What the server does before it answers: the render cache, the switch, the CDN purge, compression |
+| [admin-design.md](admin-design.md) | The admin visual contract |
+| [admin-one-dom.md](admin-one-dom.md) | One DOM per state: the rule the server-rendered admin is built on, and its four traps |
+| [admin-kit.md](admin-kit.md) | The kit's one-of-each rules, enforced by `check:admin-kit` |
+| [admin-navigation.md](admin-navigation.md) | How the admin moves between screens, and how it recovers from an update underneath an open tab |
+| [admin-rail-and-icons.md](admin-rail-and-icons.md) | The admin's one stroke weight, glyph centring, and the rail's measured lines |
+| [admin-editor.md](admin-editor.md) | The editor's own contract: the writing surface, the caret, the key feedback |
+| [admin-conversion.md](admin-conversion.md) | The log of ADR 0054's step 5: what each piece of the editor cost to take off React, and what it found |
+| [admin-no-framework.md](admin-no-framework.md) | ADR 0054's steps 6 and 7: React out, then the wrapper around ProseMirror. What each found, and what the editor weighs now |
+| [appearance.md](appearance.md) | For the OWNER: every knob that changes how the site looks, custom CSS, and what cannot be changed |
+| [appearance-contract.md](appearance-contract.md) | The CSS variables, class names and attributes custom CSS and installed themes may rely on (`check:contract`) |
+| [theme-install-api.md](theme-install-api.md) | Installing a theme from a zip: the owner's routes, the Look card that drives them, what an install checks and stores, and `/themes/<hash>/…` |
+| [themes.md](themes.md) | For the person who WRITES a theme: the loop, the package, `theme.json`, the contract and the pitfalls; [themes-css-rules.md](themes-css-rules.md) holds every checker rule with a refused and a passing example |
+| [homepage.md](homepage.md) | What `/` serves: the post list, a page, or a composed front page |
+| [seo-pwa.md](seo-pwa.md) | Sitemap, feeds, OG, region, PWA |
+| [agent-ready.md](agent-ready.md) | Markdown negotiation, `.well-known` discovery, the three shipped skills, Content-Signal |
+| [mcp.md](mcp.md) | MCP server, tokens, OAuth |
+| [content-api.md](content-api.md) | The read-only Content API at `/api/v1`, off by default |
+| [fediverse.md](fediverse.md) | ActivityPub: the blog as an account people can follow. Off by default |
+| [translations.md](translations.md) | Adding a language, and the typography guard |
+| [pen.md](pen.md) | The pen on a page that is not this blog: `/pen.css`, the `.pen` class, the three elements |
+| [agent-cookbook.md](agent-cookbook.md) | Prompts that do real jobs with a connected agent, and where the lines are |
+| [backups.md](backups.md) | What is copied off the server, how often, and how to restore it |
+| [backup-load-api.md](backup-load-api.md) | Loading a backup of any size into an empty blog over HTTP, in parts: for a program moving a blog |
+| [update-check.md](update-check.md) | What the daily update check sends, and how to turn it off |
+| [self-host.md](self-host.md) | Running it on your own server |
+| [account.md](account.md) | Claiming the blog, signing in with a passkey, and getting back in after a lost password or phone |
+| [self-host-docker.md](self-host-docker.md) | The same thing in a container, and on a NAS |
+
+## How it is built
+
+`spec/` was written before and during the rewrite from Next.js + PostgreSQL to Bun + Hono +
+SQLite. Where a spec disagrees with the code, **the code won**; the four marked **reference**
+held up and are the working account.
+
+| File | Holds |
+|---|---|
+| [spec/00-rationale.md](spec/00-rationale.md) | Why 2.0 exists, the non-goals, the numbered parity exceptions, the risks taken |
+| [spec/01-schema.md](spec/01-schema.md) | The SQLite schema as it stands: conventions, every table, the migration ledger. **Reference** |
+| [spec/01-schema-port.md](spec/01-schema-port.md) | What the Postgres features became: the array columns, the `tsvector` search, the six SQL functions |
+| [spec/02-structure.md](spec/02-structure.md) | Module layout, request flow, the seven invariants in full. **Reference** |
+| [spec/03-golden.md](spec/03-golden.md) | The rendering contract: fixtures, capture, and what a diff means |
+| [spec/04-frontend.md](spec/04-frontend.md) | Server-rendered HTML, the island model, the CSS split. **Reference** |
+| [spec/06-auth.md](spec/06-auth.md) | Password + TOTP + recovery codes, passkeys, sessions, the cookie. **Reference** |
+| [spec/07-parity-public.md](spec/07-parity-public.md) | Every reader-facing 1.x behaviour, with the fragile ones marked. The defence against silent feature loss, since the golden harness only sees public HTML |
+| [spec/07-parity-admin.md](spec/07-parity-admin.md) | The same for the admin, editor, settings, MCP, operations and auth, none of which the harness sees at all |
+
+## Why it is this way
+
+[decisions/](decisions/README.md) — ADRs, append-only, with an index saying which are still
+in force. Going against something already decided starts by reading that index.

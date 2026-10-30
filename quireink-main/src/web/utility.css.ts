@@ -1,0 +1,69 @@
+// The shared vocabulary a card composes itself from: the type ROLES and the one link
+// signature. Split out of public.css.ts at the 400-line limit.
+//
+// It is its own file because it is the one chunk nothing owns: the listing, the front page,
+// the chrome and the rail all reach for these class names, and leaving them buried in the
+// base sheet made it look as though they belonged to the page shell.
+//
+// Every size here is the owner's --fs-* setting, never a literal, which is what makes the
+// listing and the article agree without anyone keeping two numbers in step. That rule is
+// enforced by scripts/checks/type-roles.ts, and THIS FILE IS IN ITS LIST — a sheet split out
+// without being added to that list is a sheet nothing checks, which has happened here before.
+
+export const UTILITY_CSS = `
+/* The notebook's receiving door (/notes/clip): one form, no script, the same fields the
+   subscribe card wears. And the bookmarklet, drawn as a thing to be dragged. */
+.clip-line{margin:.5rem 0}
+.clip-form{display:flex;flex-direction:column;gap:.9rem;max-width:34rem;margin-top:1.25rem}
+.clip-form label{display:flex;flex-direction:column;gap:.35rem;color:var(--c-meta)}
+.clip-form input[type=text],.clip-form textarea{padding:.5rem .75rem;border:1px solid var(--c-rule);
+  border-radius:var(--radius,.5rem);background:var(--c-bg);color:var(--c-text);font:inherit;
+  resize:vertical}
+.clip-form input:focus,.clip-form textarea:focus{border-color:var(--c-heading);outline:none}
+.clip-status{display:flex;gap:1.25rem}
+.clip-status label{flex-direction:row;align-items:center}
+.clip-form button{align-self:flex-start;padding:.5rem 1.1rem;border:1px solid var(--c-rule);
+  border-radius:var(--radius,.5rem);background:var(--c-heading);color:var(--c-bg);font:inherit;cursor:pointer}
+.clip-tool{display:inline-block;padding:.45rem 1rem;border:1px solid var(--c-rule);
+  border-radius:999px;background:var(--c-bg);color:var(--c-heading);cursor:grab;text-decoration:none}
+
+/* Type ROLES, ported from the frozen tree. A card composes these rather than declaring
+   its own sizes, which is why the listing and the article agree without anyone keeping
+   two numbers in step. Every size is the owner's --fs-* setting times --type-scale, so
+   nothing here is a literal. */
+.fs-h1{font-size:var(--fs-h1);line-height:var(--lh-h1);letter-spacing:var(--ls-h1)}
+.fs-h2{font-size:var(--fs-h2);line-height:var(--lh-h2);letter-spacing:var(--ls-h2)}
+.fs-h3{font-size:var(--fs-h3);line-height:var(--lh-h3);letter-spacing:var(--ls-h3)}
+.t-small{font-size:var(--fs-small);line-height:var(--lh-small);letter-spacing:var(--ls-small)}
+.t-body{font-size:var(--fs-body);line-height:var(--lh-body);letter-spacing:var(--ls-body)}
+.text-meta{color:var(--c-meta)}
+/* One fact of a meta line stays on one line. The reading time is a bracketed number and
+   then two words, and at 390px it broke between them on EVERY card of every listing —
+   "[4]" orphaned at the end of one line and "min read" starting the next. Measured
+   2026-08-22. The line as a whole still wraps between its facts, which is what it should do;
+   this only stops a fact wrapping through its own middle. */
+.meta-part{white-space:nowrap}
+.text-text{color:var(--c-text)}
+.reading-font{font-family:var(--font-reading)}
+.font-semibold{font-weight:var(--fw-heading,600)}
+.mt-2{margin-top:.5rem}
+.mt-3{margin-top:.75rem}
+/* ONE hover signature for every link outside the body copy: an accent underline. */
+.link-accent{color:var(--c-heading);text-decoration:none}
+.link-accent:hover{text-decoration:underline;text-decoration-color:var(--c-accent);
+  text-decoration-thickness:1px;text-underline-offset:4px}
+
+/* The two shapes a surface is made of, beside the third one below. --lift is what FLOATS:
+   two steps, the contact under the near edge and the spread the sheet casts on the paper.
+   Three things floated on this site and each had its own opinion — the sign-up modal on a
+   25/50 drop, the theme menu on a 10/15 (and no radius at all), the search and book dialogs
+   on nothing. --well is what HOLDS: the inset a field wears so the box is findable before it
+   is typed in; four fields here were flat outlines while their own buttons carved on press.
+   Black rather than a palette token, and deliberately unlike the press below: a shadow is
+   dark in EVERY palette, so a token would LIGHT the inside of a field on the dark ones. */
+:root{--lift:0 16px 32px -12px rgba(0,0,0,.22),0 3px 8px -4px rgba(0,0,0,.12);
+  --well:inset 0 1px 1.5px rgba(0,0,0,.07)}
+
+
+/* THE CLICK - the press every control shares - is in motion.css.ts with the rest of the engine. */
+`.trim()

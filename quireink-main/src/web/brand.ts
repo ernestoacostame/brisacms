@@ -1,0 +1,38 @@
+// The quireINK logo, for the server-rendered pages.
+//
+// The sign-in screens carry the SOFTWARE's identity, not the blog's. That is a reversal of
+// what 06-auth.md originally specified ("the site's own masthead"), decided by the owner
+// after seeing the page: a reader never reaches /login, so the only person it speaks to is
+// the one signing in to Quire Ink, and every install should show them the same door.
+//
+// ONE logo in two sizes, not a symbol plus a word: `Qi` where a five-letter word would be a
+// smear (the app icon, the favicon, the collapsed rail), `quireINK` everywhere else. An
+// abstract symbol used to sit beside the word here, and once the compact mark became the
+// word's own initials, showing both read as a stutter.
+//
+// Inline SVG rather than a file: it must inherit `currentColor` so it survives a palette
+// change and dark mode, and a logo that arrives on its own request can arrive late, on the
+// one page where "did this load?" is a security question. OUTLINES rather than live text
+// for the same reason plus two more: the admin renders in whatever chrome font the owner
+// picked, and `pageStyles` declares only the owner's own faces, so a logo may not assume
+// any given family is even present. The art lives in `@/brand-art`, which the admin shares.
+
+import { BRAND_RED, WORD_DOT, WORD_INK, WORD_QUIRE, WORD_VIEWBOX } from '@/brand-art'
+/** The word: `quire` in Literata, `INK` in JetBrains Mono, and a full stop in ink. */
+function quireWord(height = 26): string {
+  return `<svg class="brand-word" height="${height}" viewBox="${WORD_VIEWBOX}" `
+    + `fill="currentColor" role="img" aria-label="quireINK">`
+    + `<path d="${WORD_QUIRE}"/><path d="${WORD_INK}"/>`
+    + `<circle cx="${WORD_DOT.cx}" cy="${WORD_DOT.cy}" r="${WORD_DOT.r}" fill="${BRAND_RED}"/></svg>`
+}
+
+/**
+ * The sign-in masthead.
+ *
+ * Not a link. The sign-in page has exactly one thing to do, and a logo that navigates away
+ * from it is a way to lose your place; the way back to the site is a plain link at the
+ * bottom, where leaving belongs.
+ */
+export function quireLockup(): string {
+  return `<div class="brand">${quireWord(30)}</div>`
+}

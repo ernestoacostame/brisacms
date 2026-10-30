@@ -1,0 +1,119 @@
+// The other two kinds: videos as players, attachments as rows.
+//
+// Both tabs mounted LAZILY in the React face — they fetched `/api/files` the first time anybody
+// clicked them, and lost everything on the way back. All three kinds come out of one read now
+// (`views-media.ts`), so switching tabs is an attribute and nothing is fetched twice.
+//
+// The two lists share `POST /api/files/delete`, which is a SOFT delete: the trash gives an
+// attachment back until it is purged. It is still the only destructive thing on these tabs and
+// it goes through `quire:confirm` first.
+import type { AdminStrings } from '@/i18n/admin-i18n'
+import type { FileItem, SiteLang } from '@/types'
+import { escapeAttr, escapeHtml, formatBytes, isoToZonedInput } from '@/utils'
+import { formatDateShort } from '@/admin-shared/when'
+import { NOTE_TEXT, TAP } from '@/admin-shared/scale'
+import { emptyState, selectionBar, tick } from '@/web/admin/kit'
+import { dropWell } from '@/web/admin/screens/media-images'
+import { fileKind } from '@/media/files'
+
+const FRAME = 'divide-y divide-neutral-200 overflow-hidden rounded-lg border border-neutral-200'
+  + ' dark:divide-neutral-800 dark:border-neutral-800'
+
+const QUIET = 'text-neutral-600 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white'
+
+
+// The admin's one date shape, on the site's day, as the newsletter's Joined column prints it. It
+// was the reader's long form ("October 19, 2026"), the only list in the admin that said it so.
+const meta = (f: FileItem, lang: SiteLang, tz: string): string =>
+  `${escapeHtml(formatBytes(f.size))} · ${escapeHtml(formatDateShort(isoToZonedInput(f.uploadedAt, tz) || f.uploadedAt, lang))}`
+
+// The kit's drawn tick, not the browser's 16px box: a native box cannot be hit past its own edge.
+const tickBox = (f: FileItem, cls: string): string =>
+  tick({ label: f.filename, className: cls, attrs: `data-pick="${escapeAttr(f.url)}"` })
+
+const BADGE = 'rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400'
+
+/**
+ * One attachment.
+ *
+ * `managed` is a site icon Settings still uses (favicon, app icon, author portrait): no tick and
+ * no delete, because taking it away is choosing another in Settings. An icon nothing uses any more
+ * is an ordinary file with a "not used" badge: it ticks, and a delete puts it in the Trash. Until
+ * issue #69 every icon was `managed`, and Settings' Remove never deleted the file, so a replaced or
+ * removed icon stayed here for good with no way to take it out.
+ */
+function fileRow(t: AdminStrings, lang: SiteLang, tz: string, f: FileItem, managed: boolean): string {
+  const actions = managed
+    ? `<span class="${BADGE}">${escapeHtml(t.iconsManaged)}</span>`
+    : (f.inUse === false ? `<span class="${BADGE}">${escapeHtml(t.iconsUnused)}</span>` : '')
+      + `<button type="button" data-copy="${escapeAttr(f.url)}" class="${TAP} ${QUIET}">`
+      + `${escapeHtml(t.copyUrl)}</button>`
+      + `<a href="${escapeAttr(f.url)}" download="${escapeAttr(f.filename)}" class="${TAP} ${QUIET}">`
+      + `${escapeHtml(t.download)}</a>`
+  // ON A PHONE THE KEYS TAKE THEIR OWN LINE. Held beside the name at 375 they left the name and
+  // its size and date a column 17 to 59px wide, five lines tall in German. The row wraps instead
+  // (the name column asks for its own width with `grow`; `flex-1` asks for none, so it never did),
+  // the keys keep the right edge, and from `sm` up it is one line again.
+  return `<li class="flex flex-wrap items-center gap-3 bg-white p-3 sm:flex-nowrap dark:bg-neutral-900"`
+    + ` data-file="${escapeAttr(f.url)}">`
+    + (managed ? '' : tickBox(f, ''))
+    + `<span class="flex h-9 w-12 shrink-0 items-center justify-center rounded-md bg-neutral-100 text-xs`
+    + ` font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">${escapeHtml(fileKind(f))}</span>`
+    + `<div class="min-w-0 grow">`
+    + `<p class="truncate text-sm font-medium text-neutral-800 dark:text-neutral-200"`
+    + ` title="${escapeAttr(f.filename)}">${escapeHtml(f.filename)}</p>`
+    + `<p class="${NOTE_TEXT}">${meta(f, lang, tz)}</p></div>`
+    + `<div class="ml-auto flex shrink-0 flex-wrap items-center gap-3 text-xs">${actions}</div></li>`
+}
+
+export function filesPanel(
+  t: AdminStrings, lang: SiteLang, tz: string, files: FileItem[], icons: FileItem[], open: boolean, pagerHtml = '',
+): string {
+  const rows = files.map((f) => fileRow(t, lang, tz, f, false)).join('')
+  const iconRows = icons.map((f) => fileRow(t, lang, tz, f, f.inUse !== false)).join('')
+  const empty = files.length === 0 && icons.length === 0
+  return `<div data-media-panel="files" class="px-4 pt-4 pb-2"${open ? '' : ' hidden'}>`
+    + `<div class="space-y-5">`
+    + dropWell(t, 'file', t.filesDropzone, '')
+    + selectionBar({ clearLabel: t.clearSelection, deleteLabel: t.deleteSelected, attrs: 'data-file-bar' })
+    + `<div data-file-body>`
+    + `<div class="space-y-6" data-file-lists${empty ? ' hidden' : ''}>`
+    + `<ul class="${FRAME}" data-file-frame data-file-list${files.length ? '' : ' hidden'}>${rows}</ul>`
+    + `<div class="space-y-2" data-icon-group${icons.length ? '' : ' hidden'}>`
+    + `<h3 class="text-xs font-semibold text-neutral-500 dark:text-neutral-400">`
+    + `${escapeHtml(t.iconsGroupTitle)}</h3>`
+    + `<ul class="${FRAME}" data-file-frame data-icon-list>${iconRows}</ul></div></div>`
+    + `<div data-file-empty${empty ? '' : ' hidden'}>${emptyState({ title: t.noFiles })}</div>`
+    + `</div>` + pagerHtml + `</div></div>`
+}
+
+/** `preload=metadata`: the browser fetches only the headers, not the file. */
+function videoRow(t: AdminStrings, lang: SiteLang, tz: string, f: FileItem): string {
+  return `<li class="overflow-hidden rounded-lg border border-neutral-200 bg-white`
+    + ` dark:border-neutral-800 dark:bg-neutral-900" data-file="${escapeAttr(f.url)}">`
+    + `<video src="${escapeAttr(f.url)}" controls preload="metadata" playsinline`
+    + ` class="block aspect-video w-full bg-neutral-950 object-contain"></video>`
+    + `<div class="flex items-start gap-3 p-3">`
+    + tickBox(f, 'mt-1')
+    + `<div class="min-w-0 flex-1">`
+    + `<p class="truncate text-sm font-medium text-neutral-800 dark:text-neutral-200"`
+    + ` title="${escapeAttr(f.filename)}">${escapeHtml(f.filename)}</p>`
+    + `<p class="${NOTE_TEXT}">${meta(f, lang, tz)}</p></div>`
+    + `<button type="button" data-copy="${escapeAttr(f.url)}" class="shrink-0 text-xs ${QUIET}">`
+    + `${escapeHtml(t.copyUrl)}</button></div></li>`
+}
+
+export function videosPanel(
+  t: AdminStrings, lang: SiteLang, tz: string, videos: FileItem[], open: boolean, pagerHtml = '',
+): string {
+  const rows = videos.map((f) => videoRow(t, lang, tz, f)).join('')
+  return `<div data-media-panel="videos" class="px-4 pt-4 pb-2"${open ? '' : ' hidden'}>`
+    + `<div class="space-y-5">`
+    + dropWell(t, 'file', t.videosDropzone, 'video/*')
+    + selectionBar({ clearLabel: t.clearSelection, deleteLabel: t.deleteSelected, attrs: 'data-video-bar' })
+    + `<div data-video-body>`
+    + `<ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" data-video-list`
+    + `${videos.length ? '' : ' hidden'}>${rows}</ul>`
+    + `<div data-video-empty${videos.length ? ' hidden' : ''}>${emptyState({ title: t.noVideos })}</div>`
+    + `</div>` + pagerHtml + `</div></div>`
+}

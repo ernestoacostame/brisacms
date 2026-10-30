@@ -1,0 +1,234 @@
+# Typography — one source of truth (HARD RULES)
+
+- **No hardcoded text sizes on the public site.** `bun run check:type`
+  ([`scripts/checks/type-roles.ts`](../../scripts/checks/type-roles.ts)) fails the build on any
+  `font-size` in the reader's sheets that is not `var(--fs-<role>)`, `inherit`, a value in `em`
+  (an ornament measured against its own context), or a listed exception with a reason. It is a
+  check rather than a sentence because the rule had already been broken in nine places.
+- **A role is THREE numbers, and a rule takes all three or none.** `check:type` fails a rule
+  that sets `font-size: var(--fs-X)` without `line-height: var(--lh-X)` and
+  `letter-spacing: var(--ls-X)`. Measured on the rendered page 2026-07-29: eight surfaces took
+  the size alone, so the owner's leading and tracking moved nothing there. A rule that names a
+  role variable LOOKS wired, which is why review never caught it.
+- 9 roles (`TypeRole`: `h1–h5`, `body`, `small`, `caption`, `code`), each with
+  size/line-height/letter-spacing → CSS vars `--fs/--lh/--ls-<role>`, from
+  `DEFAULT_TYPOGRAPHY` in [`src/content/fonts.ts`](../../src/content/fonts.ts) — which is the
+  BASE each preset spreads over, not what a new install starts on: a fresh install takes the
+  DEFAULT FACE's tuned numbers through `INSTALL_TYPOGRAPHY` in `src/content/settings.ts`, and
+  the default face is **Literata** since 2026-08-21, with **Inter** chrome since 2026-09-13 (re-exported by
+  `themes.ts`, so either import path works). The owner's
+  `settings.typography` is emitted by `typographyToCss()` (also applies in the admin editor
+  `.prose` = WYSIWYG). `smoothing` adds `-webkit-font-smoothing` on `body`.
+- **`--type-scale` lives inside the variable, not at the call site.** Each `--fs-<role>` is
+  emitted as `calc(<size>rem * var(--type-scale, 1))`, so any subtree that overrides
+  `--type-scale` (book mode sets 1.05, and its a/A pair lets the reader override) scales EVERYTHING inside it. It used to be spelled
+  per rule, so a rule either had it or did not: book mode enlarged the prose and left
+  figcaptions, tags and the comment thread behind.
+- **`small` is most of the page.** Dates, tags, footnotes, the footer, the related list and
+  the whole comment thread are set in it. Treat a change to it as a change to the site.
+- **Where applied:** `.prose` (h1–h5/pre/code/figcaption/table) read the role vars; titles/UI
+  OUTSIDE `.prose` use `.fs-h1…fs-h5` (titles) + `.t-small` (secondary text) + `.t-body`
+  (body-role text outside prose: card excerpts, footer). H1 = single post/page titles +
+  category/tag headings + draft preview; list cards (`PostCard`) = H2; brand wordmark = `.fs-h4`.
+  Two fixed sizes remain, both on purpose: the sign-in page's 15px body (`login.css.ts`, the one
+  sheet `check:type` skips, because no `--fs-*` is defined there) and the `max(16px,1em)` FLOOR on
+  form controls in `mobile.css.ts`, which stops iOS Safari zooming the page on focus.
+- **No hardcoded letter-spacing on public text either — tracking comes from `--ls-<role>`.** The
+  `.fs-h*`/`.t-*` classes already emit `letter-spacing: var(--ls-<role>)`, so NEVER write a literal
+  `letter-spacing` on a public heading or title: it overrides the owner's tuned value and the Admin
+  letter-spacing control stops working. The one sanctioned exception is the mono-chrome tracking
+  correction in `src/render/font-faces.ts`, which corrects a FACE, not a role.
+- **Two look headlines are derived from the owner's h1 rather than set by a role**, each listed
+  in `scripts/checks/type-roles.ts` with its reason, and each a calc() on `--fs-h1`, never a typed
+  size, so the owner's scale still moves them. The paper look's article headline is
+  `calc(var(--fs-h1) * 1.3)` at every width (it is the thing the page is recognised by). The
+  source-code look's article headline is `calc(var(--fs-h1) * .8)` UNDER 640px only
+  (`look-code.css.ts`): a monospace glyph is about .6em wide, so a long title that the book
+  serif sets in two lines on a phone broke into three. From 640px it takes the h1 role untouched.
+- **Reading-optimized defaults.** Restrained, monotonic heading scale (h1 2.0 → h5 1.0),
+  18px body at ~1.7 leading. Two claims that used to sit here were measured on 2026-07-29
+  and are not true: h5 (1.0rem = 16px) renders BELOW body (1.125rem = 18px), and the
+  measure at `contentWidth` 672 is 70 characters in Inter, 71 in Literata and 72 in Source
+  Serif — near the 45-75 band's top, not the 66 the note claimed.
+- **THE MEASURE IS A FUNCTION OF THE LANGUAGE, not of `contentWidth` alone**, which is why
+  `siteWidthHint` names no character count in any of the eleven locales. Same setting, same
+  face, same 18px: the line above measures 71 characters in Literata, and the same column
+  running Vietnamese measures **67**. Vietnamese syllables are short, so a line carries ~16
+  words and therefore ~15 of the narrow glyphs a space is — more characters fit in fewer
+  pixels. CJK is further away again, and a Latin band quoted at a Japanese or Chinese owner
+  would be wrong by more than it is right.
+  Measured 2026-08-14 on a live Vietnamese article by walking every rendered line box and
+  dropping each paragraph's last, partial one: `contentWidth` 720 → 72 · 685 → 68 ·
+  **672 → 67** · 665 → 66 · 650 → 64. ⚠️ Two cheaper methods lie: dividing characters by line
+  count reads low (every paragraph ends part-way), and an off-screen probe read 80 because it
+  derived the line count from the block height.
+- **Reset restores the CHOSEN FONT's setup, not `DEFAULT_TYPOGRAPHY`.** Each preset carries
+  typography tuned for its own face, so resetting to the Inter defaults while reading in
+  Literata silently swapped the serif's numbers for a sans's. Text wraps normally (no `text-wrap: balance`/`pretty` — both re-broke lines
+  and left a premature right rag). Change the numbers in `DEFAULT_TYPOGRAPHY`.
+- **A heading belongs to what comes after it.** Space above beats space below at every
+  level (`prose.css.ts`). It did not: heading margins were a multiple of the HEADING's own
+  size while the space below was a fixed multiple of the BODY's, so the two converged as
+  the level dropped and inverted at h5 — 22px above, 25px below. Measured after the fix:
+  h2 44/14, h3 36/11, h4 32/11, h5 27/11.
+- **Every text family declares a metric-matched fallback** (`'<Family> Fallback'` in
+  `src/render/font-faces.ts`, riding each stack right behind the primary name): the local
+  face the stack falls back to — Georgia for the serifs, Arial for the sans — reshaped with
+  `size-adjust`/`ascent-override`/`descent-override` to the family's own measurements, so
+  the `font-display:swap` moment changes glyphs without moving a line break. Verified in
+  the browser: 1,200 chars at 640px set 17 lines/505px in Literata AND in its fallback,
+  where bare Georgia set 16/475 — the swap used to move a full line. The numbers are
+  measured by `scripts/ops/font-fallback-metrics.py` over a Vietnamese + English sample
+  read glyph-by-glyph from the shipped woff2 subsets (NOT `OS/2.xAvgCharWidth`, which
+  averages bare a–z and misreads diacritics); rerun it when a font file is re-dropped. The
+  monos carry no fallback on purpose: their files only download on pages with code, and a
+  code block's box, not its glyphs, sets that layout. Pinned in `typography.test.ts`.
+- **Inter is self-hosted** (`src/assets/static/fonts/inter-{latin,latin-ext,vietnamese}.woff2`,
+  variable, declared via `@font-face` + `unicode-range` in `src/render/font-faces.ts`). The
+  family name every chain falls back to is `--font-sans`, set in `layout.ts` and `admin/spa.ts`.
+  An uploaded reading font (`settings-css.ts`) is followed by the chain drawn without it: the
+  installed theme's reading family when that is the choice, then the selected preset's stack.
+  No variable is referenced, because nothing defines one for it. **Never fetch a font from Google** at build or at runtime —
+  it broke offline and CI builds, and it is the reason all of these are in the tree. The OG
+  route self-hosts the same Inter separately as `.woff` (Satori can't decode woff2). To update
+  Inter, re-drop the woff2 files. **Which font files are `<link rel=preload>`-ed is one
+  system-wide rule** (`fontPreloadHrefs` → `docs/performance.md`): only the LCP title's reading
+font, only the site language's subset(s), never the chrome font or an uploaded custom face.
+- **ONE typeface for everything the reader READS, and one for code.** Two handles, plus
+  `--font-mono`. There is no third: no `font-family` anywhere else, no second text family.
+  `--font-mono` is JetBrains Mono, self-hosted, and it dresses BOTH inline code and fenced
+  blocks — it was a `var(--font-mono, ui-monospace)` fallback that nothing ever defined, so
+  inline code came out in the book serif and a fenced block three lines later came out in
+  whatever `ui-monospace` meant on that machine. Declaring the face costs a page with no
+  code nothing: `unicode-range` means the browser fetches a file only when a glyph needs it
+  (measured 2026-07-29 — 30 KB on a post with code, 0 KB on one without). A custom font (`settings.customFont` =
+  family + `faces[]` per weight 400/500/600/700, uploaded via `FontUpload` → `/api/files/font`,
+  stored at `files/font-<weight>-<ms>`, store-relative) overrides `--font-reading` —
+  one `@font-face` per weight because faux-bold is disabled (`font-synthesis-weight: none`).
+  `/og` renders Inter + the custom font (`src/web/og.ts` `?font=`). Empty = bundled Inter.
+- **Admin chrome does NOT follow the reader's type settings** — not the scale, and since
+  2026-08-14 not the FACE either. Its scale is Tailwind's numbers, captured as plain CSS; only
+  the admin editor `.prose` mirrors the reader. Don't wire admin chrome to `--fs-*`, and don't
+  wire it back to `chromeFont`: the admin followed that setting for a while, and putting a
+  mono code face on every label, tab, button and table cell was then rejected as cluttered
+  and wrong for an admin. A chrome font is a branding choice
+  about what a READER sees; the tool is not where it is spent. What the admin still follows is
+  everything about the owner's own WORDS — palette, type scale, reading preset, uploaded face
+  — because the editor is WYSIWYG. See `web/admin/spa.ts` `adminStyles` and
+  [`admin-design.md`](../admin-design.md).
+- Editor exposes H1–H5; the engine renders `####`/`#####` → `h4`/`h5`.
+- **A reader never downloads admin CSS.** The public sheets are hand-written, and so is the
+  admin's since ADR 0053: `src/admin/utilities.css` plus `src/admin/admin.css`. The rule and
+  the seam live in [`performance.md`](../performance.md) "The two sheets".
+
+## What a book does that a web page does not (2026-09-12)
+
+- **Hyphenation is not a partner of justification.** A book hyphenates whether or not it
+  justifies, and this sheet only did it inside the justified path — so the setting every blog
+  starts on, and every phone at any setting, never hyphenated. Now `.prose p`/`.prose li`
+  carry `hyphens:auto` with `hyphenate-limit-chars: 6 3 3` everywhere; headings, `pre` and
+  `code` opt back out. Measured on a 608px column of English: the ninth-decile line ended
+  58.9px short of the edge, and 34.5 with hyphens; the worst went 68.4 → 58.9. On a 327px
+  phone column the worst went 65 → 51. **The line count did not move** in either, so nothing
+  below the paragraph shifted. Vietnamese pays nothing: its syllables do not hyphenate.
+- **Book mode sets its OWN text** (`web/book-text.css.ts`), not the article's. The overlay
+  already kept its own paper, ink, drop cap, asterism and spine; the WORDS were left to
+  `features.bookText`, which is a setting about the SCROLLING article and is off on a fresh
+  install. What that shipped, measured on a blog that had not turned it on, was a spread with
+  a drop cap and a centre spine setting its paragraphs ragged, unindented and unhyphenated.
+- **The baseline grid, and it is the thing a printed book has that a column of HTML does
+  not.** Two columns of a spread read as one page only while their lines sit at the same
+  heights, and that holds only while every gap between blocks is a whole number of lines.
+  Measured at 1440 before the rule: the line is 31.32px, a paragraph break measured 58px
+  (1.85 lines), heading gaps 67 and 42 (2.14 and 1.34), and the left and right pages sat
+  11.7px out of phase. So in book mode a paragraph leads with NOTHING but its indent (one
+  line exactly), a heading takes ONE line above with its own line box set to TWO lines of the
+  body and nothing below, and every other block takes a line above and below. After:
+  paragraph break 1.000 lines, and every column on one phase.
+  ⚠️ **A heading's air is inside its line box, not all in its margins**, and that is what
+  stops the section breaks shouting. Two lines of margin, a one-line box and a line below is
+  four line-slots — 81px of white above the words against 34px below, on a page where
+  paragraphs are separated by an indent and nothing else, so the gaps between sections read as
+  the loudest thing on the spread (reported 2026-09-14). One line of margin and a two-line box
+  puts the face in the middle of its own air: 50px above and 18.7px below, in three slots, and
+  every gap still a whole number of lines. The indent went 1.6em → **2em** in the same pass,
+  because on a paged column it is the only thing saying a paragraph has started.
+  ⚠️ **A picture is the exception and is left off the grid on purpose.** Its height is
+  whatever its proportions give, so a column that opens with one starts wherever that leaves
+  it (measured: 7 of 8 columns on the grid, the eighth 2.8px off). Putting pictures on it
+  means letterboxing every one into a whole number of lines, which is a decision about the
+  look of the page. Guarded by the tour flow `book mode sets its pages on one baseline grid`.
+- **A picture is a PLATE and its caption belongs to it.** The caption sits 8px under the
+  picture, and book mode gives the plate two lines on each side. The scrolling article gives it
+  `2 × --sp` on each side too, and the asymmetry tried on 2026-09-12 was taken back on
+  2026-09-14: `3 × --sp` below was measured against paragraphs sitting 55px apart, where it is
+  15% more and reads as part of the plate, but a blog set like a book separates paragraphs by an
+  INDENT — measured on the live site, two paragraphs sit 12px apart, and 48px under a caption is
+  four times the body rhythm, which reads as a hole. A plate's margin is spent in `--sp`; the
+  body's rhythm is not, so a fixed multiple cannot be right for both and the smaller one is the
+  one that never looks broken.
+- **A code line wraps in book mode, because a page has nowhere to scroll.** The scrolling
+  article gives a wide block `overflow-x:auto` and the reader pans it, which is fine on a page
+  that already moves under the finger. A paged column does not move: measured 2026-09-12, one
+  block hid 126px of a 690px line at 1440 and 294px at 949, and the only thing on screen
+  saying so was a 2px overlay scrollbar in a surface where every other gesture turns the page.
+  `white-space:pre-wrap` with `overflow-wrap:break-word` for the one unbroken token no space
+  can fold, in `book-text.css.ts` and nowhere else.
+- **Two things a browser will not do for us.** `hanging-punctuation` is Safari-only, and
+  `orphans`/`widows` are ignored by Chrome's column engine — tested by raising both to 3 on a
+  spread that stranded a single line at the top of a page, which did not move it. A book
+  never strands one; we cannot stop it without paginating ourselves.
+- **`text-wrap: pretty` buys nothing here.** Tried on a justified Vietnamese article: 251
+  lines, 3 short last lines, 9 tails under a third of the column — identical with it on.
+
+## Book mode is ONE number, and the reader may move it (HARD RULE)
+
+    book mode reading text = article reading text x the scale
+    every gap inside the article  = the same x the scale
+
+The RELATION is the hard rule, not the number. The scale was fixed at 1.15 on 2026-07-29 and
+revised to **1.05** on 2026-08-21 as slightly too large by default, and it is now only a
+DEFAULT: the a/A pair in the overlay chrome moves it 0.85–1.35 per reader, persisted under
+`quire-book-scale` and applied as an inline override, so an untouched reader still gets what
+the sheet ships (`src/assets/js/book.ts`). What must not change is the relation below.
+Type and the space around it are one system:
+enlarging the words and leaving the gaps gives crowded reading, not bigger reading. So
+`--sp` (the article's spacing unit) carries `--type-scale` exactly as `--fs-<role>` does,
+and every gap inside the article is a multiple of `--sp`.
+
+**The block is emitted TWICE, and that is the mechanism.** A `var()` inside a custom
+property is substituted where the property is DECLARED, not where it is used. `--fs-body`
+on `:root` therefore resolves `var(--type-scale, 1)` against `:root`, where the scale is
+undefined, and the resolved value inherits. Overriding `--type-scale` on a descendant
+changes nothing. This file used to state the opposite, and **book mode had been rendering
+at exactly the article's size since the port** — measured 2026-07-29, every ratio 1.000.
+`typographyToCss` now emits the identical block on `:root` and on `.book-overlay`, which
+re-substitutes it there. Pinned by `web/typography.test.ts`.
+
+## Fonts — two handles, four built-in presets
+
+- **Built-in fonts (`fontPreset`).** Four self-hosted families in `FONT_PRESETS`
+  (`src/content/fonts.ts`): Inter, Source Sans 3, Literata, Source Serif 4 — each declared per
+  unicode-range in `src/render/font-faces.ts`,
+  so a family downloads ONLY when the chosen preset uses it. Each preset carries the typography
+  TUNED for it; picking a font in Admin → Appearance drops that setup into the editable roles (still
+  owner-owned). Preload tracks the chosen font. A preset may also set `readingBold` (the serifs use
+  600, since their 700 is blacker than the 600 headings) — `fontPresetCss` emits it as `--reading-bold`,
+  consumed by `.prose strong`; sans presets omit it and fall back to 700.
+- **Two font handles — chosen font ≠ site font.** `--font-reading` is the reader's own words (post
+  body + title, list cards, comment body, the editor `.prose`) and is what `fontPresetCss` /
+  `fontToCss` point (custom upload wins). `--font-sans` is the system-chrome face (dates/reading-time,
+  related/taxonomy, header, footer, rail — **the PUBLIC page only**), driven INDEPENDENTLY by the `chromeFont` selector
+  (`CHROME_FONTS` in `src/content/fonts.ts`, Admin → Appearance): `inter` (**the install default**
+  since 2026-09-13, the stack's own fallback, and what `getChromeFont` returns for an unknown id) · `reading` (points `--font-sans`
+  at `--font-reading` so the chrome follows the reading font) · `plex-mono` (self-hosted IBM Plex
+  Mono — a "code" chrome while the body stays readable) · `jetbrains-mono` (the install
+  default from 2026-08-21 to 2026-09-13). Both monos are declared per unicode-range in
+  `src/render/font-faces.ts`, are preloaded when active, and take the tracking correction
+  `MONO_TRACKING` applies to chrome surfaces only.
+  `chromeFontCss` emits the override LAST in the layout (after the reading font resolves); the legacy
+  boolean `fontChromeInter` migrates on read (`false` → `reading`). Layout also stamps
+  `<html data-chrome-font>`; a rule in `font-faces.ts` uses `[data-chrome-font="plex-mono"]` to pull the wide
+  mono chrome in by `-0.04em` (on `body`/`.t-small`/`.t-body` — the reader's `.prose`/`.fs-*` keep
+  their own tracking, other chrome fonts keep default). Apply reading text with the `reading-font`
+  class (`.prose` sets it).

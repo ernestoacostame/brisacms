@@ -1,0 +1,134 @@
+// Webmention, both ways (ADR 0046), with the network stood in for.
+import { afterAll, beforeEach, describe, expect, it } from 'bun:test'
+import { freshDatabase, dropDatabase } from '@/test/db'
+import { db } from '@/test/sqlite'
+import {
+  discoverEndpoint, keptPassage, listMentions, mostKept, receiveWebmention, sendWebmention,
+  sweepWebmentions, verifyMention,
+} from '@/server/webmention'
+
+const DIR = './.tmp/test-webmention'
+freshDatabase(DIR)
+afterAll(() => dropDatabase(DIR))
+beforeEach(() => db().run(`delete from webmentions`))
+
+const SITE = 'https://blog.example'
+const page = (body: string, headers: Record<string, string> = {}) =>
+  new Response(body, { status: 200, headers: { 'content-type': 'text/html', ...headers } })
+
+describe('discovering the endpoint', () => {
+  it('reads a Link header first, then a link tag, then an anchor, resolving relative paths', () => {
+    expect(discoverEndpoint('', '<https://a.example/wm>; rel="webmention"', 'https://a.example/p')).toBe('https://a.example/wm')
+    expect(discoverEndpoint('<html><head><link rel="webmention" href="/wm"></head></html>', null, 'https://a.example/p/q'))
+      .toBe('https://a.example/wm')
+    expect(discoverEndpoint('<a href="hooks/wm" rel="webmention stylesheet">x</a>', null, 'https://a.example/p/q'))
+      .toBe('https://a.example/p/hooks/wm')
+    expect(discoverEndpoint('<link rel="stylesheet" href="/s.css">', null, 'https://a.example/')).toBeNull()
+  })
+})
+
+describe('sending', () => {
+  it('posts source and target to the endpoint the target advertises', async () => {
+    const calls: { url: string; body?: string }[] = []
+    const fetcher = async (url: string, init?: RequestInit) => {
+      calls.push({ url, body: typeof init?.body === 'string' ? init.body : undefined })
+      if (url === 'https://a.example/post') return page('<link rel="webmention" href="/wm">')
+      return new Response('', { status: 202 })
+    }
+    expect(await sendWebmention(`${SITE}/notes/kept`, 'https://a.example/post', fetcher)).toBe('sent')
+    expect(calls[1]).toEqual({ url: 'https://a.example/wm', body: `source=${encodeURIComponent(`${SITE}/notes/kept`)}&target=${encodeURIComponent('https://a.example/post')}` })
+  })
+
+  it('says so when the target has no endpoint, and never throws on a network failure', async () => {
+    expect(await sendWebmention(`${SITE}/notes/x`, 'https://a.example/plain', async () => page('<p>hi</p>'))).toBe('no-endpoint')
+    expect(await sendWebmention(`${SITE}/notes/x`, 'https://a.example/down', async () => { throw new Error('refused') })).toBe('failed')
+  })
+})
+
+describe('receiving', () => {
+  it('refuses a target off this site, a non-http source, and a source that is the target', () => {
+    expect(receiveWebmention('https://b.example/a', 'https://other.example/p', SITE)).toBe('invalid')
+    expect(receiveWebmention('ftp://b.example/a', `${SITE}/p`, SITE)).toBe('invalid')
+    expect(receiveWebmention(`${SITE}/p`, `${SITE}/p`, SITE)).toBe('invalid')
+  })
+
+  it('keeps a pending row, verifies that the source links here, and reads the kept passage off a clip', async () => {
+    const id = receiveWebmention('https://b.example/notes/kept', `${SITE}/the-reed-pen`, SITE)
+    expect(typeof id).toBe('number')
+    expect(listMentions()[0]).toMatchObject({ source: 'https://b.example/notes/kept', status: 'pending' })
+    const html = `<article class="h-entry"><a class="u-quotation-of" href="${SITE}/the-reed-pen">x</a>`
+      + `<blockquote class="note-quote"><p>every stroke starts wet &amp; ends dry</p></blockquote></article>`
+    const m = await verifyMention(id as number, async () => page(html))
+    expect(m).toMatchObject({ status: 'verified', quote: 'every stroke starts wet & ends dry' })
+  })
+
+  it('marks a source that does not link here as failed, and a second receipt re-verifies', async () => {
+    const id = receiveWebmention('https://b.example/nope', `${SITE}/p`, SITE) as number
+    expect((await verifyMention(id, async () => page('<p>nothing about you</p>')))?.status).toBe('failed')
+    const again = receiveWebmention('https://b.example/nope', `${SITE}/p`, SITE)
+    expect(again).toBe(id)
+    expect(listMentions()[0]?.status).toBe('pending')
+  })
+
+  it('counts which passage readers keep most, from verified clips only', async () => {
+    const keep = async (source: string, quote: string) => {
+      const id = receiveWebmention(source, `${SITE}/p`, SITE) as number
+      await verifyMention(id, async () => page(`<a href="${SITE}/p">x</a><blockquote class="note-quote"><p>${quote}</p></blockquote>`))
+    }
+    await keep('https://b.example/1', 'one sentence')
+    await keep('https://c.example/1', 'one sentence')
+    await keep('https://d.example/1', 'another')
+    receiveWebmention('https://e.example/1', `${SITE}/p`, SITE) // pending, not counted
+    expect(mostKept()).toEqual([
+      { target: `${SITE}/p`, quote: 'one sentence', count: 2 },
+      { target: `${SITE}/p`, quote: 'another', count: 1 },
+    ])
+  })
+
+  it('reads only a clip passage, and never markup', () => {
+    expect(keptPassage('<blockquote class="note-quote"><p>a <b>bold</b> line</p></blockquote>')).toBe('a bold line')
+    expect(keptPassage('<blockquote><p>plain</p></blockquote>')).toBe('')
+  })
+  it('decodes entities once and leaves no tag behind', () => {
+    const q = (inner: string) => keptPassage(`<blockquote class="note-quote"><p>${inner}</p></blockquote>`)
+    expect(q('a &amp;lt; b')).toBe('a &lt; b')
+    expect(q('a &lt; b &amp; c')).toBe('a < b & c')
+    expect(q('&lt;script&gt;alert(1)&lt;/script&gt; kept')).toBe('alert(1) kept')
+    expect(q('&lt;&lt;b&gt;script&gt;x&lt;/&lt;b&gt;script&gt;')).not.toContain('<')
+    expect(q('<b>bold</b> &lt;i&gt;kept&lt;/i&gt;')).toBe('bold kept')
+  })
+})
+
+// The endpoint takes no credentials, so what it will accept and how long it keeps it are
+// both security questions rather than housekeeping ones.
+describe('what the open door will hold', () => {
+  it('refuses a URL past the length any browser would send', () => {
+    const long = `https://b.example/${'a'.repeat(2100)}`
+    expect(receiveWebmention(long, `${SITE}/p`, SITE)).toBe('invalid')
+    expect(receiveWebmention('https://b.example/a', `${SITE}/${'b'.repeat(2100)}`, SITE)).toBe('invalid')
+    // The boundary itself still passes: 2048 is a real ceiling, not a round number to sit under.
+    const exact = `https://b.example/${'a'.repeat(2048 - 'https://b.example/'.length)}`
+    expect(typeof receiveWebmention(exact, `${SITE}/p`, SITE)).toBe('number')
+  })
+
+  it('reads only the first 512 KB of a source, whatever the source sends', async () => {
+    // The link sits AFTER the cap, so finding it would mean the whole body was held.
+    const id = receiveWebmention('https://b.example/huge', `${SITE}/p`, SITE) as number
+    const huge = `${'x'.repeat(600_000)}<a href="${SITE}/p">late</a>`
+    expect((await verifyMention(id, async () => page(huge)))?.status).toBe('failed')
+  })
+
+  it('drops what never verified after a month and keeps what did', () => {
+    const old = Date.now() - 40 * 24 * 60 * 60 * 1000
+    const put = (source: string, status: string, at: number) =>
+      db().run(`insert into webmentions (source, target, status, received_at) values (?, ?, ?, ?)`,
+        [source, `${SITE}/p`, status, at])
+    put('https://b.example/1', 'pending', old)
+    put('https://b.example/2', 'failed', old)
+    put('https://b.example/3', 'verified', old)
+    put('https://b.example/4', 'pending', Date.now())
+    expect(sweepWebmentions()).toBe(2)
+    expect(listMentions().map((m) => m.source).sort())
+      .toEqual(['https://b.example/3', 'https://b.example/4'])
+  })
+})

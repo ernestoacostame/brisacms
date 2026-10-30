@@ -1,0 +1,69 @@
+# The reverse proxy for docker-compose.caddy.yml. Caddy gets and renews the certificate
+# itself; there is nothing to schedule and nothing to remember.
+#
+# The security headers are the same set docs/self-host.md documents for nginx — the SAME
+# policy, character for character where the directives overlap, because until 2026-08-29
+# the two files disagreed: this one said `script-src 'self' 'unsafe-inline'`, which is a
+# CSP that stops almost nothing, while the nginx line (and every production instance) runs
+# `script-src 'self'`. The app ships no executable inline script — its one inline <script>
+# is a JSON-LD data block, which CSP does not govern — so the strict form is the tested
+# one, proven by the instances that serve it.
+#
+# Turnstile is the single exception, and it is opt-in: an owner who enters Cloudflare keys
+# has to widen script-src, connect-src and frame-src to challenges.cloudflare.com, which is
+# what the commented block below does. Every other install is stricter without it.
+
+# The site address IS `SITE_URL`, scheme and all, because Caddy accepts a URL here and reads
+# the host out of it — verified against Caddy 2 with `https://blog.example.com`, which logged
+# `enabling automatic TLS certificate management domains:["blog.example.com"]`. It used to be
+# a second variable, `CADDY_DOMAIN`, holding the same host without the scheme: two places to
+# write one name, and the failure when they drifted was a certificate for the wrong host with
+# nothing to say so. Compose refuses to start without `SITE_URL` rather than letting an empty
+# value through, because an empty one adapts to `unrecognized global option: reverse_proxy`,
+# which names neither the variable nor the problem.
+#
+# For expiry notices from the CA, uncomment the block below and put an address in it. It is
+# commented rather than wired to a variable on purpose: `email {$ACME_EMAIL}` with the
+# variable unset is a PARSE ERROR, not an empty setting, so the optional nicety would take the
+# whole site down on every install that skipped it.
+#
+#{
+#	email you@example.com
+#}
+
+{$SITE_URL} {
+	# Kept, and narrower than it looks now that the app compresses its own text responses
+	# (brotli, `src/web/compress.ts`): Caddy leaves an already-encoded body alone, so what
+	# this still covers is the bodies the app skips — anything under its 1 KB floor.
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob: https:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; media-src 'self' blob: https:; worker-src 'self' blob:; manifest-src 'self'; frame-src 'self' https://open.spotify.com https://www.youtube-nocookie.com; upgrade-insecure-requests"
+		-Server
+	}
+
+	# With Turnstile keys in Settings, replace the line above with this one:
+	# Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob: https:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' https://challenges.cloudflare.com; connect-src 'self' https://challenges.cloudflare.com; media-src 'self' blob: https:; worker-src 'self' blob:; manifest-src 'self'; frame-src 'self' https://challenges.cloudflare.com https://open.spotify.com https://www.youtube-nocookie.com; upgrade-insecure-requests"
+
+	# Match the app's own upload ceiling (MAX_UPLOAD_MB, 64 by default) so the two refuse
+	# the same file rather than one of them being the only thing that does.
+	request_body {
+		max_size 64MB
+	}
+
+	# WHERE THE BLOG IS, named by the caller rather than written in, because this one file now
+	# serves two shapes of install. Under compose it is the service name on the private
+	# network (`quire:3000`); on a machine where the blog runs from `install.sh` it is
+	# `127.0.0.1:3000`. One file rather than two because the CSP above lives in it, and a
+	# second copy of a tested security header drifts with nothing going red.
+	#
+	# No default value: `{$VAR:quire:3000}` looks like it works and does not — the default is
+	# read up to the first colon, so the port becomes the default and the variable is ignored.
+	# Measured with `caddy adapt`, which resolved to `quire:3000` whether the variable was set
+	# or not. Both callers set it, and there is nothing sensible to fall back to anyway.
+	reverse_proxy {$QUIRE_UPSTREAM}
+}

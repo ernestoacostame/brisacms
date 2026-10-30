@@ -1,0 +1,37 @@
+# What the image build is allowed to see. The Dockerfile copies named paths rather than
+# `COPY . .`, so this is a second fence rather than the only one, and it is what keeps the
+# build context small.
+
+.git
+.github
+golden
+docs
+
+node_modules
+**/node_modules
+**/dist
+.next
+
+# Runtime data. Never bake an instance into an image.
+data
+uploads
+data-dev-uploads
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.*
+!.env.docker.example
+.dev.vars
+.dev.vars.*
+
+# The demo fixture's artwork: 3.2 MB of public-domain scans that only `seed-art.ts` and the
+# demo content seeders read, and no runtime path touches. It was riding into the image
+# inside `COPY scripts ./scripts`.
+scripts/art
+
+# Local scratch, evidence, and the deploy's commit stamp (the image is not a deploy).
+build-sha
+.tmp
+coverage
+*.tsbuildinfo

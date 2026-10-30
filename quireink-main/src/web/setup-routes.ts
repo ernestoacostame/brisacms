@@ -1,0 +1,385 @@
+// First run: claiming an install that has no owner.
+//
+// Its own file rather than more of `auth-routes.ts`, because it is a different question.
+// Those routes ask "are you the owner"; these ask "is there one yet", and the answer stops
+// being interesting forever the moment it is yes.
+//
+// EVERY route here refuses once an account exists. Not as defence in depth — as the whole
+// mechanism. `createUser` already refuses a second account (ADR 0002) so a race cannot
+// create two owners, but a claim FORM still visible on a live blog is a phishing page
+// wearing the site's own domain, and that is worth closing separately.
+
+import type { Context } from 'hono'
+import { getSettings } from '@/content/settings'
+import { adminT } from '@/i18n/admin-i18n'
+import { noUsersYet, createUser, looksLikeEmail } from '@/auth/users'
+import { checkPassword, MIN_LENGTH } from '@/auth/password'
+import { submitPassword } from '@/auth/login'
+import { generateSecret, otpauthUri } from '@/auth/totp'
+import { clientIp, overLimit, recordHit } from '@/server/rate-limit'
+import { logAuthEvent } from '@/server/activity'
+import {
+  setupToken, setupTokenMatches, forgetSetupToken, setupCodeConfigured, setupCodeIgnored,
+  MIN_CODE_LENGTH,
+} from '@/server/setup-token'
+import { qrSvg } from '@/render/qr'
+import { enrolScreen, fillTemplate } from '@/web/login-page'
+import { claimScreen, claimedScreen, unclaimedScreen } from '@/web/setup-claim-page'
+import { rememberEnrolmentSecret, enrolmentSkippable } from '@/web/enrol-routes'
+import { fail, json } from '@/web/api'
+import { ownerRouter, type OwnerRouter } from '@/web/guard'
+import { saveSettings } from '@/content/settings'
+import { refusedSetting } from '@/content/settings-refuse'
+import { isSiteLang } from '@/locales/langs'
+import { siteStepScreen, faceStepScreen, readerStepScreen, lookStepScreen } from '@/web/setup-page'
+import { APP_VERSION } from '@/version'
+import { builtinTheme, isBuiltinThemeId } from '@/content/themes-builtin'
+import { backupLoading, holdingForClaim } from '@/server/load-backup'
+
+const html = (body: string, status = 200): Response =>
+  new Response(body, { status, headers: { 'content-type': 'text/html; charset=utf-8' } })
+
+// Ten wrong secrets per address per quarter hour. Irrelevant against the 24-byte random
+// token, which no rate limit is needed for; there for `SETUP_CODE`, which a person chose
+// and a person could choose badly. Only misses are charged, so the one right answer and the
+// page loads before it cost nothing.
+export const TRIES = 10
+export const TRIES_WINDOW = 15 * 60_000
+/** Shared with `setup-restore.ts`: a wrong token there is a wrong token here, from one budget. */
+export const tries = (c: Context): string => `setup:${clientIp(c)}`
+
+/**
+ * `GET /setup`.
+ *
+ * Three answers, and the middle one is the reason this page exists at all. Before it, a
+ * fresh install met a browser with a sign-in form for an account that could not exist —
+ * indistinguishable from having forgotten the password to a blog you never made.
+ */
+export async function handleSetupPage(c: Context): Promise<Response> {
+  const settings = await getSettings()
+  // Claimed: say so and stop. Not a redirect to `/login`, because someone who followed a
+  // stale setup link deserves to know the link is stale rather than to be handed a form.
+  if (!noUsersYet()) return html(claimedScreen(settings), 404)
+  const s = adminT(settings.language)
+  const askCode = setupCodeConfigured()
+  const given = c.req.query('token') ?? ''
+  if (given === '') return html(unclaimedScreen(settings, { askCode }))
+  if (overLimit(tries(c), TRIES, TRIES_WINDOW)) {
+    return html(unclaimedScreen(settings, { error: s.setupTooMany, askCode }), 429)
+  }
+  if (!setupTokenMatches(given)) {
+    recordHit(tries(c), TRIES_WINDOW)
+    return html(unclaimedScreen(settings, { error: askCode ? s.setupBadCode : s.setupBadLink, askCode }), 403)
+  }
+  // `?lang=` renders the claim form in the language the select was just changed to, exactly
+  // as the site step does. NOTHING is saved here — there is no owner yet, so a settings
+  // write from an unauthenticated request would be a way to edit a blog by visiting it.
+  // The claim POST is what makes the choice stick.
+  const picked = c.req.query('lang')
+  return html(claimScreen(isSiteLang(picked) ? { ...settings, language: picked } : settings, { token: given }))
+}
+
+/**
+ * `POST /api/setup/claim`: the account, and then straight into two-factor.
+ *
+ * It does not answer "here is your account, now go and sign in". Sending somebody back to a
+ * form to retype the password they chose four seconds ago is the kind of seam that makes
+ * setup feel like paperwork. Instead it signs in on their behalf with what they just typed,
+ * which lands on `need-enrolment` and hands them the QR code — the flow that was already
+ * built and already correct.
+ */
+export async function handleSetupClaim(c: Context): Promise<Response> {
+  const type = c.req.header('content-type') ?? ''
+  const wantsHtml = type.includes('form')
+  const source: Record<string, unknown> = type.includes('form')
+    ? ((await c.req.parseBody().catch(() => ({}))) as Record<string, unknown>)
+    : ((await c.req.json().catch(() => ({}))) as Record<string, unknown>)
+  const field = (name: string): string =>
+    typeof source[name] === 'string' ? (source[name] as string).trim() : ''
+
+  const stored = await getSettings()
+  const token = field('token')
+  const username = field('username')
+  const email = field('email')
+  /**
+   * The language picked on this very screen (`languageField`).
+   *
+   * Applied to a LOCAL VIEW of the settings straight away, so that an error sent back from
+   * here is in the language the person just chose — and SAVED only once the claim succeeds,
+   * because everything above the token check runs for a request nobody has authenticated
+   * and a settings write there would be a way to edit a blog by posting to it. Validated,
+   * so a hand-posted value cannot set a site to a language that does not exist.
+   */
+  const language = field('language')
+  const settings = isSiteLang(language) ? { ...stored, language } : stored
+  const s = adminT(settings.language)
+  // NOT trimmed: a password is bytes the owner chose, and silently eating a leading space
+  // here means the same password fails at every later sign-in.
+  const password = typeof source.password === 'string' ? source.password : ''
+
+  const askCode = setupCodeConfigured()
+  const refuse = (message: string, status: number): Response => {
+    if (!wantsHtml) return fail(c, message, status)
+    return html(unclaimedScreen(settings, { error: message, askCode }), status)
+  }
+
+  if (!noUsersYet()) {
+    if (!wantsHtml) return fail(c, s.setupClaimed, 409)
+    return html(claimedScreen(settings), 409)
+  }
+  // A backup is going in (`server/load-backup.ts`), and its owner account with it.
+  if (backupLoading()) return refuse(s.setupRestoreBusy, 409)
+  if (overLimit(tries(c), TRIES, TRIES_WINDOW)) return refuse(s.setupTooMany, 429)
+  if (!setupTokenMatches(token)) {
+    recordHit(tries(c), TRIES_WINDOW)
+    return refuse(askCode ? s.setupBadCode : s.setupBadLink, 403)
+  }
+  // Only spaces is not a name (FIXLIST 9.2): the form comes back with what was typed and says
+  // so, where it said the LINK was wrong and threw the form away with a valid token in hand.
+  if (username === '' || email === '') {
+    if (!wantsHtml) return fail(c, s.setupNeedName, 400)
+    return html(claimScreen(settings, { token, username, email, error: s.setupNeedName }), 400)
+  }
+  // An address, and not only in the browser's `type=email`: a direct POST took anything (U15).
+  if (!looksLikeEmail(email)) {
+    if (!wantsHtml) return fail(c, s.fieldEmail, 400)
+    return html(claimScreen(settings, { token, username, email, error: s.fieldEmail }), 400)
+  }
+
+  // The same rules the CLI applies, so the two doors cannot disagree about what a password
+  // is. Reported against the claim form, which still holds what was typed — and reported
+  // per RULE, because "that will not do" without saying which leaves a person guessing.
+  const problem = checkPassword(password, [username, 'quire', settings.title])
+  if (problem !== null) {
+    const message = problem === 'too-short'
+      ? fillTemplate(s.setupPwShort, { n: MIN_LENGTH })
+      : problem === 'too-common' ? s.setupPwCommon : s.setupPwName
+    if (!wantsHtml) return fail(c, message, 400)
+    return html(claimScreen(settings, { token, username, email, error: message, errorAtPassword: true }), 400)
+  }
+
+  // Now it is a real claim, so the choice is written down. The screen this hands over to is
+  // the authenticator — the one screen of setup somebody is least able to guess their way
+  // through in a language they do not read.
+  // `setupDone: false` unconditionally, and not merely left to the default: the language
+  // line above may already have made a settings row, and a row with no answer in it reads as
+  // an install that predates the question (`fromStored`). This is the one moment anything
+  // knows for certain that a first run is starting.
+  // HELD while it writes, and asked again inside the hold: everything above awaited, and in that
+  // time a backup may have started loading or another claim may have got here first.
+  const made = await holdingForClaim(async () => {
+    if (!noUsersYet()) return false
+    await saveSettings({
+      setupDone: false,
+      ...(settings.language !== stored.language ? { language: settings.language } : {}),
+    })
+    await createUser({ username, email, password })
+    return true
+  })
+  if (made === null) return refuse(s.setupRestoreBusy, 409)
+  if (!made) {
+    if (!wantsHtml) return fail(c, s.setupClaimed, 409)
+    return html(claimedScreen(settings), 409)
+  }
+  forgetSetupToken()
+  logAuthEvent('auth.owner.claimed')
+
+  const result = await submitPassword({ username, password, ip: clientIp(c) })
+  // Anything but `need-enrolment` here means the account was made and the sign-in that
+  // should have followed did not. Say so plainly rather than pretending: the account is
+  // real, and `/login` will take it.
+  if (result.status !== 'need-enrolment') {
+    if (!wantsHtml) return json({ status: 'created' })
+    return c.redirect('/login', 303)
+  }
+
+  const secret = generateSecret()
+  rememberEnrolmentSecret(result.ticket, secret)
+  if (!wantsHtml) return json({ status: 'need-enrolment', ticket: result.ticket, secret })
+  return html(enrolScreen(settings, {
+    ticket: result.ticket,
+    secret,
+    qr: qrSvg(otpauthUri(secret, username)),
+    skippable: enrolmentSkippable(settings),
+  }))
+}
+
+/**
+ * The line the log carries at boot when nobody owns this install yet.
+ *
+ * `base` is the address the operator can actually reach, and the caller works it out from
+ * the socket rather than from `resolveSiteUrl`. That fallback answers `http://localhost:3000`
+ * whatever port the process bound — measured on the first run of this very banner, which
+ * printed `:3000` from a server listening on `:3399`. A setup link that does not open is
+ * worse than no setup link: it reads as the software being broken on the first thing it
+ * ever asks anybody to do.
+ */
+export function setupBanner(base: string): string {
+  // With `SETUP_CODE` honoured the secret is the operator's own and is NOT echoed here: the
+  // log is the one place it would gain a second reader. The page asks for it instead.
+  if (setupCodeConfigured()) {
+    return [
+      '',
+      '  ┌─────────────────────────────────────────────────────────────────────────┐',
+      '  │  This blog has no owner yet. Open the address below and type SETUP_CODE. │',
+      '  └─────────────────────────────────────────────────────────────────────────┘',
+      '',
+      `  ${base}/setup`,
+      '',
+      "  The code is the one in this service's environment. It stops working once the blog is claimed.",
+      '',
+    ].join('\n')
+  }
+  const ignored = setupCodeIgnored()
+    ? [`  [WARN] SETUP_CODE is shorter than ${MIN_CODE_LENGTH} characters and was ignored. The link above is the way in.`, '']
+    : []
+  return [
+    '',
+    '  ┌─────────────────────────────────────────────────────────────────────────┐',
+    '  │  This blog has no owner yet. Open the link below to claim it.           │',
+    '  └─────────────────────────────────────────────────────────────────────────┘',
+    '',
+    `  ${base}/setup?token=${setupToken()}`,
+    '',
+    '  The link is good until this service restarts, and once only.',
+    '',
+    // A loopback address cannot be opened from the owner's own browser when the blog is on a
+    // server (FIXLIST 9.6). Said here, where the link is, rather than in a guide.
+    ...(/\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/.test(base)
+      ? ['  On a server? Open it through a tunnel from your own machine:',
+        `    ssh -L ${new URL(base).port || '80'}:127.0.0.1:${new URL(base).port || '80'} you@your-server`,
+        '  or set SITE_URL to the public address and restart, which prints the link on it.', '']
+      : []),
+    ...ignored,
+  ].join('\n')
+}
+
+
+/**
+ * The two questions after the account, on the OWNER-GATED router (Invariant 4).
+ *
+ * They are ordinary settings writes made by somebody who is already signed in, so they are
+ * protected because of where they are registered rather than by anything inside them. That
+ * is also why they are not in the public list in `routes-guarded.ts`: they do not belong
+ * there and never did.
+ *
+ * Nothing forces a first-run owner through these — `handleEnrolDone` only sends them here
+ * while `setupDone` is false. Reaching them later is harmless: they are three small settings
+ * forms holding what is already saved.
+ */
+export function setupWizardRoutes(): OwnerRouter {
+  const router = ownerRouter()
+
+  router.get('/setup/site', async (c) => {
+    // The address the owner is ACTUALLY on, offered as the answer. `resolveSiteUrl` would
+    // hand back its `localhost:3000` fallback here, which is the exact wrong answer and the
+    // one this step exists to stop being saved by accident.
+    //
+    // From the request URL rather than the `Host` header: Hono has already reconciled the
+    // two, and a synthetic request (a test, an internal call) has a URL when it has no
+    // header. `x-forwarded-proto` still wins for the scheme, because behind a proxy the
+    // origin speaks http to something the reader reached over https, and saving `http://`
+    // here would put it in every feed and every share card.
+    const url = new URL(c.req.url)
+    const proto = c.req.header('x-forwarded-proto') ?? url.protocol.replace(':', '')
+    // `SITE_URL` FIRST WHEN THE OPERATOR SET ONE. Until 2026-09-12 this step was skipped
+    // entirely on any install that had one, so nothing here could disagree with it. Now that
+    // it is always asked, offering the request's host instead would let a first run reached
+    // at a temporary address — an IP, a preview host, a tunnel — write that address into the
+    // settings, where it OUTRANKS the environment from then on and goes into every feed,
+    // sitemap and share card. The operator's answer is the one on offer; the owner can still
+    // change it in the field.
+    const address = process.env.SITE_URL || (url.host === '' ? '' : `${proto}://${url.host}`)
+    // `?lang=` renders THIS screen in the picked language before anything is saved —
+    // the island reloads with it when the select changes. The choice only persists when
+    // the form is submitted, through the same field.
+    const settings = await getSettings()
+    const lang = c.req.query('lang')
+    return html(siteStepScreen(isSiteLang(lang) ? { ...settings, language: lang } : settings, { address }))
+  })
+
+  router.post('/setup/site', async (c) => {
+    const form = await c.req.parseBody().catch(() => ({})) as Record<string, unknown>
+    const get = (k: string): string =>
+      typeof form[k] === 'string' ? (form[k] as string).trim() : ''
+    const language = get('language')
+    const answer = {
+      title: get('title') || undefined,
+      // The sanitizer keeps the current value for anything it does not recognise, so a
+      // hand-typed zone that is not a real IANA name cannot wedge the site.
+      timezone: get('timezone'),
+      siteUrl: get('siteUrl'),
+      ...(isSiteLang(language) ? { language } : {}),
+    }
+    // An address the browser lets through (`ftp://…`) that the save would store as `''`: asked
+    // again with the reason under the field, the Settings rule (`content/settings-refuse.ts`).
+    if (refusedSetting(answer)) {
+      const settings = await getSettings()
+      const typed = { ...settings, ...answer, title: answer.title ?? settings.title }
+      return html(siteStepScreen(typed, {
+        address: answer.siteUrl, addressError: adminT(typed.language).fieldUrl,
+      }), 400)
+    }
+    await saveSettings(answer)
+    return c.redirect('/setup/face', 303)
+  })
+
+  router.get('/setup/face', async () => html(faceStepScreen(await getSettings())))
+
+  router.post('/setup/face', async (c) => {
+    const form = await c.req.parseBody().catch(() => ({})) as Record<string, unknown>
+    const mode = form.mode === 'front' ? 'front' : 'list'
+    const current = await getSettings()
+    await saveSettings({ home: { ...current.home, mode } })
+    return c.redirect('/setup/reader', 303)
+  })
+
+  router.get('/setup/reader', async () => html(readerStepScreen(await getSettings())))
+
+  router.post('/setup/reader', async (c) => {
+    const form = await c.req.parseBody().catch(() => ({})) as Record<string, unknown>
+    // ON unless the answer is exactly 'off', which is how a form with no radio at all — a
+    // submit from a browser that lost the markup — lands on the default rather than on the
+    // quieter site.
+    const readerPen = form.pen !== 'off'
+    const current = await getSettings()
+    await saveSettings({ features: { ...current.features, readerPen } })
+    return c.redirect('/setup/look', 303)
+  })
+
+  router.get('/setup/look', async () => html(lookStepScreen(await getSettings())))
+
+  router.post('/setup/look', async (c) => {
+    const form = await c.req.parseBody().catch(() => ({})) as Record<string, unknown>
+    // `theme`, or `look` from a setup page served before the field was renamed (ADR 0072).
+    const theme = form.theme ?? form.look
+    // AND THE FACE THE THEME IS DRAWN FOR, on a first run only. Nobody has chosen a chrome font
+    // yet then (no step asks), so the theme's suggestion is the answer rather than the install
+    // default: a blog that picks Source code here gets its monospace chrome. The step stays
+    // reachable after setup, and by then the font in the settings may be one the owner chose,
+    // so a finished blog keeps it. The admin offers the same suggestion and lets them refuse it.
+    const firstRun = !(await getSettings()).setupDone
+    const suggested = firstRun && isBuiltinThemeId(theme) ? builtinTheme(theme).suggests.chromeFont : undefined
+    // THE LAST QUESTION, so this is where the run is finished. Written here rather than at
+    // each step: a setup somebody abandoned halfway is one they should be offered again.
+    //
+    // And where the release is stamped. An install that has answered this has been asked
+    // which dialect it wants, so the admin's what's-new panel must never ask it again — and
+    // an install that predates the field reads as empty, which is exactly the blog the panel
+    // exists for (`content/settings.ts`).
+    await saveSettings({
+      setupDone: true,
+      seenRelease: APP_VERSION,
+      // The sanitiser keeps the current value for anything it does not recognise, so a
+      // submit from a browser that lost the radios lands on the default rather than on a
+      // dialect nobody chose.
+      ...(typeof theme === 'string' ? { theme } : {}),
+      ...(suggested ? { chromeFont: suggested } : {}),
+    })
+    // Into the editor, not the dashboard. The last thing setup should do is hand somebody a
+    // control panel; the first post is the reason they installed this.
+    return c.redirect('/admin/editor', 303)
+  })
+
+  return router
+}

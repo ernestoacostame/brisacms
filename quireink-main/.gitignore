@@ -1,0 +1,76 @@
+# dependencies
+node_modules/
+
+# build output: the compiled binary and the bundled admin and island JS
+dist/
+out/
+build/
+# ...and the scratch file `bun build --compile` leaves beside them: a 61 MB dotfile that
+# nothing cleans up. Untracked and unignored, it made `git status` dirty, and deploy.sh
+# refuses a dirty tree -- so running the build could block the next deploy with a message
+# about a file the deploy has nothing to do with.
+.*.bun-build
+
+# runtime data. SQLite databases and everything a reader or the owner uploaded: this is
+# the instance, not the product, and none of it belongs in a public repository.
+*.db
+*.db-wal
+*.db-shm
+data/
+uploads/
+data-dev-uploads/
+
+# ALL scratch lives under one root: test databases, seeded runs, compiled throwaways,
+# screenshots taken while driving the site. One rule, one directory, and a tree listing
+# that stays readable. Anything written here is regenerated and may be deleted at any time.
+.tmp/
+
+# Written by the deploy so the admin can name the running commit. Never committed: it
+# would change on every commit and mean nothing in the tree.
+build-sha
+.deployment-id
+coverage/
+
+# env files. The committed template carries no secrets and is tracked.
+.env*
+!.env.docker.example
+
+# design-sync: the Claude Design converter, its configs and its preview wrappers. The whole
+# directory moved to the private sibling on 2026-08-27 — its `projectId`s identify one
+# account's design projects, and no build, test or guard in this repository ever read any of
+# it, so a contributor who clones this cannot use it and does not need it.
+#
+# The generated halves were already ignored, for a different reason worth keeping: they are
+# rebuilt from `src/` on every run, so a tracked copy is a second answer to the same question
+# and it is stale the moment a component changes. The rules were written on the
+# `design-sync-admin-ui` branch, where the durable inputs live; main had none of them, so a
+# `git add -A` here swept 794 generated files into a public repository on 2026-08-01.
+.ds-sync/
+ds-bundle/
+ds-bundle-reader/
+.design-sync/
+
+# typescript
+*.tsbuildinfo
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+.pnpm-debug.log*
+media-index-backup-*.json
+
+# The agent's own directory is private (launch.json, settings.local.json, transcripts) —
+# except the skills, which SHIP: they are how an agent that has just cloned this repository
+# knows how to install it, work it over MCP and move a blog into it.
+.claude/*
+!.claude/skills/
+
+# Cloudflare (ADR 0066): wrangler's local state, and the runtime types `wrangler types` writes.
+.wrangler/
+# ...and the secrets `wrangler dev` reads. The template is tracked: the Deploy to Cloudflare button
+# reads it to know which secrets to ask for, and it carries names, never values.
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+src/runtime/cf/worker-configuration.d.ts

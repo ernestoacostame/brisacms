@@ -1,0 +1,1788 @@
+/* The admin chrome: everything the utility classes in `utilities.css` do not cover.
+   Served to the owner alone, so none of it reaches the public site.
+
+   Until 2026-09-14 this file began by importing Tailwind and pointing it at the admin tree,
+   and the CLI compiled the two together. The utilities now live beside it as plain CSS and
+   `scripts/build-admin.ts` concatenates them (ADR 0053). Three things the framework used to do
+   from here are worth keeping on the record, because all three are still true of the output:
+
+   1. `dark:` is a CLASS, not a media query. The boot script written by `web/admin/rail.ts`
+      sets `.dark` on <html> before the first paint and the rail island keeps it, offering
+      light / dark / system / by-time exactly as the public site does. Under the framework's
+      default those 668 dark utilities landed in one `prefers-color-scheme` block, so choosing
+      "Dark" repainted the canvas and precisely three other things while every card, border,
+      input and label stayed light, and an owner whose OS was dark got the dark admin whichever
+      setting they picked. The captured rules carry the class selector.
+   2. The utilities are inside `@layer utilities`, which is what keeps them losing to the
+      unlayered rules below. That was true before and the admin's own styles rely on it.
+   3. The transition utilities run on `--dur-fast`, not a literal. Before that they ran
+      Tailwind's own 150ms beside this sheet's 150ms, equal by luck.
+
+   The frozen tree layered this on `globals.css` and inherited the runtime theme tokens and
+   `.prose` from it. There is no globals.css here, so the handful of tokens the admin actually
+   leans on are declared below rather than inherited by luck. */
+
+/* The tokens the admin borrows from the public sheet. The editor renders `.prose`, so it
+   needs the same reading face and the same meta colour the article page uses; everything
+   else in the admin is on the neutral scale by design. */
+:root {
+  --dur-fast: .15s;
+  --dur-base: .2s;
+  --dur-slow: .5s;
+  --ease-out: cubic-bezier(.2, .7, .3, 1);
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-reading: var(--font-sans);
+  /* `--admin-mono`, NOT `--font-mono`, and the distinct name is the whole point.
+
+     The admin shell inlines the SITE's root variables, and that inline `<style>` sits after
+     this linked sheet — so anything declared here under a name the site also uses is
+     overridden on every install. Written as `--font-mono` first, and measured: it resolved
+     to JetBrains Mono, a webfont, on a fixture whose owner had picked a mono site chrome.
+
+     The admin went to ONE typeface on 2026-08-15. Pulling a second webfont back in to set a
+     source view most owners never open would undo that. A system mono downloads nothing, is
+     installed everywhere, and does the one job asked of it: make `##` and `|` line up. */
+  --admin-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+  --c-meta: #6a6a70;
+  --c-rule: #e9e9e4;
+  /* The product's highlighter — the admin's ONE accent, taken from the Writing Desk mock:
+     a search hit wears it as a <mark>, and the small dots that mean "work in progress"
+     (a draft's row, the unsaved state) are its edge tone.
+
+     THE SECOND INK, owner's call 2026-08-29: the red ballpoint. It arrives with an argument
+     the old rule did not have an answer to — the admin now has a wordmark in three colours
+     (ink, red, highlighter), so "monochrome plus one" had stopped describing the product
+     anyway. What matters is that the colours are NOT decoration: they are the five inks this
+     software is about, and each keeps on screen the meaning it has on paper. Highlighter is
+     what you mark as worth returning to. Red ballpoint is what you strike OUT — so it dresses
+     the actions that destroy something, and nothing else. Graphite is the pencil: a note
+     beside the words, which is what secondary text already is.
+
+     A colour that means one thing is still a signal. A palette is not. The test for a third
+     use is the same as it always was: what does this ink MEAN on a page? */
+  --pen: #d5f856;
+  --pen-edge: #c3e844;
+  --on-pen: #2c3208;
+  /* PEN_AUX_LIGHT in `src/render/pen.ts` — the one source, measured off a photograph of a
+     real pen box. Not re-typed by eye: the values are the product's own. */
+  --pen-red: #c23b2b;
+  --pen-red-soft: #fbeceb;
+  /* THE DESTRUCTIVE INK, and it is a SECOND token rather than a change to the one above.
+     `--pen-red` is a LINE — the ring and the underline the pen draws — and the dark value is
+     deliberately brighter than a naive darkening for exactly that reason, which the comment
+     beside it explains. This one is TEXT: the Delete button's label, the bin glyph in the log.
+     Measured on 2026-09-21: the pen's dark red reads 3.30:1 on the admin's dark surface and
+     2.78:1 on the hover one, where text wants 4.5. Light passes as it is, so only dark moves. */
+  --ink-danger: #c23b2b;
+  --pen-graphite: #5b574f;
+}
+.dark {
+  --c-meta: #85858c;
+  --c-rule: #27272a;
+  /* THE PEN'S OWN HUE, 73, since 2026-09-30. It was #7e7028, the reader's dark YELLOW pigment
+     (`PEN_DARK` in `src/pen/pigments.ts`), which is warmed to hue 50 on purpose: on a dark
+     page yellow and green highlights have to stay two inks. The admin has one pen and no
+     green beside it, so the admin paid for a separation it never uses — the held key, the
+     active tab and the progress bar came out mustard beside a light theme that is chartreuse,
+     and its label on it measured 4.41:1, under 4.5. Same hue as #d5f856, dimmed: white on
+     it 5.38, this label ink 4.93, the edge 5.54 against the page. The pigment and the dark
+     wordmark keep #7e7028; this is the admin's accent only. */
+  --pen: #5e721d;
+  --pen-edge: #7f9929;
+  --on-pen: #f4f7e2;
+  /* PEN_AUX_DARK: brighter than a naive darkening, because a LINE owes the page visibility
+     rather than a text-contrast ceiling — the same argument `pen.ts` makes for the underline. */
+  --pen-red: #a3524a;
+  --pen-red-soft: #2a1a18;
+  /* 4.66:1 on the hover surface, 5.51 on the card, 6.09 on the page — the closest red to the
+     pen's own that clears 4.5 on all three. The hover FILL stays `--pen-red` with white on it,
+     which is 5.44: filling with this lighter ink would take white down to 3.25. */
+  --ink-danger: #d97066;
+  --pen-graphite: #8f8a80;
+}
+/* Two newspaper columns inside a sheet, with the rule a paper would draw between them.
+   For lists of SHORT rows (comments, subscriber addresses): one column left half the
+   sheet blank, which reads as a hole down the middle of the page. Collapses
+   to one column below lg, where there is no blank half to fill. */
+.paper-cols { column-count: 2; column-gap: 0; column-rule: 1px solid #f0f0ef; }
+.dark .paper-cols { column-rule-color: #262626; }
+.paper-cols > * { break-inside: avoid; }
+@media (max-width: 1023px) { .paper-cols { column-count: 1; } }
+/* One card is not two columns' worth: it sat in the left half with the rule beside nothing. */
+.paper-cols:has(> :only-child) { column-count: 1; column-rule: none; }
+/* NOT for lists in time order. The log and the trash left this on 2026-09-23: columns read down
+   the left and then down the right, so the newest entry was top-left and the next one was not
+   below it. */
+
+/* The search hit, painted the way the reading site paints a highlight. Scoped to the
+   write pane's rows: the editor's own five-ink marks carry inline colours and must not
+   inherit a default. */
+[data-write-row] mark,
+.paper-cols mark {
+  background: var(--pen);
+  color: var(--on-pen);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+/* `overscroll-behavior-y: contain` is the important half, and it is here because of a real
+   loss of work: on a phone, scrolling hard at the top of the editor triggers the browser's
+   pull-to-refresh, the page RELOADS, and whatever was typed since the last local snapshot is
+   gone. The gesture is not a navigation the author asked for, and there is nothing above the
+   top of an editor to pull towards. `contain` stops the refresh and the scroll chaining
+   while leaving ordinary scrolling exactly as it was. Admin only: the reading site wants the
+   browser's normal behaviour. */
+html {
+  overscroll-behavior-y: contain;
+}
+/* ⚠️ `font-size-adjust` WAS HERE, and taking it out is the point of this comment.
+
+   The reasoning for it was sound and the measurement was real: a reading face and a chrome
+   face are not the same size at the same `font-size`. x-height per 1em, measured in the
+   browser — JetBrains Mono 0.550, Inter 0.539, IBM Plex Mono 0.516, Literata 0.508, Source
+   Sans 3 0.486, Source Serif 4 0.481 — so Literata at 12px renders at 92% of a 12px mono
+   label beside it. `font-size-adjust: from-font` on `body` normalises that in one
+   declaration, for any face including one the owner uploads.
+
+   It also breaks every leading it touches, and CSS offers no way to stop it. `line-height`
+   resolves against the COMPUTED font-size, never the adjusted one — measured all three forms
+   in Chrome: `20px`, unitless `1.6` and `normal` all produce the identical line box with the
+   adjustment on and off, while the glyphs inside it grow 8%. So the admin's hints went from
+   1.67 leading to 1.54, and a Source Serif 4 reading face would have taken them to 1.46.
+   Tailwind's line-heights are absolute numbers, so this applied to EVERY reading-face
+   element and would have applied to every one added later.
+
+   An 8% difference in apparent size between two faces is ordinary typography. Text with 8%
+   less air than it was designed for is not, and the owner read it immediately. The size
+   difference stands; the leading is what a reader feels. */
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  overscroll-behavior-y: contain;
+}
+
+/* ONE FACE. The admin is set in Inter and nothing else.
+
+   It was two — `--font-reading` for what a PERSON wrote, `--font-sans` for what the MACHINE
+   says — adopted 2026-08-14 and RETIRED 2026-08-15, both at the owner's instruction. What
+   is worth keeping is why the second one is right and the first sounded right.
+
+   The division is real on the reading site, where a post title and its date are genuinely
+   different kinds of thing and a reader has time to feel it. A tool is not read, it is
+   scanned, and here the same division landed between a setting's LABEL and the sentence under
+   it — two halves of one control, four lines apart, in two typefaces. That is not a division
+   a person experiences as meaning; it is two voices in a form. The admin says one thing in one
+   face and lets SIZE and WEIGHT do the ranking (`components/type.ts`).
+
+   TWO EXCEPTIONS, and both are the editor, because the editor is WYSIWYG: a post has to be
+   written in the face it publishes in. `.ProseMirror` gets it from `fontPresetCss` in
+   `web/admin/spa.ts`, and the editor's TITLE field wears `.reading-font` for the same reason —
+   it is the same words, at the same size, that the published page will show. The other holder
+   of the class is `[data-specimen]`, the font picker's own preview tiles, which must paint
+   themselves in the family they are offering or they are not a preview.
+
+   ⚠️ `--font-reading` therefore STAYS DEFINED and `spa.ts` keeps emitting the preset. Deleting
+   either would make the editor write in Inter and publish in the site's face. */
+.admin .reading-font {
+  font-family: var(--font-reading);
+}
+
+/* THE SECOND CARVE-OUT, 2026-09-07: the page's own title line, and nothing else.
+
+   A FIXED family, not `var(--font-reading)`, and the distinction is the decision. The reading
+   face is a site setting: an owner who publishes in Source Sans would have re-lettered every
+   heading in their tool by choosing what their readers read. A screen's name is the product's
+   to set. Literata is already downloaded here — `allFontFaceCss()` emits every family so the
+   font picker can paint its tiles — so this costs no request.
+
+   Georgia before the generic serif because the fallback is what shows for the ~100ms before
+   the face lands, and a page title reflowing between two very differently-proportioned serifs
+   is more visible on one 28px line than it is in a paragraph. */
+.admin .page-title-face {
+  font-family: 'Literata', Georgia, 'Times New Roman', serif;
+}
+
+/* ⚠️ There was a `letter-spacing: normal` on both of those, and on `[data-specimen]`, and
+   they are gone with the reason for them. `MONO_TRACKING` pulls a mono chrome in by -0.05em
+   because JetBrains Mono is a wide face, it was applied to `body`, and it INHERITED — so
+   every serif put on a descendant was set -0.05em too: Literata at 12px drawn at -0.8px,
+   letters touching, on every hint in the admin, and the font picker previewing both serifs
+   crushed. That was "sát nhau", and it was a real bug for as long as the admin wore the
+   site's chrome font.
+
+   It no longer does (`web/admin/spa.ts`, adminStyles): the admin's chrome is Inter, nothing
+   here emits `MONO_TRACKING`, and the shell stops stamping `data-chrome-font`. So the reset
+   now guards nothing, and a rule that guards nothing while carrying a paragraph about why it
+   is load-bearing is the exact thing this file keeps getting wrong. If the admin is ever
+   pointed back at the chrome font, this is the first thing to put back. */
+
+/* Where the settings search landed you.
+   A smooth scroll with no mark at the end of it leaves the reader looking for what moved,
+   which is the same hunt the search exists to remove. Outline rather than background: a
+   background repaints the card and reads as a state the setting is in, while an outline
+   reads as a pointer and takes no colour from the neutral scale.
+   The outline is DRAWN by the class and only taken away by the animation, so with motion
+   off (the owner's switch, or the OS) the mark still appears, holds for as long as
+   useSettingJump keeps the class on, and leaves; it used to be transparent at rest and
+   painted only by the keyframes, which made the marker vanish exactly where the reader
+   had asked for less motion rather than for less help. 1.6s is a hold, not a motion tier,
+   which is why it is not a `--dur-*` token. */
+@keyframes setting-found {
+  from { outline-color: currentColor; }
+  to { outline-color: transparent; }
+}
+.setting-found {
+  outline: 2px solid currentColor;
+  outline-offset: 6px;
+  border-radius: 4px;
+  animation: setting-found 1.6s ease-out forwards;
+}
+
+/* PROSEMIRROR'S REQUIRED CSS, the part that is behaviour rather than look (2026-09-30).
+
+   prosemirror-view ships `style/prosemirror.css` and asks for it; nothing loaded it, so the
+   surface computed `white-space: normal` and the view kept a space typed after a mark, an atom
+   or another space alive the only way `normal` allows: as U+00A0. `**bold**\xa0and` went into
+   the Markdown and `&nbsp;` onto the published page, holding words together and polluting
+   search and diffs. Every load also logged the view's own warning about exactly this.
+   The selection outline in the upstream file is look, and the editor draws its own. */
+.ProseMirror {
+  position: relative;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  white-space: break-spaces;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0;
+}
+.ProseMirror pre { white-space: pre-wrap; }
+.ProseMirror li { position: relative; }
+
+/* ⚠️ A BLOCK OFF SCREEN IS NOT DRAWN WHILE SOMEBODY TYPES (2026-10-04). Every pen stroke is
+   `mix-blend-mode: multiply`, and to the browser each one is a blending effect it re-layers,
+   re-commits and hit-tests on EVERY frame — all of them, on screen or not, because a keystroke
+   repaints and the effect tree is the whole document's. Traced in Chrome with the CPU slowed
+   four times: on a 13,000-word post holding 1,491 strokes, 36 ms of main thread per key, of
+   which layering, commit and hit-testing were 17; on one holding 5,040, 74 ms per key and
+   key-to-paint at 56 ms. With the blocks off screen skipped, 20 and 22 ms per key and
+   key-to-paint at 26 ms on both — a long post types like a short one.
+   Only the plain blocks, never a figure: a gallery tile's toolbar is positioned against the
+   writing column, and the containment this brings would make the figure its containing block.
+   The editor floats nothing (see the 30% figure below), so no paragraph has a float to wrap.
+   `overflow-clip-margin` because skipping brings paint containment, which clips at the block's
+   edge, and a ring at the start of a line reaches a quarter of an em past it (measured by
+   screenshot: the left cap was cut). The `@supports` is that same fact: a browser that cannot
+   push the clip out is left drawing everything, as before, rather than clipping the pen.
+   The size is a guess for a block never yet drawn; `auto` keeps the real one once it has been. */
+@supports (overflow-clip-margin: 1em) {
+  .ProseMirror > :is(p, h1, h2, h3, h4, h5, h6, blockquote, ul, ol, pre) {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 5em;
+    overflow-clip-margin: 1em;
+  }
+}
+.ProseMirror-hideselection *::selection { background: transparent; }
+.ProseMirror-hideselection { caret-color: transparent; }
+.ProseMirror [draggable][contenteditable=false] { user-select: text; }
+img.ProseMirror-separator {
+  display: inline !important;
+  border: none !important;
+  margin: 0 !important;
+}
+
+/* A code block names its language in the corner, from the `data-language` the node draws. */
+.ProseMirror pre[data-language]::before {
+  content: attr(data-language);
+  float: right;
+  margin-left: 0.75rem;
+  font-size: 0.75em;
+  opacity: 0.6;
+  user-select: none;
+}
+
+/* Editor preview: the writing surface has no .gallery wrapper (grouping happens on
+   publish), so make #grid figures flow side-by-side as thumbnails — a gallery
+   reads as columns in the editor too, not a vertical stack.
+   ⚠️ THESE RULES USED TO REACH THE FIGURE'S PARENT THROUGH `:has(> figure…)`, because
+   `ReactNodeViewRenderer` wrapped every node view in a `.react-renderer` div and the width had
+   to live on the element in the flow. Seven rules did, and they were the last `:has()` in the
+   admin — a construct that has already taken Safari's render process down on another site
+   (Chrome is unaffected, which is what makes it easy to miss). The node view is plain
+   ProseMirror since 2026-09-15 and the figure IS the element in the flow, so the rules key on
+   it. Scoped to .ProseMirror so the published page is unaffected. */
+.ProseMirror figure.img-grid {
+  display: inline-block;
+  /* Three across, always — while the published page uses two, three or four by count. So a
+     gallery of four read 3+1 while you wrote it and 2x2 once you published it, and nothing
+     said which was true. This is the fallback now: a tile that cannot find its own position
+     between transactions. The real widths are keyed on the count below. */
+  width: 31.5%;
+  /* `my-4` sits on the figure and a tile must not carry it: the margin is the grid's gutter. */
+  margin: 0 1.5% 0.5rem 0;
+  vertical-align: top;
+  /* The containing block for the escaping toolbar below. */
+  position: relative;
+}
+/* The published column count, as the editor's own row. The three numbers are
+   `editorTileWidth(2|3|4)` in `render/gallery-cols.ts` — that function is the source and
+   `figures.test.ts` holds this sheet to it, because CSS cannot import and a second copy of
+   a layout rule is how the two sides drifted apart in the first place. */
+.ProseMirror figure[data-cols="2"] { width: 48.5%; }
+.ProseMirror figure[data-cols="3"] { width: 31.8%; }
+.ProseMirror figure[data-cols="4"] { width: 23.5%; }
+
+/* THE SELECTED TILE'S TOOLBAR, out of the cell it could never fit in.
+   A gallery cell is 202px on a desktop and 102px on a phone; the bar holds up to seventeen
+   buttons whose segmented groups clip rather than wrap (`overflow-hidden` on the track), so
+   the crop ratios and the frame weights were simply cut off and unclickable. Taken out of
+   flow it lays out against the writing column instead, and it sits ABOVE the tile so it
+   never covers the picture whose crop is being chosen. It reads as a popover because it now
+   floats over content: its own surface, a hairline, a shadow. */
+.ProseMirror .qi-tile-bar {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  z-index: 30;
+  width: max-content;
+  max-width: min(38rem, calc(100vw - 2rem));
+  padding: 0.375rem;
+  border-radius: 0.5rem;
+  /* --c-rule is the admin's own hairline token and it already flips with the theme, so the
+     border needs no dark twin. The surface does: this floats over the writing sheet, which
+     is white on paper and near-black at night, and a popover has to be opaque or the text
+     under it reads through the buttons. */
+  border: 1px solid var(--c-rule);
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+}
+.dark .ProseMirror .qi-tile-bar {
+  background: #171717;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
+}
+.ProseMirror figure.img-grid img {
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+}
+
+/* A 30% figure previews at its published width. No float in the editor — a ProseMirror
+   node view is a block and text does not wrap around it — so the alignment shows as
+   position only, which is enough to tell the three sizes apart while writing. */
+.ProseMirror figure.img-third {
+  width: 30%;
+}
+.ProseMirror figure.img-third.img-center {
+  margin-left: auto;
+  margin-right: auto;
+}
+.ProseMirror figure.img-third.img-right {
+  margin-left: auto;
+}
+/* The left case is the default and says so out loud, rather than being the absence of a rule:
+   `check:admin-css` proves every class the admin writes has a rule behind it, and a class that
+   is written but styled nowhere is exactly what it is there to catch. */
+.ProseMirror figure.img-third.img-left {
+  margin-right: auto;
+}
+
+/* A "Large" picture, previewed. Until 2026-09-15 the editor drew one exactly like a column
+   picture, so the size keys offered a choice the writing surface did not show — the same fault
+   `galleryCols` was written to fix for the column count. The published page nudges into the
+   gutter by `clamp(0px,4vw,4rem)`; here it cancels the writing sheet's own `px-4` instead, so
+   the figure spans the full sheet at every width and cannot overflow it. */
+.ProseMirror figure.img-wide {
+  margin-left: -1rem;
+  margin-right: -1rem;
+}
+
+/* The empty-state placeholder (`admin/editor/plugins.ts`). ⚠️ `:first-child` below is relative
+   to the PARENT, so this matches an empty paragraph inside a <td> or an <li> exactly as well as
+   one at the top of the sheet — which is why that plugin decorates TOP-LEVEL blocks only. */
+.ProseMirror:focus {
+  outline: none;
+}
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--c-meta);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* A task item in the editor: the box and the words on ONE line. The node view
+   (`admin/editor/views.ts`) prints a <label> and a <div> as two blocks and nothing had ever
+   laid them side by side, so the box sat above its words — seen once the pen's list marks took
+   the disc away (2026-09-09). */
+.ProseMirror ul[data-type="taskList"] > li {
+  display: flex;
+  gap: 0.5em;
+  align-items: baseline;
+}
+.ProseMirror ul[data-type="taskList"] > li > label {
+  flex: none;
+}
+.ProseMirror ul[data-type="taskList"] > li > div {
+  flex: 1;
+  min-width: 0;
+}
+
+/* PAPER, not a dashboard canvas. Isolated from the public palette tokens either way.
+
+   This was #f5f5f5 — a true neutral gray — with white cards on it. That pairing is the shape
+   every generated admin has: the canvas recedes, the cards float, and the page reads as a tray
+   of boxes. It was rejected on 2026-08-15 as looking cheap, and the diagnosis is that
+   nothing in the admin came from this product. The reading site is one sheet of #fcfcfc with
+   hairlines ruled across it and no box floating anywhere.
+
+   So: the same paper, one hair warmer than the sheet a card is drawn on, which leaves exactly
+   enough separation to see an edge and not enough to make the card an object. The card's own
+   shadow came off at the same time (`CARD` in `admin-shared/kit.ts`): with a gray canvas the
+   shadow was
+   redundant, and on paper it would be the only thing casting one. */
+.admin-canvas {
+  background: #f7f6f4;
+}
+.dark .admin-canvas {
+  background: #0f0f0f;
+}
+
+/* THE TWO SWITCHES THAT CHANGE WHAT YOU LOOK AT say so in WEIGHT, not in colour. Markdown and
+   Focus are states, not actions, and a coloured control on this bar would read as the third
+   thing you can do to the piece — beside Save and Publish, which are. `aria-pressed` is
+   already the truthful attribute for a switch, so it is the one the look hangs off rather
+   than a class the island would have to add and remove in step with it. */
+[data-sheet-actions] [aria-pressed='true'] {
+  font-weight: 500;
+  color: #171717;
+}
+.dark [data-sheet-actions] [aria-pressed='true'] {
+  color: #fff;
+}
+
+/* THE ATTRIBUTES SHEET, and the one number both halves of it read.
+   `SlideOver` sets the width here rather than in its own class list because the canvas has
+   to hold exactly this much of its right edge clear, and a sheet 24rem wide beside a canvas
+   that reserved 20 would cover 64px of the writing with nothing to say so. One value, two
+   readers. */
+:root {
+  --admin-sheet-w: 24rem;
+}
+.admin-sheet {
+  width: 100%;
+  max-width: var(--admin-sheet-w);
+}
+/* STANDING BESIDE THE WORDS INSTEAD OF ON THEM. The attribute is written by the writing
+   sheet's island, in `admin/island/lib/sheet-open.ts`, and only when the panel is one the
+   writer opened AND the window is wide enough to give it room without narrowing the writing
+   column (`DOCK_AT` there is the 85rem the decision turns on; the server cannot make it,
+   because it is a question about the window). The column keeps its full measure and re-centres in what is left,
+   which moves the text once, on a deliberate click, instead of hiding a third of every line
+   for as long as the sheet is open. */
+[data-admin-sheet='docked'] .admin-canvas {
+  padding-right: var(--admin-sheet-w);
+}
+/* Docked, the action row's own toggle is on screen and clickable, so the panel's footer "Hide" key
+   is the second key of one name. Modal (narrower, or the publish step) it is the only way shut from
+   inside the dialog, so it stays. */
+[data-admin-sheet='docked'] [data-panel-shut-wrap] {
+  display: none;
+}
+/* On the canvas rather than under the attribute, or only the OPENING would be animated and
+   closing the sheet would snap the column back across 192px in one frame. */
+.admin-canvas {
+  transition: padding-right var(--dur-base) var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-canvas {
+    transition: none;
+  }
+}
+/* MILLED OUT OF THE CASE, rather than butted against it behind a drawn line. The rail used
+   to end in a 1px border — the same hairline the sheet's own edge is drawn with, so the case
+   seam and the paper's edge were the same stroke and neither said which was structure. A
+   recess says it without a line: the working area sits a fraction below the plate around it,
+   which is where a recess is on anything you can pick up. Only from `lg`, because below it
+   there is no rail and the canvas has nothing to be recessed into. */
+@media (min-width: 64rem) {
+  .admin-canvas {
+    box-shadow: inset 1px 0 0 rgb(0 0 0 / 0.07), inset 7px 0 7px -7px rgb(0 0 0 / 0.09);
+  }
+  .dark .admin-canvas {
+    box-shadow: inset 1px 0 0 rgb(0 0 0 / 0.6), inset 7px 0 7px -7px rgb(0 0 0 / 0.7);
+  }
+}
+
+/* THE CASE: the rail, and the shell behind everything. White, the same white as the paper —
+   a white desk with white paper on it is not a thing that needs explaining, and the warm
+   canvas between them was already a step darker than both. What the seam needed was not a
+   different colour but a different KIND of edge, which is the recess above: structure is
+   shown by depth, a sheet's own edge by a hairline. Before, both were the identical 1px
+   line, so nothing said which of the two whites you could write on.
+
+   The cool `neutral-100` the shell used to carry is gone with it: on the one screen where
+   the shell shows through, a cool plate beside a warm canvas is a seam doing nothing. */
+.admin-case {
+  background: #ffffff;
+}
+.dark .admin-case {
+  background: #171717;
+}
+/* The phone's top bar is the same plate, translucent because the page scrolls under it. */
+.admin-bar {
+  background: rgb(255 255 255 / 0.95);
+}
+.dark .admin-bar {
+  background: rgb(23 23 23 / 0.95);
+}
+
+/* AND THE DIALOGS HUNG ON <body>, which are outside the shell: the Library's full-size view
+   and the picture picker drew Chrome's own blue ring on their keys (FIXLIST 7.6). */
+.admin-shell :focus-visible,
+dialog :focus-visible,
+[role='dialog'] :focus-visible {
+  outline: 2px solid #737373;
+  outline-offset: 2px;
+}
+.dark .admin-shell :focus-visible,
+.dark dialog :focus-visible,
+.dark [role='dialog'] :focus-visible {
+  outline-color: #a3a3a3;
+}
+/* The editor is a large writing surface, not a discrete button/input. Its card
+   already communicates the active workspace; the global admin focus ring would
+   draw a harsh rectangle around the public-width prose column.
+
+   BOTH surfaces, and the second one was missing for as long as markdown mode has
+   existed. The textarea carries Tailwind's `outline-none`, which loses to the rule
+   above on specificity — a utility is one class, `.admin-shell :focus-visible` is two
+   — so clicking into the markdown source drew a 2px rectangle around a column 60vh
+   tall — an ugly black frame around the writing area. Reported 2026-08-15. Written
+   here rather than as `!important` in the component, because the exception belongs
+   beside the rule it is an exception to. */
+/* All THREE writing surfaces, and the third was found by photographing the second. The
+   post title is a textarea set at 30px across the reading column; the admin's focus ring is
+   drawn for a discrete control, so clicking into a headline boxed it. Focus is still legible
+   on all three — a caret in a large field is what says where you are, which is the argument
+   the first two shipped under. */
+.admin-shell .ProseMirror:focus-visible,
+.admin-shell .write-surface:focus-visible,
+.admin-shell .md-source:focus-visible {
+  outline: none;
+}
+
+/* MARKDOWN SOURCE. The rich surface sets what a reader will see, so it renders in the
+   reading face at reading size (`fontPresetCss`). This one is the opposite: it shows the
+   SOURCE, where a run of `##` or a table's pipes only line up in a face whose characters
+   are all one width. It was inheriting the admin's Inter at 14px, which made a heading
+   marker and a list marker indistinguishable at a glance and left the whole mode reading
+   as a comment box rather than as an editor.
+
+   The mono face is the one already loaded for the editor's code button and its LaTeX
+   input, so this costs nothing new — and it is the same face the published page sets a
+   code block in, which is the point: source looks like source on both sides. */
+/* THE ONE PLACE BOTH BOXES ARE MEASURED. `admin/components/editor-source.ts` draws the text
+   twice: a mirror that dims the markers, and the textarea you actually type in over it. The
+   caret sits after the glyph the MIRROR drew. Every property below therefore has to be
+   identical for the two, which is why neither element sets any of them itself and why this
+   is one rule with two selectors rather than two rules that look the same today.
+
+   0.9375rem, up from 0.875: at 14px the source read as fine print beside a rich editor set
+   at reading size, and was reported as wanting to be a little larger. */
+.md-box {
+  font-family: var(--admin-mono);
+  font-size: 0.9375rem;
+  line-height: 1.8;
+  letter-spacing: 0;
+  tab-size: 2;
+  padding: 1rem;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+  margin: 0;
+  border: 0;
+}
+
+/* The mirror sits UNDER the textarea and is never interactive. `inset: 0` rather than a
+   height: the textarea is in flow and grows itself, so it is what gives the wrapper its
+   size and the mirror simply fills whatever that came to. */
+.md-mirror {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  color: #262626;
+}
+.dark .md-mirror {
+  color: #d4d4d4;
+}
+
+/* The MARKERS: `##`, `---`, the asterisks, the pipes, the pen's `==`. Dimmed rather than
+   coloured, because they are not a second kind of content — they are the scaffolding, and
+   what the writer is reading past them is the prose. Not italic: `<i>` is used for its
+   length, so the style has to be taken back. */
+.md-mirror i {
+  font-style: normal;
+  color: #a3a3a3;
+}
+.dark .md-mirror i {
+  color: #6b6b6b;
+}
+
+/* The typing layer. Its own text is invisible — the mirror is what you read — while the
+   caret has to stay visible, hence the explicit colour rather than `currentColor`, which
+   would resolve to the transparent one.
+
+   The selection tint is SEMI-TRANSPARENT for the same reason: a selection is painted on
+   this layer, above the mirror, so an opaque one would black out the very text it is
+   selecting. Measured at 22% — enough to read as a selection, sheer enough to read through. */
+.md-source {
+  position: relative;
+  background: transparent;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  caret-color: #171717;
+}
+.dark .md-source {
+  caret-color: #e5e5e5;
+}
+.md-source::selection {
+  background: color-mix(in srgb, #3b82f6 22%, transparent);
+}
+.typewriter-stage.has-typewriter-caret .ProseMirror {
+  caret-color: transparent;
+}
+.typewriter-caret {
+  position: absolute;
+  z-index: 2;
+  width: 0.5rem;
+  border-left: 2px solid #171717;
+  border-radius: 1px;
+  background: rgb(23 23 23 / 8%);
+  opacity: 0;
+  pointer-events: none;
+  transform-origin: left center;
+}
+.dark .typewriter-caret {
+  border-left-color: #f5f5f5;
+  background: rgb(245 245 245 / 12%);
+}
+.typewriter-stage.has-typewriter-caret .typewriter-caret {
+  opacity: 1;
+}
+/* THE BLINK, reworked 2026-08-24 on the owner's report that typing "nháy" — flickered.
+   Two changes, and the second is the one that matters.
+
+   It FADES rather than switching. `steps(1, end)` is a hard on/off, which is the strobe a
+   terminal cursor makes; over 1.2s with an ease it reads as breathing instead. It also
+   never reaches zero — a caret that disappears completely has to reappear, and the
+   reappearance is the flash. 0.18 is faint enough to read as "gone".
+
+   And it STOPS while the hands are moving (`is-typing`, held for 700ms past the last
+   keystroke by `key-feedback.ts`). A blink means "the cursor is here and nothing is
+   happening"; during a burst of typing something plainly is, so the blink is competing
+   with the writing for the same corner of the eye. A fast writer now never sees it. */
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-motion='on'] .typewriter-stage.has-typewriter-caret .typewriter-caret {
+    animation: typewriter-caret-blink 1.2s ease-in-out infinite;
+  }
+  :root[data-motion='on'] .typewriter-stage.has-typewriter-caret .typewriter-caret.is-typing {
+    animation: none;
+    opacity: 1;
+  }
+}
+@keyframes typewriter-caret-blink {
+  0%, 42% { opacity: 1; }
+  71% { opacity: 0.18; }
+  100% { opacity: 1; }
+}
+
+/* Native colour picker (admin theme): strip the default inner padding/border so
+   the swatch is one clean, obviously-clickable colour chip — clicking it opens
+   the browser's full colour picker (2D area + hue + HEX). */
+input[type='color'] {
+  -webkit-appearance: none;
+  appearance: none;
+  padding: 0;
+  cursor: pointer;
+}
+input[type='color']::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input[type='color']::-webkit-color-swatch {
+  border: none;
+  border-radius: 0;
+}
+input[type='color']::-moz-color-swatch {
+  border: none;
+  border-radius: 0;
+}
+
+/* iOS Safari zooms the whole page when a focused control is set below 16px, and every field
+   in this admin is text-sm (14px): tapping any input on a phone shifted the layout sideways
+   and left it there, once per field. A FLOOR on touch widths only, so the desktop keeps the
+   14px the kit was measured at. The editor is exempt because ProseMirror sets its own
+   reading size and is already above the threshold. */
+@media (max-width: 639px) {
+  /* ⚠️ NOT THE WRITING SURFACE. This rule is unlayered and the utilities are not, so it beat
+     the title's `text-3xl` and set the post's headline at 16px on a phone, smaller than an H2
+     in the body under it (seen 2026-09-23). The paper's fields set their own reading size,
+     which is already above the threshold iOS zooms at. */
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea:not(.write-surface) {
+    font-size: 16px;
+  }
+
+  /* ⚠️ AND THE LINE BOX IS PINNED, or the floor above changes every field's HEIGHT.
+     16px at the inherited 1.4286 is a 22.857px line, so a field that is 36px on a desktop
+     becomes 36.86 on a phone while the key standing beside it stays exactly 36 — measured
+     2026-09-16 on the header-menu rows and on the account tab's password row. Nobody can name
+     a 0.86px step and everybody can see the row is not level.
+
+     22px, so 6 + 22 + 6 + 2 = 36 and the two agree exactly. Single-line controls only: a
+     textarea's height is its rows TIMES this number, and pinning it there would resize every
+     multi-line box on a phone to fix an alignment it is not part of. */
+  input:not([type='checkbox']):not([type='radio']),
+  select {
+    line-height: 22px;
+  }
+}
+
+/* A scrollable area that CLIPS mid-row reads as broken — the cut-off chip in the tag
+   cloud was the owner's example. The fade says "there is more" without a border. A MASK,
+   not an overlay gradient: it works over any ground and never tints the content. Applied
+   to every max-height scroller in the admin; the 24px band is small enough that the last
+   line is still readable once scrolled to. */
+.scroll-fade {
+  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 24px), transparent);
+}
+
+/* A strip that scrolls under a finger but shows no bar. Used by the segmented tracks, which
+   are 32px tall — a scrollbar inside one is most of the control. The strip is still
+   scrollable; what is hidden is only the furniture. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* The same fade, sideways, for a strip that scrolls horizontally with its bar hidden. On a
+   phone the editor's key row ended in a button cut through the middle ("H2" sliced at the
+   glass) and the Analytics range read "All tim" — a layout fault to the eye, not "there is
+   more" (seen 2026-09-23).
+   ⚠️ DRIVEN BY THE STRIP'S OWN SCROLL, because a fixed fade would dim the last key of every
+   strip that FITS. A scroll timeline is inactive on a box that cannot scroll, so the animation
+   does not apply and the band is 0; on one that can, it is 24px until the end is reached.
+   A browser without scroll timelines draws no fade, which is what it drew before. */
+@property --fade-x { syntax: '<length>'; inherits: false; initial-value: 0px; }
+@keyframes fade-x-end { from, 98% { --fade-x: 24px; } to { --fade-x: 0px; } }
+.scroll-fade-x {
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - var(--fade-x)), transparent);
+  animation: fade-x-end linear both;
+  animation-timeline: scroll(self inline);
+}
+
+/* The settings tabs: seven labels, four of them past the edge at 375px, and the 24px band left
+   the cut-off word looking merely clipped (UX review 2026-10-08). A wider band says "this goes
+   on"; it is the same timeline, so it is gone at the end and on a desktop where the strip fits. */
+@keyframes fade-x-end-wide { from, 98% { --fade-x: 48px; } to { --fade-x: 0px; } }
+[data-settings-tabs].scroll-fade-x { animation-name: fade-x-end-wide; }
+
+/* A table in the WRITING SHEET scrolls. The editor was the one surface where a wide table
+   simply stuck out: measured at 344px, a four-column table reached 410px and took the page
+   with it.
+   ON THE WRAPPER, not on .ProseMirror. The reader's rule scrolls the whole prose
+   (`.prose:has(table){overflow-x:auto}`) and that is right for a page you only read — but
+   panning the WRITING surface sideways moves every paragraph away from the caret that is
+   still in one of them. ProseMirror already wraps each table in `.tableWrapper`, so the
+   table can pan while the words stay where they were put. */
+.ProseMirror .tableWrapper { overflow-x: auto; }
+
+/* EVERY CONTROL ANSWERS A FINGER AT THE SAME SPEED.
+   Measured 2026-08-28: 92 kinds of control across the admin changed colour on hover with no
+   transition at all, so they snapped while their neighbours eased — which is most of what
+   "máy móc" means when somebody says an interface feels mechanical. It was never a decision;
+   it was 92 places that each had to remember, and most did not.
+   `:where()` on purpose: it makes this selector specificity ZERO, so any utility a component
+   states for itself wins outright — the sidebar keeps its `transition-[width] duration-200`,
+   a button keeps whatever it declares. This is a floor, not a rule.
+   Only the properties a hover actually changes. Not `all`: transitioning layout is how a
+   list starts sliding about when a row is added, and this admin has lists that grow.
+   The gates at the foot of this file switch it off with everything else. */
+/* AND THE TWO STATE MARKS THAT ARE NOT CONTROLS. The floor below lists the things a finger
+   uses, which is right for a floor and leaves out every span and div the island repaints. Two
+   of those carry a STATE rather than decoration, so both were changing by jumping (2026-09-20):
+   the pilot lamp — `LAMP_SHAPE` in `admin-shared/kit.ts` carries `transition-colors` for it —
+   and a row that goes dead when the feature behind it has no engine, which the island dims by
+   toggling one utility on a div. */
+[data-dim-when] {
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.admin-shell :where(a, button, select, input, textarea, summary, label, [role='button'], [role='switch']) {
+  transition-property: color, background-color, border-color, text-decoration-color, outline-color, fill, stroke, opacity, box-shadow;
+  transition-duration: var(--dur-fast);
+  /* ⚠️ var(--ease-out), the token this product declares, NOT the framework's own default.
+     This read cubic-bezier(0.4, 0, 0.2, 1) while the reading site's floor read the keyword
+     `ease` and the token said a third thing — one job, three curves (2026-09-20). */
+  transition-timing-function: var(--ease-out);
+}
+
+/* The fader. A native range wears the OS accent and a pill thumb; this one is the hi-fi
+   slide from the control grammar: a carved groove, and a rectangular ink knob standing
+   proud of it. Drawing that means all four vendor pseudo-elements — the price of relief on
+   the one control the browser will not shade. Keep track and thumb metrics in step across
+   the webkit/moz pairs; they cannot share a rule. */
+.fader { -webkit-appearance: none; appearance: none; height: 1.5rem; background: none; }
+.fader::-webkit-slider-runnable-track {
+  height: .55rem; border-radius: 999px; border: 1px solid #d4d4d4; background: #f5f5f5;
+  box-shadow: inset 0 1.5px 2.5px rgb(0 0 0 / .12);
+}
+.fader::-webkit-slider-thumb {
+  -webkit-appearance: none; width: .8rem; height: 1.4rem; border-radius: .25rem;
+  /* Measured off a 2x screenshot, not derived: the arithmetic answer (-.36rem, half the
+     track less half the thumb) still painted the knob ~3px low, because WebKit hangs the
+     thumb from the track's CONTENT box and then rounds. This value is the one that
+     photographs centred. */
+  background: #171717; margin-top: -.54rem;
+  box-shadow: 0 1px 2px rgb(0 0 0 / .35), inset 0 1px 1px rgb(255 255 255 / .4), inset 0 -1.5px 2px rgb(0 0 0 / .35);
+}
+.fader::-moz-range-track {
+  height: .55rem; border-radius: 999px; border: 1px solid #d4d4d4; background: #f5f5f5;
+  box-shadow: inset 0 1.5px 2.5px rgb(0 0 0 / .12);
+}
+.fader::-moz-range-thumb {
+  width: .8rem; height: 1.4rem; border: 0; border-radius: .25rem; background: #171717;
+  box-shadow: 0 1px 2px rgb(0 0 0 / .35), inset 0 1px 1px rgb(255 255 255 / .4), inset 0 -1.5px 2px rgb(0 0 0 / .35);
+}
+.dark .fader::-webkit-slider-runnable-track { border-color: #404040; background: #1c1c1c; box-shadow: inset 0 1.5px 2.5px rgb(0 0 0 / .55); }
+.dark .fader::-webkit-slider-thumb { background: #f5f5f5; box-shadow: 0 1px 2px rgb(0 0 0 / .6), inset 0 1px 1px rgb(255 255 255 / .55), inset 0 -1.5px 2px rgb(0 0 0 / .25); }
+.dark .fader::-moz-range-track { border-color: #404040; background: #1c1c1c; box-shadow: inset 0 1.5px 2.5px rgb(0 0 0 / .55); }
+.dark .fader::-moz-range-thumb { background: #f5f5f5; box-shadow: 0 1px 2px rgb(0 0 0 / .6), inset 0 1px 1px rgb(255 255 255 / .55), inset 0 -1.5px 2px rgb(0 0 0 / .25); }
+
+/* --- Settings: explanations off ---------------------------------------------------------
+   Thirty-seven groups of controls, each setting carrying a sentence or three between its
+   label and its control — measured 2026-09-04 at 16-30% of the vertical space in the cards,
+   30% on Reading. The owner's words were that it made the screen hard to read, and the copy
+   itself is not the problem: it is right where you do not want it when you already know what
+   a switch does and just want to reach it.
+
+   So it hides, per DEVICE, the way the rail's icons and its collapsed state do. Nothing is
+   deleted and nothing is translated away — the sentences are still in the eleven
+   dictionaries, the settings search still MATCHES on them (a person who describes rather
+   than names still finds the row), and one click brings them all back.
+
+   `.admin-note` rides on `NOTE_TEXT` in `scale.ts` — see the note there for why it is on the
+   token rather than on two dozen call sites, and why `NOTE_ALERT` is deliberately left out
+   of it. `.tab-hint` marks a line that is wayfinding rather than explanation, and is exempt:
+   the sentence under the Advanced key says what is folded behind it (`advancedBand` in
+   `settings-shell.ts`), and a key whose contents cannot be guessed is a key nobody opens. The
+   line that stands in for a table control the chosen theme draws itself (`ownable` in
+   `settings-post.ts`) is exempt for the same reason: hidden, a bare label would sit there.
+   (The name is older than both: it marked the sentence each tab printed under the strip
+   until ADR 0073 took that line away.) */
+/* THE UNCHOSEN LABEL ON A CARVED SEGMENT TRACK, which has to satisfy two numbers at once and
+   sits between two Tailwind steps.
+
+   The track is neutral-200, so the label must clear 4.5:1 against it to be read at 13px; the
+   chosen label is near-black on a white key, and the two labels must stay at least 3:1 apart
+   or the strip stops saying which one is chosen (`tour-flows-css.ts` holds that). Measured:
+   neutral-500 gives 3.76 on the track and 4.2 between the labels; neutral-600 gives 6.2 and
+   2.53 — each step passes one test and fails the other. #656565 reads 4.63 on the track and
+   3.40 between the labels, which is the only band that clears both, and there is no Tailwind
+   step inside it. Dark is untouched: on the dark track neutral-400 already measures 6.94. */
+.seg-off { color: #656565; }
+.dark .seg-off { color: var(--color-neutral-400, #a3a3a3); }
+
+/* LIGHT-MODE SMALL PRINT. `text-neutral-500` (#737373) measures 4.39:1 on the paper canvas
+   (#f7f6f4) at 12-13px, which is where the kit note (`kit-note`), the meta lines and the
+   quiet links all sit. One step darker, to #6b6b6b (5.0:1 on paper, 5.3:1 on a white card),
+   is the smallest move that clears 4.5 and is done HERE rather than at each call site so
+   every use is fixed at once. It lives INSIDE `@layer utilities`, after the utility it adjusts:
+   an unlayered rule would beat every layered utility and flatten `hover:text-*` on the same
+   element. `:where()` keeps it at one class, so it wins over `.text-neutral-500` by order and
+   loses to a hover or `dark:` variant at (0,2,0). Dark needs nothing: neutral-400 on #0f0f0f
+   is above 7:1. */
+@layer utilities {
+  :where(html:not(.dark)) .text-neutral-500 { color: #6b6b6b; }
+}
+
+/* A ROW CHECKBOX is drawn 16px and must be hit at 24px on a phone or any coarse pointer.
+
+   The INPUT is the target and is made 24px itself, with no pseudo-element on it: an `<input>` is
+   a replaced element, and a `::before` on one is not drawn by every engine, so a hit area built
+   from one worked in Chromium and was a 16px target elsewhere. Here the input grows by a 4px
+   TRANSPARENT border on every side, its background is clipped to the padding box (the 16px the
+   box has always been) and the 1px edge is an inset shadow on that box, so the drawn square is
+   the same 16px. A -4px margin gives the 4px back, so the 16px wrapper, the row and the tick
+   drawn over it do not move. The edge colour is a variable so the checked and dark looks only
+   restate a colour. The focus ring moves from a box-shadow (which would be drawn around the
+   24px) to an outline offset back onto the 16px, the same 2px ring in the same place. */
+@media (max-width: 48rem), (pointer: coarse) {
+  .kit-tick {
+    --tick-edge: var(--color-neutral-300);
+    --tick-ring: var(--color-neutral-300);
+    box-sizing: border-box; width: 1.5rem; height: 1.5rem; margin: -4px;
+    border: 4px solid transparent; border-radius: 8px; background-clip: padding-box;
+    --u-inset-shadow: inset 0 0 0 1px var(--tick-edge);
+  }
+  .kit-tick:checked { --tick-edge: var(--color-neutral-900); }
+  .dark .kit-tick { --tick-edge: var(--color-neutral-600); --tick-ring: var(--color-neutral-700); }
+  .dark .kit-tick:checked { --tick-edge: var(--color-white); }
+  .kit-tick:focus-visible {
+    --u-ring-shadow: 0 0 #0000; outline: 2px solid var(--tick-ring); outline-offset: -4px;
+  }
+  /* A native box (the Cloudflare card) cannot be resized without changing the drawn square, so
+     its LABEL reaches 6px past the box on the left and gives the same 24px to a thumb. */
+  .kit-native-tick { margin-left: -6px; padding-left: 6px; }
+  /* FORCED COLOURS drop the inset-shadow edge and paint the transparent 4px border in a system
+     colour, which would turn the 16px box into a 24px square with a heavy frame. The border goes
+     back to the page colour and the 1px edge is an outline hugging the 16px from inside it; the
+     checked box is filled with Highlight and a focused one keeps the thicker outline. */
+  @media (forced-colors: active) {
+    .kit-tick { border-color: Canvas; outline: 1px solid CanvasText; outline-offset: -5px; --u-inset-shadow: 0 0 #0000; }
+    .kit-tick:checked { background-color: Highlight; outline-color: Highlight; }
+    .kit-tick:focus-visible { outline: 2px solid Highlight; outline-offset: -4px; }
+  }
+}
+
+/* BELOW lg THE SHELL IS A COLUMN, so a short page (the trash, an empty list) still fills the
+   glass: the canvas takes what the rail leaves, and the paper colour reaches the bottom edge
+   instead of stopping where the content does and showing the page ground under it. From lg
+   the shell is already a locked flex row. */
+@media (max-width: 63.999rem) {
+  .admin-shell { display: flex; flex-direction: column; min-height: 100dvh; }
+  .admin-shell > .admin-canvas { flex: 1 1 auto; }
+}
+
+/* THE ADVANCED KEY'S CHEVRON points down while the band is shut and up while it is open, read
+   off the key's own `aria-expanded` so the picture and what a screen reader is told cannot
+   disagree. The island moves both (`island/lib/settings-advanced.ts`). */
+[data-advanced-toggle][aria-expanded='true'] .advanced-chevron { rotate: 180deg; }
+
+[data-explanations='off'] .admin-note:not(.tab-hint) { display: none; }
+/* And the HOLE it leaves. Tailwind's `space-y-*` is `& > :not([hidden]) ~ :not([hidden])`,
+   and an element with `display: none` still matches `:not([hidden])` — so a card whose first
+   child is its opening sentence kept that sentence's share of the stack after the sentence
+   was gone, and every such card opened with a blank strip under its title. Only the first
+   child needs this: a note anywhere else is the LAST thing in its own little block. */
+[data-explanations='off'] .admin-note:not(.tab-hint):first-child + * { margin-top: 0; }
+
+/* And the ROW, once the sentence between the label and the control is gone.
+   `Setting` and `ui/Input` both lay a setting out as `justify-between`: the label takes the
+   free space, the control is pushed to the far end. That reads well with a note in the
+   middle and badly without one — the owner's screenshot of Storage was a label at the left
+   edge of a 560px card, a "0" box at the right edge, and nothing in between. His words were
+   "thu hẹp mỗi dòng lại": bring the row in.
+
+   The first answer was a 12rem floor under the head, so that a label shorter than that still
+   reserved the column and every control started at the same x. It did not hold, and the three
+   ways it failed were all measured on the Blog tab at 1440 on 2026-09-12, in ONE card:
+
+     294  the site title, its description and the canonical address (stacked fields, which are
+          not `.setting-row` at all and so never saw the rule)
+     502  the language, the timezone and the excerpt length (the 12rem column)
+     753  "show the description" (a switch, pinned to the far end)
+
+   Three left edges in six rows, and the floor's own cost on top: a 55px label reserving 192px
+   puts 137px of nothing between "Múi giờ" and the box it belongs to, which is what was
+   reported — the words too far from the field.
+
+   So with the sentence gone the row simply STACKS, like the text fields it sits among, and
+   every control in the card starts at the card's own left edge. Nothing is invented: it is
+   the layout the fields beside it already had, extended to the rows that were holding out.
+   The gap between the words and the control is `FIELD_GAP`, the same 8px a text field uses.
+
+   A BOOLEAN is the exception and keeps its far end (`.switch-row`). Its control column is
+   then the card's right edge — an edge the card already draws — so it aligns with the right
+   edge of every full-width field above it, and a card of nine toggles stays a list instead of
+   becoming nine labels with a switch stranded under each.
+
+   Only with explanations OFF. With them on the head is holding a paragraph, the control at
+   the far end is what the paragraph fills the space in front of, and stacking would put a
+   two-line sentence between a label and its control. */
+[data-explanations='off'] .setting-row:not(.switch-row) { display: block; }
+[data-explanations='off'] .setting-row:not(.switch-row) > :last-child { margin-top: 0.5rem; }
+/* And the switch keeps the far end it already had, centred on its label rather than hung from
+   the top of it: with the sentence hidden the head is one 20px line beside a 24px switch, and
+   `items-start` left them 2px out. */
+[data-explanations='off'] .switch-row { align-items: center; }
+/* And the HEIGHT of it, which is the half that was actually complained about.
+   A `ToggleRow` is a `Setting` wearing `p-4`: 16px of air above and below a 24px switch, so a
+   row that says "Table of contents · on" is 65px tall and a card of nine of them is 585px of
+   mostly nothing. That padding is not decoration when the explanation is there — it is what
+   keeps a two-line sentence off the rule above it. With the sentence gone it is padding around
+   padding, and the owner's word for the result was "bự": huge.
+   8px here plus the 8px of slack below takes a switch row from 65px to 42px — nine of them in
+   the Reading card, 585px down to 378. The switch itself is unchanged at 24px, which is what a
+   finger actually aims at; the row around it was never the tap target. Keyed on `p-4` so it
+   reaches the padded rows and leaves the bare ones (a plain `ui/Input` row has no padding of
+   its own) at the height they already had. */
+[data-explanations='off'] .setting-row.p-4 { padding-block: 0.5rem; }
+/* And the SIDES of that same padding, which belong to the list and not to the row.
+   `PANEL_LIST` runs full width (`-mx-4`) and its rows pad 16px back in, so a switch in a
+   ruled list lands exactly on the card's content edge. A `ToggleRow` standing on its own
+   carries the same `p-4` with no `-mx-4` under it, so its switch stops 16px short — measured
+   on the Posts tab, "Hiện chú thích" ending at 1338 against "Dòng kẻ sọc" at 1354 and every
+   field in both cards at 1354. One column, or it is not a column. */
+.switch-row.p-4 { padding-inline: 0; }
+.panel-list .switch-row.p-4 { padding-inline: 1rem; }
+/* The other 8px, and it is invisible until you measure: the control's wrapper is a block, so
+   the 24px switch inside it sits in a 32px line box and the row pays for six pixels of
+   descender space that nothing is using. `flex` takes the line box out of it. */
+[data-explanations='off'] .setting-row > :last-child { display: flex; padding-top: 0; }
+/* A stacked row's control wrapper is `flex` by the line above, which would stretch a 112px
+   number field to the width of the card. Left, and only as wide as it asked to be. */
+[data-explanations='off'] .setting-row:not(.switch-row) > :last-child { justify-content: flex-start; }
+/* And the strip at each end of a list card. `PANEL_LIST` runs full width (`-mx-4`) inside a
+   body that pads 16px all round, so above the first row and below the last there is a band of
+   nothing between the card's own rule and the first row — 32px a card, near 200px on a tab of
+   six. Pull the list over that padding; the header's rule and the card's edge draw the two
+   lines the list itself no longer does. */
+/* ⚠️ SCOPED TO THE CARD'S OWN BODY (`.card-body >`), not to any first child.
+   The pull exists to swallow the CARD's 16px of padding, and `:first-child` alone matched a
+   list that happened to open any wrapper — which after the settings regrouping (ADR 0041) put
+   a group heading and its first switch on the same line: `SettingsGroup` renders a title and
+   then a list, and the list is the first child of the div inside it, with no card padding
+   above it to swallow. Measured on the Posts tab, "After the last word". */
+[data-explanations='off'] .card-body > .panel-list:first-child { margin-top: -1rem; }
+[data-explanations='off'] .card-body > .panel-list:last-child { margin-bottom: -1rem; }
+
+/* A LAMP ON STANDBY. One meaning only: scheduled — it has not happened yet, and nothing is
+   wrong. 2s in and out, which reads as breathing rather than as a blink; a blink is an alarm.
+   Inside the same motion gate every other keyframe in this file sits behind, so an owner who
+   switched motion off gets a steady lamp and loses nothing but the animation. */
+@keyframes admin-lamp-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .45; }
+}
+.lamp-pulse { animation: admin-lamp-breathe 2s ease-in-out infinite; }
+
+/* THE RAIL'S GLYPH SIZE, set on the surface rather than at twenty-one call sites.
+   Every glyph in the admin is drawn at `var(--admin-glyph, 1.25rem)`: `icon()` in
+   `web/admin/kit.ts` puts that pair of sizes on the `<svg>` it wraps around the shared set in
+   `src/icons.ts`, and the rail writes the same pair itself in `web/admin/rail-rows.ts`.
+   20px is right in a 14px
+   context (a media tile's keys, a table row's actions); the rail sits one step lower at 18px
+   because its glyph shares a 40px row with a label of the same 14px and a 20px mark out-weighed
+   the word it belongs to. Stroke 1.8 of 24, which is 1.35px at this size. */
+.rail-glyphs { --admin-glyph: 1.125rem; }
+
+/* ═══ THE RAIL'S STATES, AS CSS ═══════════════════════════════════════════════════════════
+
+   The rail is one DOM whatever state it is in (`web/admin/rail.ts`), and these rules are the
+   other half of that decision. Four attributes on <html>, written before the first paint by
+   `railBootScript`, and afterwards by the island:
+
+     data-rail-collapsed  1 = 72px of glyphs, 0 = 208px with words
+     data-rail-icons      0 = words alone, beside the labels only (see below)
+     data-rail-more       1 = "everything else" stands open
+     data-rail-arranging  1 = rows can be picked up, and the rail is wider to say so
+     data-rail-logo/search  0 = that piece of the top row is switched off
+
+   WHY NOT REDRAW. Until 2026-09-14 the rail was React and drew a different tree per state, so
+   collapsing it rebuilt eleven rows, four SVGs and a menu. Here it sets one character. Nothing
+   is rebuilt, so nothing can be rebuilt wrongly — and, the part that is visible, the server can
+   send a rail it cannot know the state of and have it arrive in the right one anyway.
+
+   SCOPE IS THE WHOLE DIFFICULTY. `collapsed` is about the STICKY COLUMN and nothing else: the
+   phone's drawer is always full width with its words showing, and a rule that forgot to say
+   `#admin-rail` emptied it. `icons` is about BOTH, because it is a preference about density and
+   the drawer honours it. Every selector below says which it means. */
+
+/* --- the width, and it only exists from `lg` up, where the column is drawn at all --------- */
+@media (min-width: 64rem) {
+  #admin-rail { width: 13rem; }
+  /* WIDER WHILE ARRANGING, and it is a measurement rather than a preference: the grip and the
+     two steppers take 62px off a 208px rail, which left "Everything else" as "Ever…" and
+     "Collapse sidebar" as "Collapse sid…". A row you cannot read is a row you cannot place.
+     256px puts every label back and returns to 208 on the way out. */
+  :root[data-rail-arranging='1'] #admin-rail { width: 16rem; }
+  /* Last, because collapsed wins: arrange mode belongs to the open rail and simply does not
+     draw on a shut one. */
+  :root[data-rail-collapsed='1'] #admin-rail { width: 4.5rem; }
+}
+
+/* --- open: the gap between a glyph and its word ------------------------------------------
+   12px, the same gap every label in this rail starts its words at, and it is a RULE rather
+   than a utility on the row because the collapsed rail has to take it away — an unlayered rule
+   beats `@layer utilities`, so a `gap-3` in the markup would have won and the shut rail's
+   glyphs would sit off centre. Missed on the first pass and caught by photographing the two
+   rails side by side: every label had moved 12px left, which no assertion about rows, labels
+   or hrefs could see. */
+.rail-row { gap: .75rem; }
+/* The group row carries TWO glyphs — its own, and the chevron that says which way it moves —
+   so the chevron goes to the FAR edge and the label keeps the column's left edge. The face is
+   glyph-and-word, and it takes the SAME 12px gap the destinations above it use: at 10px this
+   row's label began 2px to their left, which is a rail with two left edges for its words. */
+.rail-more { justify-content: space-between; gap: .5rem; }
+.rail-more-face { gap: .75rem; }
+:root[data-rail-collapsed='1'] #admin-rail .rail-more-face { gap: 0; }
+/* The 40px this used to restore when the rail shut is the row's own height now that the group
+   row is set like the destinations above it (`SIDEBAR_GROUP` in `admin-shared/rail.ts`). */
+
+/* THE GROUP'S INDENT IS ONE STEP OF 16px. Its guide line stands on the left edge of the glyph
+   boxes above it (the group's 12px margin on the rail's 12px padding), and the rows inside begin
+   a 1px line plus 3px past it, so a sub-row's glyph starts 16px right of a destination's and its
+   label 16px right of theirs. It was a 4px pad: 17px of step, one off the 4px grid the rest of
+   the column keeps. */
+.rail-group { padding-left: 3px; }
+/* The current-page bar inside the group is centred ON the guide line (1px at the group's edge,
+   so a 3px bar starts 1px before it and ends 1px after), where the destinations' bar is centred
+   in the rail's 12px gutter. At the gutter's offset it landed 0.5px off the line: a thick stroke
+   beside a thin one rather than one stroke. The collapsed rail has no guide, so it keeps the
+   gutter's offset. */
+:root[data-rail-collapsed='0'] #admin-rail .rail-group [aria-current='page']::before,
+.admin-drawer .rail-group [aria-current='page']::before { left: -5px; }
+
+/* A zone's floor only exists while something is being arranged. It is a DROP TARGET, and at
+   rest it was 12px of nothing between the destinations and the group — which made the phone's
+   drawer 32px taller than it had been. */
+.rail-floor { display: none; }
+:root[data-rail-arranging='1'] .rail-floor { display: block; }
+
+/* --- shut: the words go, the glyphs centre ------------------------------------------------ */
+:root[data-rail-collapsed='1'] #admin-rail .rail-label,
+:root[data-rail-collapsed='1'] #admin-rail .rail-chord,
+:root[data-rail-collapsed='1'] #admin-rail .rail-more-chevron,
+/* Never on the collapsed rail, where it would be an unlabelled glyph offering to remove the
+   glyphs — and where switching them off would leave a column of nothing at all. */
+:root[data-rail-collapsed='1'] #admin-rail .rail-icons-switch { display: none; }
+:root[data-rail-collapsed='1'] #admin-rail .rail-row { justify-content: center; gap: 0; }
+:root[data-rail-collapsed='1'] #admin-rail .rail-top { flex-direction: column; align-items: center; gap: .5rem; }
+:root[data-rail-collapsed='1'] #admin-rail .rail-strip { justify-content: center; }
+/* Collapsed, there is nothing to indent: the group's rows join the column they came from.
+   `display: contents` is exactly that — the wrapper stops existing for layout.
+   ⚠️ AND ONLY WHILE THE GROUP IS OPEN. Written as `[data-rail-collapsed='1'] #admin-rail
+   .rail-group`, this out-specified the rule that hides a folded group — an id beats an
+   attribute — so shutting the rail unfolded seven rows nobody had asked for. Caught by
+   counting the rows a person can SEE in each state rather than by reading the DOM. */
+:root[data-rail-collapsed='1'][data-rail-more='1'] #admin-rail .rail-group { display: contents; }
+/* LEFT PADDING ONLY, and only when the rail is open: the word's first letter starts where the
+   glyphs below it start. A row's glyph box begins 12px in (the row's own padding) and the
+   widest glyph inks (frames: mail, image) begin 2 of their 24 units inside that box, so the
+   word is padded by the row's 12px plus 2/24 of the glyph size. Measured at 18px glyphs: the
+   word's ink at 25.5px, the frames' at 25.5px; it was 24.4 at a flat 12px, 1.1px nearer the
+   rail's edge than any glyph under it. Collapsed the mark is centred in a 72px rail, where a
+   one-sided pad would push it off centre. */
+:root[data-rail-collapsed='0'] #admin-rail .rail-wordmark { padding-left: calc(.75rem + var(--admin-glyph) / 12); }
+/* The way back out points the other way. */
+:root[data-rail-collapsed='1'] #admin-rail .rail-collapse-chevron { rotate: 180deg; }
+/* The owner's menu sits at the END of the strip on an open rail and in the MIDDLE of a shut
+   one, where there is no end to sit at: 72px holds one row of centred keys. */
+.rail-strip-end { margin-left: auto; }
+:root[data-rail-collapsed='1'] #admin-rail .rail-strip-end { margin-left: 0; }
+
+/* ⚠️ A CHORD IS TWO SPELLINGS AND THIS PICKS, before the first paint, off the `data-mac` the
+   boot script writes on `<html>`. It used to be a `textContent` swap on `DOMContentLoaded` —
+   one beat after the paint — so every admin page opened printing `Ctrl+Shift+K` and then
+   narrowed to `⌘⇧K`. The search key shares its row with the wordmark and the wordmark's box is
+   `min-w-0 truncate`, so the wider chord squeezed the logo and the swap let it spring back:
+   filmed on a navigation between two admin screens, the logo jumps size on every load. */
+.chord-mac { display: none; }
+:root[data-mac='1'] .chord-mac { display: inline; }
+:root[data-mac='1'] .chord-other { display: none; }
+/* A phone has no keyboard to press the chord on: the badge is noise there (2026-09-30). */
+@media (hover: none) and (pointer: coarse) { .rail-chord { display: none; } }
+
+/* The wordmark is `Q.` at 72px and `quireINK` above it: the same logo at the size where the
+   word would be a smear. Both are in the markup; this picks. */
+#admin-rail .rail-mark,
+:root[data-rail-collapsed='1'] #admin-rail .rail-word { display: none; }
+/* ⚠️ THE WORD IS CENTRED ON ITS LETTERS, NOT ON ITS BOX. `quireINK` has a descender on the `q`
+   and the viewBox carries it: the box runs from y=-78.8 to y=23.6 while the letters run from
+   the cap line to the baseline, -76.82 to 0. Centring the box therefore hangs the visible word
+   ABOVE the line everything beside it sits on. Measured in the open rail at 1600x1000: the
+   letters' middle landed at 37.89px against the search key's 40.00 — 2.11px high, which is
+   exactly half the descender and is why it read as "the logo is not on the same axis as
+   search".
+
+   A PERCENTAGE of the word's own height, like the mark's nudge below: the descender is 21.6 of
+   the viewBox's 102.4 units, so half of it is 10.55%, and that stays true at any height. */
+#admin-rail .rail-word { translate: 0 10.55%; }
+/* ⚠️ AND THE COLLAPSED MARK MUST NOT BE CLIPPED BY ITS OWN WRAPPER. The wrapper truncates,
+   which is right for a five-letter word in a narrow rail and wrong for a fixed glyph: shut, it
+   shrinks to exactly the mark's 27.83px, and the 10.9% nudge below then pushes 3.03px of the
+   mark past its right edge, where `overflow: hidden` cuts it. Measured: the dot's right edge
+   landed at 120.49px against a wrapper ending at 117.91 — 2.58px of the red full stop gone.
+   Collapsed there is nothing to truncate, so nothing should be hidden. */
+:root[data-rail-collapsed='1'] #admin-rail .rail-wordmark-box { overflow: visible; }
+:root[data-rail-collapsed='1'] #admin-rail .rail-mark {
+  display: block;
+  /* ⚠️ THE LETTER IS CENTRED, NOT THE BOX. `Q.` is a Q plus a red dot that hangs off its right,
+     and the dot is inside the SVG's box — so a mark centred on its box puts the Q 3.04px left of
+     the column every icon below it stands on. Measured in the collapsed rail at 22px: box centre
+     36.00, Q centre 32.96, icons 36.00. Reported by eye first.
+
+     A PERCENTAGE of the mark's own width, not a pixel count: 13.09 of the viewBox's 120.1 units
+     is 10.9%, and that stays true if the mark is ever set at another height. The dot overhangs to
+     the right, which is what a dot after a letter does. */
+  translate: 10.9% 0;
+}
+/* The drawer and the phone bar are never collapsed, whatever the column is doing. */
+.admin-drawer .rail-mark, .admin-bar .rail-mark { display: none; }
+
+/* --- the glyphs, BESIDE THE LABELS ------------------------------------------------------- */
+/* ⚠️ Beside its LABELS, which is why the collapsed rail ignores this and always draws them. A
+   collapsed rail has no labels — icons are the only thing it can be. The first version of this
+   read the setting as "no icons anywhere", so it had to hide the collapse control too, and the
+   next report was that it could not be found. Two separate wishes: one is about how the rail
+   reads, the other is about getting 208px back. */
+:root[data-rail-icons='0'] .rail-glyph { display: none; }
+:root[data-rail-icons='0'] #admin-rail .rail-icons-on,
+:root[data-rail-icons='1'] #admin-rail .rail-icons-off { display: none; }
+:root[data-rail-collapsed='1'] #admin-rail .rail-glyph { display: flex; }
+
+/* --- the group ---------------------------------------------------------------------------- */
+:root[data-rail-more='0'] .rail-group { display: none; }
+/* In arrange mode it is FORCED OPEN: its rows are half of what is being arranged, and a folded
+   group would hide them behind a toggle whose own row is being dragged at the time. */
+:root[data-rail-arranging='1'] .rail-group { display: flex; }
+:root[data-rail-more='0'] #admin-rail .rail-more-chevron { rotate: -90deg; }
+:root[data-rail-more='1'] #admin-rail .rail-more-chevron { rotate: 90deg; }
+/* The drawer carries its own copy of the column and reads the same preference. */
+:root[data-rail-more='0'] .admin-drawer .rail-more-chevron { rotate: -90deg; }
+:root[data-rail-more='1'] .admin-drawer .rail-more-chevron { rotate: 90deg; }
+
+/* --- the two switches on the top row ------------------------------------------------------ */
+/* Search is CHROME when the wordmark is on: a small key balanced against the mark. Switch the
+   wordmark off and that balance has nothing to balance against — one glyph floating over a
+   column of left-aligned labels — so it becomes what everything else at that edge is: a row,
+   above Home, with its label and its chord. ONE control in two dresses, both in the markup. */
+.rail-search-row { display: none; }
+:root[data-rail-logo='0'] .rail-top { display: none; }
+:root[data-rail-logo='0'] .rail-search-row { display: flex; }
+:root[data-rail-search='0'] .rail-search-key,
+:root[data-rail-search='0'] .rail-search-row { display: none; }
+/* `mt-6` only when there IS a top row: with the wordmark switched off the column starts at the
+   top of the rail, and the gap would be air over nothing. */
+:root[data-rail-logo='1'] #admin-rail .rail-column { margin-top: 1.5rem; }
+
+/* --- the theme key's two faces ------------------------------------------------------------ */
+/* Which one is right is decided by the `dark` class the no-flash script has already written,
+   so both are in the markup and neither is ever drawn wrongly for a frame. */
+.rail-moon { display: none; }
+.dark .rail-sun { display: none; }
+.dark .rail-moon { display: block; }
+
+/* --- the phone's burger ------------------------------------------------------------------- */
+.rail-cross { display: none; }
+[data-rail-open] .rail-burger { display: none; }
+[data-rail-open] .rail-cross { display: block; }
+
+/* --- arrange mode: what the markup already holds, unhidden ------------------------------- */
+/* Reading, the foot is one strip of icon keys. ARRANGING, it is back to labelled rows: a 32px
+   glyph is not something a hand can pick up and place, and the whole mode is about picking rows
+   up. Both are in the markup; this is the swap. */
+.rail-foot-rows, .rail-arrange-foot { display: none; }
+:root[data-rail-arranging='1'] #admin-rail .rail-strip { display: none; }
+:root[data-rail-arranging='1'] #admin-rail .rail-foot-rows,
+:root[data-rail-arranging='1'] #admin-rail .rail-arrange-foot { display: flex; }
+:root[data-rail-arranging='1'] #admin-rail .rail-arrange-foot { flex-direction: column; }
+/* A tick rather than a coloured switch: it reads the way the rail's other preferences do and
+   needs no colour to say which state it is in. */
+.rail-tickbox { border-color: var(--color-neutral-300, #d4d4d4); color: transparent; }
+.dark .rail-tickbox { border-color: var(--color-neutral-600, #525252); }
+[aria-checked='true'] > .rail-tickbox {
+  border-color: var(--color-neutral-900, #171717);
+  background: var(--color-neutral-900, #171717);
+  color: #fff;
+}
+.dark [aria-checked='true'] > .rail-tickbox {
+  border-color: #fff;
+  background: #fff;
+  color: var(--color-neutral-900, #171717);
+}
+
+/* --- arrange mode, which the island builds --------------------------------------------------
+   The grip and the two steppers on eighteen rows are ~14 KB of SVG for a mode entered twice a
+   year, so they are not in the markup — the island adds them on the way in. These are the rules
+   they land into.
+
+   `touch-action: none` is load-bearing on a touch screen: without it the browser claims the
+   gesture for scrolling the instant the finger moves vertically, which is every drag in a
+   vertical list. The wrapped row is inert while arranging, so a press anywhere along it is a
+   grab rather than a click on the link inside. */
+.rail-arrangeable {
+  display: flex;
+  align-items: center;
+  gap: .125rem;
+  border-radius: .5rem;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.rail-arrangeable > .rail-carried { min-width: 0; flex: 1; pointer-events: none; }
+.rail-arrangeable[data-held] {
+  position: relative;
+  z-index: 10;
+  cursor: grabbing;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / .16);
+}
+.dark .rail-arrangeable[data-held] { background: var(--color-neutral-800, #262626); }
+.rail-grip { flex-shrink: 0; color: var(--color-neutral-400, #a3a3a3); }
+
+/* An empty list still has to be reachable: move every row out of "Everything else" and the
+   group becomes a zero-height div with no rows to aim at, so the list would be closed for
+   good. Each zone gets a floor with a height of its own while it is empty. */
+.rail-floor {
+  border-radius: .5rem;
+  border: 1px dashed transparent;
+  height: .75rem;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.rail-floor[data-empty] { height: 2.25rem; border-color: var(--color-neutral-300, #d4d4d4); }
+.dark .rail-floor[data-empty] { border-color: var(--color-neutral-600, #525252); }
+
+/* A 44 × 44 HIT BOX FOR A FINGER, and nothing at all for a cursor.
+
+   `TAP_TOUCH` in `admin-shared/scale.ts` carries the reasoning. The short version: three 28px keys sit on a
+   media thumbnail, and neither growing them nor padding them is available — one covers the
+   picture, the other pushes them off the tile. A centred pseudo-element takes no space, moves
+   nothing, and is 44px wide to a finger.
+
+   `pointer: coarse` and not a width query: what decides is whether the thing pointing is a
+   fingertip, and an iPad in landscape is 1024px wide with no cursor at all. */
+@media (pointer: coarse) {
+  /* ⚠️ AN ACTION THAT WAITS FOR A POINTER NEVER ARRIVES ON A FINGER. The comments queue hides
+     its delete key with `opacity-0` and reveals it on `group-hover`, for a good reason it states
+     itself — a moderator reads far more rows than they act on — but there is no hover on a
+     phone, so that key was invisible and unreachable there. It is still focusable, which makes
+     it worse: a screen reader announces a control nobody can see.
+
+     Shown outright where the pointer is coarse. The quiet is a desktop luxury; on a phone the
+     row is wide enough to carry the key anyway. Found 2026-09-16 while redrawing the trash rows,
+     which nearly copied the pattern. */
+  .group:hover .group-hover\:opacity-100,
+  [class~='opacity-0'][class*='group-hover:opacity-100'],
+  [class~='sm:opacity-0'][class*='group-hover:opacity-100'] {
+    opacity: 1;
+  }
+
+  .tap-touch { position: relative; }
+  .tap-touch::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 44px;
+    height: 44px;
+    translate: -50% -50%;
+  }
+}
+
+/* ═══ THE ADMIN MOVES, and until 2026-09-07 it did not. ═══
+
+   Measured on that date across every admin screen: 48 of 48 interactive elements had a
+   transition, all of them the same `--dur-fast` hover, and there were ZERO keyframes and no
+   entrance of any kind. Every change of state was an instant swap — a tab's panel replaced
+   between two frames, a page replaced by another page, a row appearing where nothing was —
+   and an instant swap is the one thing the eye cannot follow: it reports "the screen is
+   different now" without reporting what changed or where the old thing went.
+
+   Five entrances below, and one thing they all have in common: they are all ARRIVALS. Nothing
+   here moves while anybody is reading or typing, nothing loops, and nothing delays an action
+   — the click has already happened by the time the paint starts. `docs/conventions/motion.md`
+   is the contract; the gates at the foot of this file zero every one of them.
+
+   ⚠️ THE TOKENS DO NOT MOVE. The audit proposed renaming them and retiming two, and the
+   reason not to is that they are a promise shared with the reading site (`web/motion.css.ts`
+   declares the same three, and the doc says in as many words that the numbers must not drift).
+   What was missing here was motion, not different numbers. */
+
+/* (a) A PAGE ARRIVES. The canvas' content is keyed by path, so a route change mounts a new
+   subtree and `@starting-style` catches it. Six pixels, which is far enough to read as a
+   direction and near enough that nothing appears to travel. */
+.admin-enter {
+  transition: opacity var(--dur-base) var(--ease-out), translate var(--dur-base) var(--ease-out);
+}
+@starting-style {
+  .admin-enter { opacity: 0; translate: 0 6px; }
+}
+
+/* (c) A LIST ARRIVES IN ORDER, up to ten rows and then all at once — a stagger long enough
+   to be read as one sweep rather than as a queue. `--i` is set inline by the list; rows past
+   the tenth get no delay at all, because a fortieth row appearing 800ms late is a bug that
+   looks like a design.
+
+   An ANIMATION rather than a transition, because a row is CREATED rather than changed: a
+   transition needs a value to move FROM, and an element that has just been inserted has none.
+   So this plays on the frame the row first exists in the document, and a row already standing
+   there does not play it again. */
+@keyframes admin-row-in {
+  from { opacity: 0; translate: 0 4px; }
+  to { opacity: 1; translate: 0 0; }
+}
+.admin-stagger > * {
+  animation: admin-row-in var(--dur-base) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 10) * 20ms);
+}
+
+/* (d) A FIELD THAT DEPENDS ON A SWITCH grows out of the row rather than appearing in it.
+   `grid-template-rows: 0fr → 1fr` is the only way to animate to a height nobody has measured;
+   the inner element owns the `overflow: hidden` that makes it a curtain rather than a clip. */
+.admin-reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--dur-base) var(--ease-out);
+}
+.admin-reveal[data-open] { grid-template-rows: 1fr; }
+.admin-reveal > * { overflow: hidden; }
+
+/* (f) THE PHONE'S DRAWER SLIDES, and the scrim behind it fades. It appeared and disappeared
+   between frames, which on a panel that covers most of the screen reads as the page having
+   been replaced rather than as something having opened over it. */
+.admin-drawer {
+  transition: opacity var(--dur-base) var(--ease-out), translate var(--dur-base) var(--ease-out);
+}
+.admin-scrim { transition: opacity var(--dur-base) var(--ease-out); }
+@starting-style {
+  .admin-drawer { opacity: 0; translate: 0 -8px; }
+  .admin-scrim { opacity: 0; }
+}
+
+/* THE ENTRANCES. A toast, the command palette and a slide-over ARRIVE rather than appear:
+   a shade transparent and a few pixels short, settling on the one curve, from the
+   @starting-style the browser applies the first time an element is rendered: the frame the
+   island inserts a toast, and the frame a dialog that shipped hidden in the shell is
+   unhidden. Where the engine has
+   no @starting-style they simply appear, which is the state every rule starts from. Only
+   opacity and translate, which cost a composite and never a layout. */
+.admin-toast,
+html.admin [role='dialog'] {
+  transition: opacity var(--dur-base) var(--ease-out), translate var(--dur-base) var(--ease-out);
+}
+@starting-style {
+  .admin-toast { opacity: 0; translate: 0 8px; }
+  html.admin [role='dialog'] { opacity: 0; translate: 0 6px; }
+}
+/* AND THE WAY OUT. A toast that arrives on a curve and then disappears on a frame reads as a
+   glitch rather than as an exit: the eye tracks the entrance, so it is watching the thing at
+   the moment it vanishes. 150ms, which is `EXIT_MS` in `admin/island/lib/overlay-toast.ts` —
+   the two numbers have to agree or the element is gone before the transition starts. */
+.admin-toast[data-leaving] {
+  opacity: 0;
+  translate: 0 8px;
+  transition-duration: var(--dur-fast);
+}
+
+/* THE PEN ANSWERING THE HAND (ADR 0049). A mark the writer has JUST applied draws itself
+   across the words in 200ms — the highlighter's stroke, the underline, the ring — by
+   growing the background the pen sheet already paints, from nothing to its full width. The
+   class is put on the DOM element by `pen-feedback.ts` for a beat and taken off again, so
+   an existing mark never replays it, and a document opening full of marks does not sweep.
+   The TEXT does not move: only the ink under it is arriving, which is the rule the key
+   feedback lives by too (nothing animates the words). Gated like everything else by the
+   two rules below. */
+@keyframes pen-draw { from { background-size: 0 var(--ink-h, 1.05em); } }
+@keyframes pen-under { from { background-size: 0 var(--u-h, .42em); } }
+@keyframes pen-ring { from { background-size: 0 100%, 0 100%, 0 100%; } }
+.prose mark.pen-fresh { animation: pen-draw 200ms var(--ease-out) both; }
+.prose u.pen-fresh { animation: pen-under 160ms var(--ease-out) both; }
+.prose mark[data-form=o].pen-fresh { animation: pen-ring 240ms var(--ease-out) both; }
+
+/* THE TWO GATES. The owner's one switch (server-rendered as data-motion on <html>) and the
+   OS preference each set every animation and transition to none in one rule, exactly as
+   the reading site does in web/motion.css.ts. Until 2026-09-06 the admin gated four rules
+   one at a time and the rest - every Tailwind `transition`, six `animate-pulse` skeletons,
+   the sidebar's width - kept moving with the switch off. A state that must survive with
+   motion off (the progress bar's static two-thirds, above) is a rule of its own; a duration
+   never is. */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after { animation: none !important; transition: none !important; }
+}
+:root[data-motion='off'] *,
+:root[data-motion='off'] ::before,
+:root[data-motion='off'] ::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* ---------------------------------------------------------------------------
+   THE FIND HIGHLIGHT (`FindExtension.ts`).
+
+   Drawn as a decoration, never as a mark, so none of this reaches the Markdown the piece
+   saves as. Two weights, and both are needed: every hit gets the quiet one so the writer can
+   see at a glance where a word falls in the piece, and the one they are standing on gets the
+   loud one so stepping through is visible without reading the count.
+
+   The pen's own two colours rather than a browser yellow. The highlighter ink is what this
+   product already uses to mean "this bit, here", and the current hit takes the ballpoint red
+   that every other "you are here" mark in the admin takes.
+
+   `box-decoration-break` because a hit can wrap: without it the background is drawn once
+   across the whole box and the padding lands only at the two far ends, so the first line of a
+   wrapped match is missing its right edge and the second its left. */
+.find-hit {
+  /* `color: inherit` because the Markdown mirror draws its hits as `<mark>`, which every
+     browser gives a colour of its own along with the yellow this rule is replacing. */
+  color: inherit;
+  /* Declared twice on purpose, and this is one of the two places where dropping Tailwind took
+     something away that has to be put back by hand. Its compiler wrapped every `color-mix` in
+     an `@supports` and left a flat colour underneath; without that, a browser that does not
+     know the function drops the declaration and the hit has NO highlight at all rather than a
+     solid one. Two declarations do the same job: the second wins wherever it is understood. */
+  background: var(--pen-edge);
+  background: color-mix(in srgb, var(--pen-edge) 45%, transparent);
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.find-hit-now {
+  /* The other one. See `.find-hit` above. */
+  background: var(--pen-red);
+  background: color-mix(in srgb, var(--pen-red) 28%, transparent);
+  box-shadow: inset 0 -1.5px 0 var(--pen-red);
+}
+
+/* THE GREETING, one of four, chosen before the first paint (ADR 0054).
+ *
+ * The dashboard draws all four parts of the day and the boot script stamps `data-daypart` on
+ * the root; this shows the one that matches. It is the same shape as the rail's collapsed and
+ * icons states: the server cannot know what o'clock it is where the reader is sitting, so it
+ * draws every answer and the browser picks.
+ *
+ * The DEFAULT is the last one in the file rather than a rule of its own: if no attribute is
+ * stamped — a browser that threw inside the boot script — every greeting stays hidden except
+ * the last, which is a sentence rather than a blank line where a name should be. */
+/* ⚠️ THE SPANS ARE `data-greet`, THE ROOT IS `data-daypart`, and they must never be the same
+ * name. Written as one name first: `[data-daypart]{display:none}` matched `<html>` itself,
+ * which the boot script stamps, and the whole admin rendered as a blank page — on every
+ * screen, not just this one. Two names cannot collide, and each says what it is: one is a
+ * fact about the browser's clock, the other is a greeting waiting to be chosen. */
+[data-greet] { display: none; }
+html[data-daypart='morning'] [data-greet='morning'],
+html[data-daypart='afternoon'] [data-greet='afternoon'],
+html[data-daypart='evening'] [data-greet='evening'],
+html[data-daypart='night'] [data-greet='night'] { display: inline; }
+html:not([data-daypart]) [data-greet]:last-child { display: inline; }
+
+/* THE LAST ROW SHOWING, in a table whose other rows are still in the DOM.
+   `TROW`'s `last:border-0` asks for `:last-child`, and since the analytics piece index became
+   server-rendered HTML (ADR 0054) that is row forty-one standing hidden behind thirty others —
+   so the ten rows on screen ended with a rule the React face never drew, sitting between the
+   last title and the "Show all" link. The server marks the row, the island moves the mark.
+   An attribute pair outranks the utility it overrides without needing !important. */
+tr[data-piece][data-last] {
+  border-bottom-width: 0;
+}
+
+/* THE CHAT ROW'S TWO FACES: the cross that offers to delete, and the pair that confirms it.
+   Confirming in place rather than in a dialog, because a chat is small enough that a modal
+   asking about it is heavier than the thing it is protecting.
+
+   Both are drawn and CSS picks (`docs/admin-one-dom.md`), and the picking is done HERE rather
+   than with a `hidden` attribute because the state belongs to the ROW — one attribute on the
+   chat decides both halves, where two `hidden` attributes would be one state written twice.
+
+   ⚠️ NOT because the attribute would lose. It was written here that a `hidden` attribute
+   against a display utility is a tie the utility wins; that is not true in this build, and
+   acting on it nearly cost a rule nobody needed. `utilities.css` puts `!important` on
+   `[hidden]` (its only other ones are the reduced-motion rules) — so the attribute beats `flex`,
+   `contents`, `inline-block` and every other display utility outright. Checked 2026-09-15. */
+[data-ai-chat]:not([data-ai-confirming]) [data-ai-confirm] { display: none; }
+[data-ai-chat][data-ai-confirming] [data-ai-del] { display: none; }
+
+/* ─── THE WRITE COLUMN ─────────────────────────────────────────────────────────────────────
+   Every piece is drawn once and the filters HIDE rather than remove (`docs/admin-one-dom.md`
+   trap 2) — but the hiding is the ISLAND's `hidden`, not a rule here, and that is a correction
+   worth writing down. Kind, status and "what is missing" were CSS rules against attributes on
+   the column, which drew correctly and left the island unable to COUNT: `shown` was the number
+   of rows that passed the search, so a filter that hid all forty-six of them still reported
+   forty-six and the "nothing matches your filter" line never appeared. Found by diffing this
+   build against the React one it replaces, which said the sentence and this did not.
+
+   One mechanism, one counter. What CSS still does here is the part that is genuinely a LOOK. */
+
+/* THE TICK TAKES THE LAMP'S PLACE. Both ship drawn; the mode picks. Adding a column instead
+   moved every title 24px right and re-wrapped half the list at the moment somebody went to
+   pick from it — swapping costs 8px and nothing re-wraps. It is a rule rather than a `hidden`
+   attribute because ONE attribute on the column decides both halves for all forty-eight rows,
+   which is the same reason the pair above it is. (It is not that the attribute would lose: see
+   the note above — `[hidden]` carries the sheet's only `!important`.) */
+[data-write-pane]:not([data-picking]) .write-tick { display: none; }
+[data-write-pane][data-picking] .write-lamp { display: none; }
+
+/* A ROW BEING PICKED IS NOT A LINK, and the island takes its `href` away to make that true for
+   the keyboard and for a screen reader as well as for the mouse. What is left here is the
+   pointer: the whole row is the tick's target, so a tap anywhere ticks. */
+[data-write-pane][data-picking] [data-piece] { cursor: pointer; }
+
+/* THE OPEN ROW IS A KEY HELD DOWN, carved into the paper. Not while picking: the lifted ground
+   means "this one", and in that mode "this one" is what the tick says — two meanings for one
+   background is how a row nobody ticked comes to read as ticked. */
+[data-write-pane]:not([data-picking]) [data-piece][aria-current='page'] {
+  background: #fff;
+  box-shadow: inset 0 2px 3px rgb(0 0 0 / 0.14);
+}
+[data-write-pane]:not([data-picking]) [data-piece][aria-current='page'] .write-title {
+  font-weight: 600;
+}
+.dark [data-write-pane]:not([data-picking]) [data-piece][aria-current='page'] {
+  background: #171717;
+  box-shadow: inset 0 2px 3px rgb(0 0 0 / 0.5);
+}
+[data-write-pane] [data-piece]:not([aria-current='page']):hover { background: rgb(255 255 255 / 0.6); }
+.dark [data-write-pane] [data-piece]:not([aria-current='page']):hover { background: rgb(23 23 23 / 0.6); }
+/* A ticked row lifts too, without the carve: it is chosen, not open.
+
+   ⚠️ AN ATTRIBUTE THE ISLAND WRITES, NEVER `:has()`. The obvious rule here is
+   `[data-piece]:has([data-write-tick]:checked)`, and it TAKES SAFARI DOWN — the whole page, not
+   the rule (`docs/admin-one-dom.md` trap 4, and it has cost this project a live site before).
+   Chrome shows nothing wrong, which is what makes it worth a warning rather than a note. */
+[data-write-pane][data-picking] [data-piece][data-picked] { background: #fff; }
+.dark [data-write-pane][data-picking] [data-piece][data-picked] { background: #171717; }
+
+/* THE FOUR DIALECTS on the what's-new panel, told apart by `aria-pressed` rather than by a
+   class the island swaps. The chosen one is the ink-on-paper pair the whole admin uses for a
+   latched control; the other three are outlined. One state, said once, in the attribute that
+   is already true. */
+.news-look {
+  border-color: rgb(212 212 212);
+  color: rgb(64 64 64);
+}
+.news-look:hover {
+  background: rgb(245 245 245);
+}
+.news-look[aria-pressed='true'] {
+  border-color: #171717;
+  background: #171717;
+  color: #fff;
+}
+.dark .news-look {
+  border-color: rgb(82 82 82);
+  color: rgb(212 212 212);
+}
+.dark .news-look:hover {
+  background: rgb(38 38 38);
+}
+.dark .news-look[aria-pressed='true'] {
+  border-color: #fff;
+  background: #fff;
+  color: #171717;
+}
+
+/* THE COMMAND PALETTE'S FIRST GROUP HEADING sits closer to the box than the gaps between
+   groups do — and WHICH heading that is depends on what the typing has left showing, not on
+   which one is first in the markup. `:first-child` would count the four hidden ones
+   (`docs/admin-one-dom.md`, trap 4), so the island marks it and this is the rule. */
+[data-pal-head][data-pal-first] {
+  padding-top: 0.375rem;
+}
+
+/* ── THE LIBRARY'S TWO LAYOUTS ───────────────────────────────────────────────────────────
+   Grid or list, for Images, Videos and Files alike, off ONE attribute the boot script writes
+   on `<html>` before the first paint. The markup is the same either way — the same tiles, the
+   same rows, the same keys — because a library that rebuilt itself to change shape is a
+   library the island would have to draw, and drawing is the one thing the island may not do.
+
+   Which key is pressed is painted from here for the same reason: the server cannot read a
+   `localStorage` preference, and a control corrected after the paint is a control that
+   flickers. */
+:root[data-media-view-images='grid'] [data-media-tab='images'] [data-media-view-key='grid'],
+:root[data-media-view-images='list'] [data-media-tab='images'] [data-media-view-key='list'],
+:root[data-media-view-videos='grid'] [data-media-tab='videos'] [data-media-view-key='grid'],
+:root[data-media-view-videos='list'] [data-media-tab='videos'] [data-media-view-key='list'],
+:root[data-media-view-files='grid'] [data-media-tab='files'] [data-media-view-key='grid'],
+:root[data-media-view-files='list'] [data-media-tab='files'] [data-media-view-key='list'] {
+  background: #fff;
+  font-weight: 600;
+  color: var(--color-neutral-950, #0a0a0a);
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, .16);
+}
+:root.dark[data-media-view-images='grid'] [data-media-tab='images'] [data-media-view-key='grid'],
+:root.dark[data-media-view-images='list'] [data-media-tab='images'] [data-media-view-key='list'],
+:root.dark[data-media-view-videos='grid'] [data-media-tab='videos'] [data-media-view-key='grid'],
+:root.dark[data-media-view-videos='list'] [data-media-tab='videos'] [data-media-view-key='list'],
+:root.dark[data-media-view-files='grid'] [data-media-tab='files'] [data-media-view-key='grid'],
+:root.dark[data-media-view-files='list'] [data-media-tab='files'] [data-media-view-key='list'] {
+  background: var(--color-neutral-800, #262626);
+  color: #fff;
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, .55);
+}
+
+/* IMAGES, as a list: the tray becomes a thumbnail and the caption the line beside it. The
+   tray's own contents are absolutely positioned inside it, so shrinking the tray is all it
+   takes — the tick, the chips and the three keys follow it without a rule of their own. */
+:root[data-media-view-images='list'] [data-media-grid] { display: flex; flex-direction: column; gap: 0; }
+:root[data-media-view-images='list'] [data-media-grid] > figure {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .375rem .25rem;
+  border-bottom: 1px solid var(--color-neutral-200, #e5e5e5);
+}
+:root.dark[data-media-view-images='list'] [data-media-grid] > figure { border-bottom-color: var(--color-neutral-800, #262626); }
+:root[data-media-view-images='list'] [data-media-grid] > figure:last-child { border-bottom: 0; }
+:root[data-media-view-images='list'] [data-media-grid] [data-tray] { width: 3rem; flex: none; }
+:root[data-media-view-images='list'] [data-media-grid] figcaption { margin-top: 0; flex: 1 1 auto; min-width: 0; }
+
+/* VIDEOS, as a list: the player keeps its 16:9 and stops being the card's whole top. */
+:root[data-media-view-videos='list'] [data-video-list] { display: flex; flex-direction: column; gap: .5rem; }
+:root[data-media-view-videos='list'] [data-video-list] > li { display: flex; align-items: center; }
+:root[data-media-view-videos='list'] [data-video-list] > li > video { width: 10rem; flex: none; }
+:root[data-media-view-videos='list'] [data-video-list] > li > div { flex: 1 1 auto; min-width: 0; align-items: center; }
+
+/* FILES, as a grid: the framed run of rows becomes a tray of cards. `divide-y` draws its
+   hairline on every child but the first, which in a grid lands across the middle of a column —
+   so the children take their own border instead. */
+:root[data-media-view-files='grid'] [data-file-frame] {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: .75rem;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+}
+:root[data-media-view-files='grid'] [data-file-frame] > li {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .5rem;
+  border: 1px solid var(--color-neutral-200, #e5e5e5);
+  border-radius: .5rem;
+}
+:root.dark[data-media-view-files='grid'] [data-file-frame] > li { border-color: var(--color-neutral-800, #262626); }
+:root[data-media-view-files='grid'] [data-file-frame] > li > div { width: 100%; }
+
+/* THE LIBRARY'S FULL-SIZE PICTURE, a native <dialog> since 2026-09-23 (it was a div nobody was
+   told had opened). A dialog arrives with the UA's centred box, border and white paper; this
+   takes all three away so the picture sits on the dimmed page as it always did. The closed
+   rule matters: `display:flex` would otherwise show a dialog that is not open. */
+[data-media-zoom] {
+  margin: 0; width: 100%; height: 100%; max-width: none; max-height: none;
+  padding: 1rem; border: 0; background: transparent;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .75rem;
+}
+[data-media-zoom]:not([open]) { display: none; }
+[data-media-zoom]::backdrop { background: color-mix(in srgb, #000 80%, transparent); }
+
+/* THE WRITE PANE GROWS WITH THE WINDOW when it stands alone, since 2026-09-23. It was 320px from
+   1280 up whatever the screen, which held the excerpt at 36 characters a line on a 1920 display —
+   under the 45 that `docs/conventions/type.md` sets as the floor — beside a paper with nothing
+   on it. Now 24% of the window: 320px at 1280, 448px from 1867, about 52 characters.
+   ⚠️ BESIDE THE EDITOR IT STAYS 320px, and that was measured, not assumed. The editor's key row
+   stays on one line with the pane up to 376px, but the ACTION row above it does not: in
+   Portuguese at 1760 it fits one line beside 320px and breaks in two beside 376px. The paper
+   has no width to give there, in at least one of the eleven languages. */
+@media (min-width: 1280px) {
+  [data-write-fit='alone'] { width: clamp(20rem, 24vw, 28rem); }
+}
+
+/* A short numbered list in two columns that reads DOWN each column, not across — the order of
+   the steps is the order the eye meets them. Rows are the half of the list, rounded up. */
+@media (min-width: 640px) {
+  .steps-down { grid-auto-flow: column; grid-template-rows: repeat(3, auto); }
+}
+
+/* THE COUNT ROW'S HAIRLINES (Newsletter > People). Drawn by position because the row is a 2x2
+   on a phone and a 1x4 from 640px, and a utility per cell cannot say "every inner boundary, no
+   outer one" for both: the first cut had no `sm:` border utilities in the sheet and left the
+   middle boundary of the 1x4 undrawn. Colour stays with the cell's own utilities. */
+.count-row > * {
+  border-style: solid;
+  border-width: 0 1px 1px 0;
+}
+.count-row > :nth-child(even) { border-right-width: 0; }
+.count-row > :nth-child(n+3) { border-bottom-width: 0; }
+@media (width >= 40rem) {
+  .count-row > *, .count-row > :nth-child(even), .count-row > :nth-child(n+3) { border-width: 0 1px 0 0; }
+  .count-row > :last-child { border-right-width: 0; }
+}

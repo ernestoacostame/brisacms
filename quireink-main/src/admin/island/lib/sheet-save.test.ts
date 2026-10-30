@@ -1,0 +1,91 @@
+// WHAT A SAVE ACTUALLY SENDS, which is a hand-written list and therefore goes stale.
+//
+// `payloadOf` names every field on the wire. A field added to the panel, wired into the draft
+// and forgotten HERE is a field the owner fills in, watches save, and finds empty when they come
+// back — with no error anywhere, because the save succeeded. It is the same failure `getPage`
+// had in the other direction, and this feature found both in one afternoon.
+//
+// So this file asserts the KEY SET, not a handful of values: a test that checks the fields
+// somebody remembered to check is the same list again, one layer up.
+import { describe, expect, it } from 'bun:test'
+import { emptyDraft, type SheetDraft } from '@/admin-shared/sheet-wire'
+import { payloadOf, previewPlan, statusForSave } from './sheet-save'
+
+const TZ = 'Asia/Ho_Chi_Minh'
+const draft = (over: Partial<SheetDraft> = {}): SheetDraft => ({ ...emptyDraft(), ...over })
+
+describe('what a save sends', () => {
+  it('sends every field a POST has, and no more', () => {
+    const keys = Object.keys(payloadOf('post', draft({ title: 'T', series: 'S' }), 'body', TZ)).sort()
+    expect(keys).toEqual([
+      'categories', 'content', 'coverImage', 'date', 'excerpt', 'featuredImage',
+      'lang', 'metaDescription', 'metaTitle', 'series', 'seriesOrder', 'slug', 'slugDerived', 'status',
+      'tags', 'title', 'translationGroup',
+    ])
+  })
+
+  it('sends a PAGE its language and no date', () => {
+    const body = payloadOf('page', draft({ title: 'About', lang: 'en', translationGroup: 'me' }), 'x', TZ)
+    expect(Object.keys(body).sort()).toEqual([
+      'content', 'featuredImage', 'lang', 'slug', 'slugDerived', 'status', 'title', 'translationGroup',
+    ])
+    expect(body.lang).toBe('en')
+    expect(body.translationGroup).toBe('me')
+  })
+
+  it('sends a NOTE neither, because a note has neither', () => {
+    // A note is a page of a notebook and a clip quotes its source in the source's own language
+    // (ADR 0044, ADR 0056). The columns do not exist on it.
+    const keys = Object.keys(payloadOf('note', draft({ title: 'N' }), 'x', TZ))
+    expect(keys).not.toContain('lang')
+    expect(keys).not.toContain('translationGroup')
+  })
+
+  it('sends undefined for an empty language, which CLEARS it', () => {
+    // ⚠️ `undefined`, not left out. The row is written whole on every save, so a field emptied
+    // on screen has to arrive as nothing rather than be absent — absent is "leave what was
+    // there", which is how a language somebody removed comes back on the next save.
+    const body = payloadOf('post', draft({ title: 'T', lang: '', translationGroup: '  ' }), 'x', TZ)
+    expect('lang' in body).toBe(true)
+    expect(body.lang).toBeUndefined()
+    expect(body.translationGroup).toBeUndefined()
+    // The counter-test: a value set really does travel.
+    const filled = payloadOf('post', draft({ title: 'T', lang: 'vi', translationGroup: 'thu' }), 'x', TZ)
+    expect(filled.lang).toBe('vi')
+    expect(filled.translationGroup).toBe('thu')
+  })
+})
+
+describe('what a plain Save does to the status', () => {
+  it('leaves a live piece live', () => {
+    // ⌘S on a live post to fix a typo took it off the site: Save wrote `draft` regardless.
+    expect(statusForSave('published', 'published')).toBe('published')
+  })
+  it('unpublishes only when the panel says so', () => {
+    expect(statusForSave('published', 'draft')).toBe('draft')
+  })
+  it('never publishes a draft: that is the Publish key and its questions', () => {
+    expect(statusForSave('draft', 'published')).toBe('draft')
+    expect(statusForSave('draft', 'draft')).toBe('draft')
+  })
+})
+
+describe('a slug nobody typed', () => {
+  it('is sent as derived, so the server may add -2', () => {
+    expect(payloadOf('post', draft({ title: 'Three weeks' }), 'x', TZ).slugDerived).toBe(true)
+  })
+  it('is not, once the writer typed one or a save pinned it', () => {
+    expect(payloadOf('post', draft({ title: 'T', slug: 'mine' }), 'x', TZ).slugDerived).toBeUndefined()
+  })
+})
+
+describe('what Preview saves first', () => {
+  it('saves a draft with Published ticked AS A DRAFT, never published', () => {
+    expect(previewPlan('draft', 'published')).toEqual({ save: 'draft' })
+    expect(previewPlan('draft', 'draft')).toEqual({ save: 'draft' })
+  })
+  it('saves nothing on a live piece: it is previewed from a snapshot', () => {
+    expect(previewPlan('published', 'published')).toEqual({ snapshot: true })
+    expect(previewPlan('published', 'draft')).toEqual({ snapshot: true })
+  })
+})

@@ -1,0 +1,395 @@
+// The public router.
+//
+// Hono, not a framework: a route is a function from a request to a string, and the whole
+// page cache is one Map (Invariant 1). What was ISR plus a tagged data cache plus a
+// per-write path superset is now "render it, keep the string, throw all of them away on
+// any write".
+//
+// Route order is load-bearing. `/:slug` matches anything, so every fixed path is
+// registered before it; Hono matches in registration order.
+
+import { Hono } from 'hono'
+import type { Context } from 'hono'
+import { getSettings } from '@/content/settings'
+import { cached, notFoundPage } from '@/web/listing-page'
+import { parsePathPage } from '@/content/paginate'
+import { renderHome, renderPostList, slugRole } from '@/web/home-mode'
+import { registerFeedRoutes } from '@/web/feed-routes'
+import { registerApiV1Routes } from '@/web/api-v1'
+import { registerAssetRoutes } from '@/web/asset-routes'
+import { handleActivityObject, registerApRoutes, wantsActivity } from '@/web/ap-routes'
+import { registerTermRoutes } from '@/web/term-routes'
+import { renderArticle } from '@/web/article'
+import { handleOg } from '@/web/og'
+import { handleTrack } from '@/web/track'
+import { handleUpload } from '@/web/uploads'
+import { handleThemeFile } from '@/web/theme-files'
+import { handleMarkdown, wantsMarkdown } from '@/web/markdown'
+import { handleManifest } from '@/web/manifest'
+import { handlePreview } from '@/web/preview'
+import { handleSearch, handleSearchIndex } from '@/web/search-api'
+import { handleSearchPage } from '@/web/search-page'
+import { canonicalPath } from '@/web/canonical-path'
+import { userRedirects } from '@/web/redirects'
+import { cacheHeaders } from '@/web/cache-headers'
+import { handlePreviewLeave, themePreview } from '@/web/theme-preview'
+import { LEAVE_PATH } from '@/web/theme-preview-paths'
+import { securityHeaders } from '@/web/security-headers'
+import { updatePing } from '@/web/update-ping'
+import { capPublicBodies, capThemeUploads } from '@/web/body-cap'
+import { compression } from '@/runtime/impl/compress'
+import { errorHandler, notFoundHandler, requestLogger } from '@/web/api'
+import { contentRoutes } from '@/web/admin/content'
+import { bulkRoutes } from '@/web/admin/content-bulk'
+import { noteRoutes } from '@/web/admin/notes'
+import { renderNotePage, renderNotesIndex } from '@/web/notes-page'
+import { clipRoutes, handleClipPage } from '@/web/clip-page'
+import { micropubRoutes } from '@/web/micropub'
+import { penRoutes } from '@/web/pen-routes'
+import { handlePenCss } from '@/web/pen-css'
+import { handleWebmention } from '@/web/webmention-route'
+import { securityRoutes } from '@/web/admin/security'
+import { siteRoutes } from '@/web/admin/site'
+import { uploadRoutes } from '@/web/admin/uploads'
+import { newsRoutes } from '@/web/admin/news'
+import { opsRoutes, publicOpsRoutes } from '@/web/admin/ops'
+import { assistantRoutes } from '@/web/admin/assistant'
+import { mcpAdminRoutes, mcpOAuthRoutes } from '@/web/admin/mcp'
+import { viewRoutes } from '@/web/admin/views'
+import { backupRoutes } from '@/web/admin/backup'
+import { themeRoutes } from '@/web/admin/themes'
+import { cloudflareMoveRoutes } from '@/web/admin/cloudflare-move'
+import { cloudflareUpdateRoutes } from '@/web/admin/cloudflare-update'
+import { handleMcp } from '@/web/admin/mcp-transport'
+import { adminShell } from '@/web/admin/spa'
+import { handleAdminAsset } from '@/web/admin/asset-route'
+import { currentOwner, renewCookie } from '@/web/guard'
+import { handleCommentsGet, handleCommentsPost, handleStampGet } from '@/web/comments'
+import { commentAuthRoutes } from '@/web/comment-auth'
+import { SPECULATION_PATH, speculationRules } from '@/web/speculation'
+import {
+  handleConfirm, handleOpenPixel, handleSubscribe, handleUnsubscribeGet, handleUnsubscribePost,
+} from '@/web/newsletter'
+import {
+  handleLogin, handleLoginPage, handleLogout, handleTwoFactor, handleTwoFactorMode, handleTwoFactorPage,
+} from '@/web/auth-routes'
+import { handleEnrol, handleEnrolDone, handleEnrolSkip } from '@/web/enrol-routes'
+import { registerPasskeyRoutes } from '@/web/passkey-routes'
+import { passkeyAdminRoutes } from '@/web/admin/security-passkeys'
+import { handleSetupClaim, handleSetupPage, setupWizardRoutes } from '@/web/setup-routes'
+import { handleRestore, handleRestorePage } from '@/web/setup-restore'
+import { handlePartPut, handlePartsBegin, handlePartsDrop, handlePartsLoad, handlePartsStatus } from '@/web/setup-restore-parts'
+
+/**
+ * The admin shell, for the owner, or a redirect to sign in.
+ *
+ * The redirect carries where they were going, so signing in lands them on the page they
+ * asked for rather than dumping them at the dashboard.
+ */
+async function adminPage(c: Context): Promise<Response> {
+  const found = currentOwner(c)
+  if (found === null) {
+    const next = encodeURIComponent(c.req.path + (new URL(c.req.url).search || ''))
+    return c.redirect(`/login?next=${next}`, 302)
+  }
+  // The shell carries the owner's language, typeface and palette, so the first paint is
+  // already correct. The frozen tree got them from the root layout the admin sat inside.
+  //
+  // The PATH goes in too, since ADR 0054: the rail is server-rendered and the where-you-are
+  // mark is a fact about this request. It was a client-side comparison against `location`,
+  // which is the same answer arrived at one paint later.
+  const query = new URL(c.req.url).searchParams
+  const res = c.html(await adminShell(await getSettings(), c.req.path, query), 200, { 'x-robots-tag': 'noindex, nofollow' })
+  renewCookie(c, found, res)
+  return res
+}
+
+export function createApp(): Hono {
+  const app = new Hono()
+
+  // Every request is timed and logged here rather than at the end of each handler. A rule
+  // kept by remembering it is a rule that a route eventually forgets.
+  app.use('*', requestLogger())
+
+  // ...and the same argument for errors: a handler may throw, and this is the one place
+  // that becomes a logged, typed 500.
+  app.onError(errorHandler())
+
+  // A URL NO route claims. The `/{slug}` route answers a single-segment miss with the 404
+  // page, so that case has always looked right — and it is the only case anyone checked.
+  // Anything with two or more segments matched no route at all and fell through to Hono's
+  // built-in `404 Not Found`, in text/plain, with no viewport meta: measured at 390px, the
+  // exact failure `notFoundPage` was written to prevent. The URLs this hits are not
+  // hypothetical. A WordPress site imported into Quire Ink has every old inbound link
+  // shaped `/2024/01/slug`, and every one of them landed here.
+  app.notFound(notFoundHandler())
+
+  // What a shared cache may do with a page, in one rule at the door.
+  app.use('*', cacheHeaders())
+
+  // ...and the three response headers that cost nothing and are wrong to omit.
+  app.use('*', securityHeaders())
+
+  // Nothing here ever sent content-encoding, so every page and every asset left the origin
+  // uncompressed. Outermost of the three, so it sees the finished body of every route.
+  app.use('*', compression())
+
+  // The owner's look at a theme before choosing it (ADR 0072): drawn in a scope the page cache
+  // will not touch, and sent `private, no-store` before `cacheHeaders` above sees it. Inside the
+  // three above so the bar it adds is compressed and tagged like any page. See `web/theme-preview.ts`.
+  app.use('*', themePreview())
+
+  // A trailing slash is the same page, not a miss. See `web/canonical-path.ts`.
+  //
+  // ⚠️ BELOW THE THREE ABOVE, and that placement is the whole point. Registered first, it was
+  // OUTSIDE them, so the 301 it returns without calling `next()` never reached `cacheHeaders`,
+  // `securityHeaders` or `compression`: measured 2026-09-16, `/page/1` answered 301 with no
+  // `cache-control` and no `x-frame-options` while an ordinary page carried both. A 301 with no
+  // freshness is heuristically cacheable and browsers hold it hard, and this one's destination
+  // is a SETTING (`listRoot()` reads `home.mode` and `home.listPath`), so renaming the list path
+  // left every reader who had seen `/page/1` being sent to the old one, with nothing on the
+  // server able to reach into their browser and undo it. From here it takes `private, no-store`
+  // from `cacheHeaders`, which is what `/favicon.ico`'s redirect already gets for the same
+  // reason: a pointer that can change must not be kept.
+  app.use('*', canonicalPath())
+
+  // A URL the owner MOVED answers before any route sees it. See `web/redirects.ts`.
+  app.use('*', userRedirects())
+
+  // A reader arriving is what triggers the once-a-day update check, and this is the only
+  // line of it on the request path. See `web/update-ping.ts` for why it is a reader rather
+  // than a timer, and `server/update-check.ts` for what the call carries.
+  app.use('*', updatePing())
+
+  // A stranger's body is kilobytes; see `web/body-cap.ts` for the two layers.
+  capPublicBodies(app)
+  capThemeUploads(app)
+
+  // `/` is the post list, or a page the owner chose. Resolved per request rather than when
+  // the routes are built, because the mode is a setting: see `web/home-mode.ts`.
+  app.get('/', async () => cached('/', renderHome)())
+
+  app.get('/page/:n', async (c) => {
+    const page = parsePathPage(c.req.param('n'))
+    if (page === null) return notFoundPage()
+    return cached(`/page/${page}`, () => renderPostList(page))()
+  })
+
+  // ----- the archives ---------------------------------------------------------
+  // Category, tag, series and the year index, each with its own feed. In their own file
+  // since 2026-08-30: they are the routes that resolve a NAME to a set of posts, and this
+  // one had nine lines left. See `web/term-routes.ts`.
+
+  registerTermRoutes(app)
+
+  // ----- search ---------------------------------------------------------------
+
+  app.get('/search', handleSearchPage)
+
+  // ----- the analytics beacon -------------------------------------------------
+  // Public and unauthenticated by necessity: it is called by every reader's browser. It
+  // is rate-limited per IP, drops bots and admin paths, and stores no PII.
+
+  app.post('/api/track', handleTrack)
+
+  // ----- the JSON and machine surfaces ----------------------------------------
+
+  app.get('/api/search', handleSearch)
+
+  app.get('/api/search/index', handleSearchIndex)
+  app.get('/api/comments', handleCommentsGet)
+  app.get('/api/comments/stamp', handleStampGet)
+  app.post('/api/comments', handleCommentsPost)
+  // Reader sign-in, which is not the owner's: it grants a filled-in name and a skipped
+  // captcha, nothing more. Mounted here rather than with `/api/auth` for that reason.
+  app.route('/', commentAuthRoutes())
+  app.post('/api/subscribe', handleSubscribe)
+  app.get('/api/newsletter/confirm', handleConfirm)
+  // GET asks for a click, POST does it. Link scanners and mail-client prefetchers issue
+  // GETs, so unsubscribing on GET means an appliance that merely looked at an inbox can
+  // remove the reader from the list.
+  app.get('/api/newsletter/unsubscribe', handleUnsubscribeGet)
+  app.post('/api/newsletter/unsubscribe', handleUnsubscribePost)
+  app.get('/api/newsletter/open', handleOpenPixel)
+  app.get('/api/md/:slug', handleMarkdown)
+
+  // ----- the Content API (ADR 0057) -------------------------------------------
+  // `/api/v1/*`: the published writing as JSON, for a client building something out of this
+  // blog rather than reading it. GET only, and every path answers 404 until the owner turns it
+  // on in Settings -> Server & connections. Registered as a group in `web/api-v1.ts`, where the
+  // switch is checked once for all of them.
+
+  registerApiV1Routes(app)
+
+  // ----- the fediverse (ADR 0059) ---------------------------------------------
+  // WebFinger, the actor, its two collections and its inbox. Every one of them answers 404
+  // until the owner switches it on AND names a handle AND has set the site address — an actor
+  // whose id says `localhost` is an identity pointing at whoever asked.
+
+  registerApRoutes(app)
+  app.get('/manifest.webmanifest', handleManifest)
+  // Pointed at by the `Speculation-Rules` header on every public page. A document rather
+  // than an inline script, so the public site keeps shipping none.
+  app.get(SPECULATION_PATH, () => speculationRules())
+
+  // ----- sign-in --------------------------------------------------------------
+  // The only write routes that cannot be owner-gated, because they are how one becomes an
+  // owner. Each is listed in `scripts/checks/routes-guarded.ts` with the reason it is
+  // public, so the exception is a decision on the record rather than an omission.
+
+  app.get('/login', handleLoginPage)
+  app.get('/login/2fa', handleTwoFactorPage)
+  app.post('/api/auth/login', handleLogin)
+  app.post('/api/auth/2fa', handleTwoFactor)
+  app.post('/api/auth/2fa/mode', handleTwoFactorMode)
+  app.post('/api/auth/enrol', handleEnrol)
+  app.post('/api/auth/enrol/done', handleEnrolDone)
+  app.post('/api/auth/enrol/skip', handleEnrolSkip)
+  // A passkey, beside the password and never instead of it (ADR 0071).
+  registerPasskeyRoutes(app)
+
+  // First run. Both refuse the moment an account exists, so on a claimed blog these are two
+  // more 404s rather than a door left standing open with nothing behind it.
+  app.get('/setup', handleSetupPage)
+  app.post('/api/setup/claim', handleSetupClaim)
+  // The other door out of an unclaimed install: a backup loaded into it (ADR 0067). As guarded as
+  // the claim, and as dead once there is an owner.
+  app.get('/setup/restore', handleRestorePage)
+  app.post('/setup/restore', handleRestore)
+  // The same door for an archive larger than one request may carry, in parts (G4). JSON, for the
+  // page's script and for a program moving a blog; as guarded as the form, on every request.
+  app.post('/setup/restore/parts', handlePartsBegin)
+  app.get('/setup/restore/parts/:id', handlePartsStatus)
+  app.put('/setup/restore/parts/:id/:part', handlePartPut)
+  app.post('/setup/restore/parts/:id/load', handlePartsLoad)
+  app.delete('/setup/restore/parts/:id', handlePartsDrop)
+  app.post('/api/auth/logout', handleLogout)
+
+  // ----- the admin API --------------------------------------------------------
+  // Mounted at the root because each route already carries its full `/api/...` path, and
+  // `route()` here would prefix them a second time. Every one of these is behind
+  // `requireOwner()` by virtue of the router it was registered on, not by a check inside
+  // it (Invariant 4), and `check:routes` fails the build if one escapes.
+
+  app.route('/', contentRoutes().routes)
+  app.route('/', bulkRoutes().routes)
+  app.route('/', noteRoutes().routes)
+  app.route('/', clipRoutes().routes)
+  // The open standards (ADR 0046): Micropub into the notebook, Webmention in.
+  app.route('/', micropubRoutes())
+  // A reader's marks across their devices (ADR 0047): a code or the commenter cookie, no account.
+  app.route('/', penRoutes())
+  // The pen as a stylesheet anyone may link (ADR 0048): stable path, revalidating, CORS open.
+  app.get('/pen.css', handlePenCss)
+  app.post('/webmention', handleWebmention)
+  // A GET on the endpoint says what it is, so a person who follows the rel link is not
+  // handed somebody's post by that name; the slug is reserved for the same reason.
+  app.get('/webmention', (c) => c.text('Webmention endpoint. POST source and target, form-encoded.'))
+  app.route('/', securityRoutes().routes)
+  app.route('/', passkeyAdminRoutes().routes)
+  app.route('/', siteRoutes().routes)
+  app.route('/', uploadRoutes().routes)
+  app.route('/', newsRoutes().routes)
+  app.route('/', opsRoutes().routes)
+  app.route('/', assistantRoutes().routes)
+  app.route('/', setupWizardRoutes().routes)
+  app.route('/', publicOpsRoutes())
+  app.route('/', mcpAdminRoutes().routes)
+  app.route('/', mcpOAuthRoutes())
+  app.route('/', viewRoutes().routes)
+  app.route('/', backupRoutes().routes)
+  app.route('/', themeRoutes().routes)
+  app.route('/', cloudflareMoveRoutes().routes)
+  app.route('/', cloudflareUpdateRoutes().routes)
+
+  // The MCP endpoint. NOT on an owner-gated router: it authenticates with a bearer token
+  // the owner minted, not with the session cookie, and it must answer 401 with the
+  // metadata pointer rather than the gate's plain refusal. Declared public in
+  // `check:routes` with that reason.
+  app.get('/api/mcp', handleMcp)
+  app.post('/api/mcp', handleMcp)
+  app.delete('/api/mcp', handleMcp)
+
+  // ----- the admin ------------------------------------------------------------
+  // The built bundle, and the empty shell that mounts it. Registered before `/:slug` so a
+  // page called "admin" cannot shadow it.
+  //
+  // The assets are PUBLIC by deliberate choice: they are a compiled front end containing
+  // no data, every byte of it is in a public repository, and gating them would only mean a
+  // signed-out reader who lands on /admin gets a broken page instead of a sign-in form.
+  // Everything the bundle then asks for is gated.
+  app.get('/admin/assets/*', handleAdminAsset)
+
+  app.get('/admin', async (c) => await adminPage(c))
+  app.get('/admin/*', async (c) => await adminPage(c))
+
+  // ----- drafts ---------------------------------------------------------------
+  // Registered before `/:slug` so a post that happens to be called "preview" cannot
+  // shadow it, and kept off that route so the public page has no token branch at all.
+
+  app.get('/preview/:slug', handlePreview)
+  // Leaving a theme preview: two segments, so it shadows no slug.
+  app.get(LEAVE_PATH, handlePreviewLeave)
+
+  // ----- the Open Graph card --------------------------------------------------
+  // Everything it needs is in the query string, so it reads no settings and no database.
+
+  app.get('/og', handleOg)
+
+  // ----- media ----------------------------------------------------------------
+  // Every image and video in a rendered page resolves here. Streamed, range-capable, and
+  // cached forever, because upload names are content-stable.
+
+  app.get('/uploads/*', handleUpload)
+  // An installed theme's files, by the hash of its package (ADR 0072). Two segments at least, so
+  // the name `themes` stays free for a post or a page.
+  app.get('/themes/:hash/*', handleThemeFile)
+
+  // The icon, the fonts, the bundles and the service worker: everything this BUILD produced
+  // rather than the owner. See `web/asset-routes.ts` for why they travel together.
+
+  registerAssetRoutes(app)
+
+  // ----- machine-readable -----------------------------------------------------
+  // The feed, the sitemap, robots.txt and llms.txt. In their own file since 2026-08-22:
+  // they are the only routes here answering a program rather than a person, and this one
+  // reached its line ceiling.
+
+  registerFeedRoutes(app)
+
+  // ----- the notebook (ADR 0044): its own address, never in the post namespace ----
+  app.get('/notes', async () => cached('/notes', renderNotesIndex)())
+  // The receiving door (ADR 0045): the owner's, never cached, before the slug route.
+  app.get('/notes/clip', handleClipPage)
+  app.get('/notes/:slug', async (c) => {
+    const slug = c.req.param('slug')
+    return cached(`/notes/${slug}`, () => renderNotePage(slug))()
+  })
+
+  // ----- the catch-all: one /{slug} namespace for posts AND pages -------------
+
+  app.get('/:slug', async (c) => {
+    const slug = c.req.param('slug')
+    // ...and two slugs in this namespace may not be a document at all once `/` has been
+    // given away: one is the post list's new home, and one is the page already served at
+    // `/`, whose own slug is then a second URL for one document (ADR 0014).
+    const role = await slugRole(slug)
+    if (role === 'list') return cached(`/${slug}`, () => renderPostList(1))()
+    if (role === 'home') return c.redirect('/', 301)
+    // An agent that asks for Markdown gets the source it was written in rather than HTML
+    // it would have to parse back into prose. Same URL, same visibility rules.
+    //
+    // ⚠️ BOTH OF THESE SIT ABOVE `cached(...)` AND THAT IS LOAD-BEARING. The page cache is keyed
+    // by PATH ALONE, so a representation that varies by `Accept` must never be written into it:
+    // one fediverse server asking first would leave every reader afterwards being served JSON.
+    // Each branch answers with its own headers, including the `Vary` that says so.
+    if (wantsMarkdown(c.req.header('accept'))) return handleMarkdown(c)
+    if (wantsActivity(c.req.header('accept'))) {
+      const object = await handleActivityObject(c, slug)
+      if (object) return object
+    }
+    return cached(`/${slug}`, () => renderArticle(slug))()
+  })
+
+  return app
+}

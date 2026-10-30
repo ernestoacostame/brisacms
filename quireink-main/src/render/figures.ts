@@ -1,0 +1,282 @@
+// Figures: an <img> in the markdown becomes a <figure> here — where it sits, how wide it
+// is, the frame it wears, the run of tiles it may belong to, and which of its stored widths
+// the browser is allowed to choose from.
+//
+// Split out of `post-content.ts` on 2026-08-28, when making `sizes` honest per shape took
+// that file past its 400-line cap. The guard says a file at the cap is SPLIT rather than
+// squeezed, and this was the section that could leave whole: it is the same subject
+// `figure.css.ts` owns on the other side, and every rule in here is about one element.
+//
+// It exports only what `post-content.ts` calls: the two fact types, and the two passes.
+import { collapseBlob } from '@/media/blob'
+import { galleryCols } from '@/render/gallery-cols'
+import { safeImageSrc } from '@/md/html-rules'
+
+
+/**
+ * A value about to be written inside double quotes, with the one character that could leave.
+ *
+ * ⚠️ THE QUOTE AND NOTHING ELSE. Everything this file puts in an attribute has already been
+ * through the engine's escaper (`md/html.ts`), so `&` is already `&amp;` and escaping it
+ * again would publish `&amp;amp;` in every URL that carries a query string.
+ *
+ * IT CANNOT FIRE TODAY, and it is here anyway. The values are read back out of rendered HTML
+ * with `[^"]*`, which stops at the first quote, so one cannot be in them — a safety that
+ * lives two regular expressions away from the attribute it protects and would be lost by any
+ * future change to how these tags are found. CodeQL reads it the same way and files it as an
+ * incomplete sanitizer (js/incomplete-html-attribute-sanitization, six alerts, 2026-09-14).
+ * Making it true HERE costs one replace per attribute and stops the property being an
+ * argument.
+ *
+ * UNCONDITIONAL, and the short-circuit it replaced is why. It was written
+ * `value.includes('"') ? value.replaceAll(…) : value`, which saves a scan on the string that
+ * never has a quote in it — and hands every reader, CodeQL included, a branch where nothing
+ * is escaped at all. The six alerts moved to the call sites and stayed open. A guard that is
+ * only sometimes applied is not a guard.
+ */
+const attr = (value: string): string => value.replace(/"/g, '&quot;')
+
+// Intrinsic dims of uploaded originals, keyed by collapsed pathname. width/height
+// on the <img> reserves the box from the aspect ratio → no CLS.
+export type ImageDims = Map<string, { width: number; height: number }>
+
+/**
+ * Which originals have display variants, and WHICH SET of them.
+ *
+ * A Set until 2026-08-28, when a third width was added and membership stopped being enough:
+ * an original finalised before that day has 1024/1600 and nothing else, and a `<picture>`
+ * that names a missing candidate fails outright rather than falling back. The version says
+ * what is on disk, so an old image is offered exactly what it has and the ordinary sweep
+ * upgrades it without a migration.
+ */
+export type ReadyOriginals = Map<string, number>
+
+// The shapes a gallery tile can be cropped to. Written `1x1` rather than `1:1` because
+// this travels in a URL fragment, where a colon is legal but reads as a scheme separator
+// to every human who looks at it. `asis` is not the absence of a ratio: it is "keep the
+// proportions", which a gallery has to be able to say out loud once a SITE default exists
+// to disagree with.
+const GRID_RATIOS = new Set(['asis', '1x1', '3x2', '4x3'])
+
+// Figure placement from the src fragment: #left|#right (align, default center),
+// #wide (noses right into the gutter on wide screens; every image is full-bleed on phones),
+// #third (30% of the column; with an align it floats and the text runs around it,
+// magazine-fashion — the one fragment that changes how TEXT lays out, not just the figure).
+// Caption = alt.
+// The frame a picture wears, independent of where the picture sits: a mat of paper (or of
+// ink) with a line around it. `frame` alone is the middle weight; `thin` and `thick` mean
+// nothing on their own, which is why they are read only from beside it.
+//
+// THREE-VALUED, like the gallery options above it, and the third value is SILENCE: no token
+// means "whatever the site setting says". So `noframe` has to exist and has to be written
+// down — on a site whose default is a frame, "this one, plain" is a thing an author needs to
+// be able to say, and saying nothing already means something else.
+function frameClasses(tokens: string[]): string {
+  if (tokens.includes('noframe')) return 'img-noframe'
+  if (!tokens.includes('frame')) return ''
+  const weight = tokens.includes('thin') ? 'img-frame-thin' : tokens.includes('thick') ? 'img-frame-thick' : ''
+  const ink = tokens.includes('ink') ? 'img-frame-ink' : ''
+  return ['img-frame', weight, ink].filter(Boolean).join(' ')
+}
+
+/**
+ * Exported for `admin/components/image-frag.test.ts`, which holds this and the EDITOR's reader
+ * of the same fragment to one answer. They have drifted before — the editor matched `right`
+ * as a substring, so `#bright` aligned a picture here and not there, silently.
+ */
+export function imgClasses(frag: string): string {
+  // Exact hyphen tokens so `#bright` can't match `right`: left|right|wide|third|left-third|….
+  const tokens = frag.split('-')
+  // `#grid` marks a gallery item; groupGalleries() wraps consecutive ones. The
+  // grid owns layout, so align/wide are ignored for a grid item.
+  //
+  // A gallery may also name its own shape and caption state. Each is three-valued and the
+  // third value is SILENCE: no token means "whatever the site setting says", which is what
+  // lets one screen fix a whole imported archive. The classes only carry an override.
+  if (tokens.includes('grid')) {
+    const ratio = tokens.find((t) => GRID_RATIOS.has(t))
+    const cap = tokens.includes('nocap') ? 'g-nocap' : tokens.includes('cap') ? 'g-cap' : ''
+    const opts = [ratio ? `g-${ratio}` : '', cap, frameClasses(tokens)].filter(Boolean)
+    return opts.length ? `img-grid ${opts.join(' ')}` : 'img-grid'
+  }
+  const align = tokens.includes('left') ? 'img-left' : tokens.includes('right') ? 'img-right' : 'img-center'
+  // The frame is ORTHOGONAL to all of this: it is drawn on the picture, while align and
+  // size decide where the picture goes. So it rides along with whichever answer wins below.
+  const frame = frameClasses(tokens)
+  const with_ = (base: string): string => (frame ? `${base} ${frame}` : base)
+  // `wide` and `third` are both sizes, so they cannot compose; wide wins because a fragment
+  // carrying both was almost certainly widened last.
+  if (tokens.includes('wide')) return with_(`${align} img-wide`)
+  return with_(tokens.includes('third') ? `${align} img-third` : align)
+}
+
+// Wrap a run of 2+ consecutive `#grid` figures (separated only by whitespace)
+// into one `.gallery` grid container, with a column count chosen from how many
+// images are in the run. A lone grid image stays a normal figure.
+// `img-grid[^"]*` rather than `img-grid"`, because a tile now carries its ratio and
+// caption classes alongside. Matching the exact old string silently stopped grouping the
+// moment an option was set, and a gallery that quietly falls apart into a column of
+// full-width photos is the kind of break nobody reports as a bug.
+export function groupGalleries(html: string): string {
+  return html.replace(/(?:<figure class="img-grid[^"]*">[\s\S]*?<\/figure>\s*){2,}/g, (run) => {
+    const count = (run.match(/<figure class="img-grid[^"]*">/g) ?? []).length
+    const cols = galleryCols(count)
+    // THE ONLY PLACE A TILE'S WIDTH IS KNOWN. `buildFigures` sees one image at a time and
+    // cannot tell a tile from a lone picture's neighbour; the column count exists here and
+    // nowhere earlier, so this is where the tile's `sizes` stops being a placeholder.
+    // Without it every tile claimed the full column and the browser fetched accordingly.
+    return `<div class="gallery gallery-cols-${cols}">${run.trim().replaceAll(`sizes="${SIZES_TILE}"`, `sizes="${tileSizes(cols)}"`)}</div>`
+  })
+}
+
+/**
+ * What a gallery tile will really be, in one string the browser can act on.
+ *
+ * The numbers come from `figure.css.ts`: the gallery is the reading measure wide and the
+ * gap is half a spacing unit (8px at the default scale), so a tile is the measure less the
+ * gaps, divided by the columns. Below 639px `mobile.css.ts` caps the gallery at two
+ * columns whatever this count is, so the phone half of the promise is 47vw regardless —
+ * a tile beside one other tile, inside the page's own padding.
+ */
+function tileSizes(cols: number): string {
+  const px = Math.round((COLUMN_PX - 8 * (cols - 1)) / cols)
+  return `(max-width: 639px) 47vw, ${px}px`
+}
+
+// <picture> (AVIF/WebP) ONLY for raster originals with confirmed variants (`ready`, which
+// carries the VERSION of the set on disk). A <picture> has no fallback on a 404 source, so
+// anything unconfirmed renders as a plain <img> of the original (always loads) — and a v1
+// original is offered only the two widths v1 generated.
+//
+// `sizes` IS A PROMISE ABOUT LAYOUT, and for a year this file made the same promise about
+// every picture: `100vw` on a phone, 768px above. That is true of an image holding the
+// reading column and false of every other shape the renderer can produce. Measured
+// 2026-08-28 on a 390px phone: a gallery tile renders at 167px and was being told 100vw, so
+// the browser dutifully fetched the 1024 file — six times the pixels it would draw. A
+// `sizes` that lies costs bytes on every reader's connection and cannot be caught by any
+// test that reads the markup, because the markup is exactly what was asked for.
+//
+// So each shape states its own, from the geometry in `figure.css.ts`:
+//   column   672px, the reading measure
+//   third    30% of it, and 60% of the viewport on a phone (mobile.css unfloats it)
+//   wide     the measure plus both gutters, clamp(0,4vw,4rem) each side
+//   grid     a tile, rewritten by `groupGalleries` once the column count is known
+const COLUMN_PX = 672
+const SIZES_COLUMN = `(max-width: 768px) 100vw, ${COLUMN_PX}px`
+const SIZES_THIRD = `(max-width: 768px) 60vw, ${Math.round(COLUMN_PX * 0.3)}px`
+const SIZES_WIDE = `(max-width: 768px) 100vw, ${COLUMN_PX + 128}px`
+// A placeholder the tile carries until the run is grouped; `groupGalleries` replaces it
+// with the width the tile will really have. If a tile somehow never gets grouped it is a
+// lone `#grid` figure at column width, which is what this says.
+const SIZES_TILE = SIZES_COLUMN
+
+function sizesFor(cls: string): string {
+  if (cls.includes('img-grid')) return SIZES_TILE
+  if (cls.includes('img-wide')) return SIZES_WIDE
+  if (cls.includes('img-third')) return SIZES_THIRD
+  return SIZES_COLUMN
+}
+
+/**
+ * Exported since 2026-08-29 because `web/front-card.ts` had grown a SECOND copy of this,
+ * and the copy had already drifted: it named 1024 and 1600 only, so every card thumbnail
+ * and every front-page picture asked for a 1024px file — including a 96px square. The 512
+ * width exists precisely for the pictures that do not hold the reading column
+ * (`media/image.ts` measured it: 190.2 KB against 66.7 KB on one post), and the copy could
+ * not offer it because it had been handed a Set instead of the version map.
+ */
+export function responsiveSources(cleanSrc: string, ready: ReadyOriginals, sizes: string): string | null {
+  const m = cleanSrc.match(/^(.*\/media\/.+)\.(?:jpe?g|png)$/i)
+  if (!m) return null
+  const version = ready.get(collapseBlob(cleanSrc))
+  if (!version) return null // variants not generated -> plain <img>
+  // Only the widths this original actually HAS. Naming -512 for a v1 image would break the
+  // picture outright rather than degrade it.
+  const widths = version >= 2 ? [512, 1024, 1600] : [1024, 1600]
+  const set = (fmt: string) => widths.map((w) => `${m[1]}-${w}.${fmt} ${w}w`).join(', ')
+  return (
+    `<source type="image/avif" srcset="${attr(set('avif'))}" sizes="${sizes}">` +
+    `<source type="image/webp" srcset="${attr(set('webp'))}" sizes="${sizes}">`
+  )
+}
+/** Elements that never have a closing tag, so they never change nesting depth. */
+const VOID = new Set(['img', 'br', 'hr', 'source', 'wbr', 'input', 'col', 'embed', 'area', 'track'])
+
+/**
+ * Every picture out of the paragraph it was written in, splitting the paragraph around it.
+ *
+ * ⚠️ A `<figure>` IS A BLOCK AND A `<p>` CANNOT HOLD ONE. Markdown has a single shape for a
+ * picture and it is inline, so `text ![a](b) text` — or, far more often, an image written with
+ * no blank line after it — is one paragraph carrying an image. Turning that image into a
+ * `<figure>` and leaving it there hands the browser `<p>…<figure>…</figure>…</p>`, which its
+ * parser repairs by CLOSING the paragraph before the figure. What comes out is an empty `<p>`,
+ * the figure, and the rest of the sentence as a BARE TEXT NODE with no paragraph around it.
+ *
+ * WHAT THAT COSTS, measured on the live site after the fix landed, 2026-09-14: the run of words
+ * after a picture is now `text-align:justify` with `hyphens:auto` and a 25.3px top margin, and
+ * as a bare text node it had none of them — `.prose` itself is `text-align:start`, so that one
+ * paragraph sat ragged-right and unhyphenated in the middle of a justified piece. NOT the
+ * first-line indent: `figure + p` sets that to 0 on purpose (`prose.css.ts`), so it read the
+ * same either way and an earlier note here said otherwise.
+ *
+ * 43 pictures in 20 of this blog's 92 posts were in that state, and had been since long before
+ * the engine changed — `marked` produced the same shape.
+ *
+ * Only an image at the paragraph's OWN level is lifted. One nested inside an inline element
+ * (`<a><img></a>`) would leave that element torn in half by the split, and the paragraph keeps
+ * it. None of this blog's 92 posts has one.
+ */
+function liftImagesOutOfParagraphs(html: string): string {
+  return html.replace(/<p(?:\s[^>]*)?>([\s\S]*?)<\/p>/g, (whole, inner: string) => {
+    if (!inner.includes('<img')) return whole
+    const out: string[] = []
+    const tag = /<(\/?)([a-zA-Z][\w-]*)\b[^>]*?(\/?)>/g
+    let depth = 0
+    let from = 0
+    let m: RegExpExecArray | null
+    while ((m = tag.exec(inner)) !== null) {
+      const closing = m[1] === '/'
+      const name = m[2]!.toLowerCase()
+      if (name === 'img' && !closing && depth === 0) {
+        const run = inner.slice(from, m.index)
+        if (run.trim()) out.push(`<p>${run}</p>`)
+        out.push(m[0])
+        from = m.index + m[0].length
+        continue
+      }
+      if (!VOID.has(name) && m[3] !== '/') depth += closing ? -1 : 1
+    }
+    const rest = inner.slice(from)
+    if (rest.trim()) out.push(`<p>${rest}</p>`)
+    return out.length ? out.join('') : whole
+  })
+}
+
+export function buildFigures(html: string, ready: ReadyOriginals, dims: ImageDims): string {
+  let seen = 0 // index of the image within the body, in source order
+  // The lift replaces what used to be `<p>\s*(<img>)\s*</p>` → `$1`: that rule only knew the
+  // paragraph holding NOTHING but a picture, which is the case this blog writes most often and
+  // not the only one it writes.
+  return liftImagesOutOfParagraphs(html)
+    .replace(/<img\b[^>]*>/g, (tag) => {
+      const src = tag.match(/\bsrc="([^"]*)"/)?.[1]
+      if (!src) return tag
+      const alt = tag.match(/\balt="([^"]*)"/)?.[1] ?? ''
+      const [rawSrc, frag = ''] = src.split('#')
+      const cleanSrc = safeImageSrc(rawSrc ?? '')
+      const caption = alt ? `<figcaption>${alt}</figcaption>` : ''
+      // Intrinsic size (when known) reserves the box -> no CLS as it loads.
+      const d = dims.get(collapseBlob(cleanSrc))
+      const sizeAttrs = d ? ` width="${d.width}" height="${d.height}"` : ''
+      // First image = likely LCP → eager + high priority; later images stay lazy.
+      const priority = seen === 0 ? ' fetchpriority="high"' : ' loading="lazy"'
+      seen++
+      const img = `<img src="${attr(cleanSrc)}" alt="${attr(alt)}"${sizeAttrs}${priority}>`
+      // The classes decide the shape, and the shape decides what `sizes` may honestly say,
+      // so they are computed BEFORE the sources rather than after.
+      const cls = imgClasses(frag)
+      const sources = responsiveSources(cleanSrc, ready, sizesFor(cls))
+      const media = sources ? `<picture>${sources}${img}</picture>` : img
+      return `<figure class="${attr(cls)}">${media}${caption}</figure>`
+    })
+}

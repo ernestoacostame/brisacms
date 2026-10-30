@@ -1,0 +1,114 @@
+# The Docker Hub shop window: the short line, the overview, and the category.
+#
+# SEPARATE FROM `publish.yml` on purpose. The listing is prose, not an artefact — fixing a
+# typo in the overview should not require cutting a release, and cutting a release should not
+# depend on Docker Hub's description API being up. So this runs when the overview file
+# changes, and by hand.
+#
+# It exists because the page was BARE: measured on 2026-08-21, `quireink/quireink` had an
+# empty description, no overview and no category. Docker Hub's own search — the one a
+# Synology or QNAP container UI puts in front of its owner — reads exactly those fields, so a
+# blank listing is an image nobody can find and, if they do find it, nobody can evaluate.
+#
+# The overview is its OWN file rather than the README, and that is not duplication for its
+# own sake: Docker Hub renders Markdown but resolves no relative link, so every path in the
+# README (`./docs/self-host.md`, the screenshots, the badges) would arrive broken. The file
+# it reads uses absolute URLs throughout.
+name: Docker Hub listing
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/dockerhub-overview.md'
+      - '.github/workflows/dockerhub-listing.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# UBUNTU 24.04 BY NAME, not ubuntu-latest (2026-09-23): the label moves to Ubuntu 26 from
+# 2026-10-19, and a runner image changing under a release is a failure nobody asked for. Moving
+# to 26 is a change to make on purpose, with CI watching, and then to pin again.
+jobs:
+  describe:
+    runs-on: ubuntu-24.04
+    # Same guard as the publish workflow: `secrets` is not readable from a step's `if`, so it
+    # comes through `env` first. A fork, or this repository before the credentials existed,
+    # skips the whole thing rather than failing.
+    env:
+      HAS_HUB: ${{ secrets.DOCKERHUB_TOKEN != '' }}
+      REPO: quireink/quireink
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: The short line and the overview
+        if: env.HAS_HUB == 'true'
+        uses: peter-evans/dockerhub-description@v5
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: quireink/quireink
+          # 100 characters is the Hub's ceiling and this is 90. It names NAS because the
+          # search that reads this line is the one inside a Synology or QNAP container UI,
+          # and it spends its second sentence on the one thing no other blog image offers.
+          # The architecture — one process, two SQLite files — is the FIRST line of the
+          # overview immediately below, where there is room for a proof.
+          short-description: 'A blog you host yourself, small enough for a NAS. An AI agent can write and publish to it.'
+          readme-filepath: ./docs/dockerhub-overview.md
+
+      # The category is not part of that action, and it is what the Hub's own filters use.
+      # `content-management-system` is the whole list on purpose: it is what this is, and
+      # padding it with `web-servers` to widen the net would put a blog engine in the aisle
+      # where people are looking for nginx.
+      #
+      # THE PATH AND THE BODY ARE BOTH COUNTER-INTUITIVE, and both cost a run to learn:
+      #   * PATCH `/categories/`, not the repository root. The root accepts a description
+      #     happily and silently IGNORES a `categories` key — it answered 200 and the public
+      #     record still showed none. Probing unauthenticated separates them: root and
+      #     `/categories/` both answer 401 to PATCH, while PUT and POST on `/categories/`
+      #     answer 405.
+      #   * A BARE ARRAY. `{"categories":[...]}`, the shape the read endpoint returns, gets
+      #     500 "internal error"; the array alone gets 200.
+      # Undocumented either way, so the check below reads the public record rather than
+      # trusting this status.
+      - name: The category
+        if: env.HAS_HUB == 'true'
+        env:
+          USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          jwt=$(curl -fsS -X POST https://hub.docker.com/v2/users/login \
+            -H 'Content-Type: application/json' \
+            -d "$(jq -n --arg u "$USERNAME" --arg p "$TOKEN" '{username:$u,password:$p}')" \
+            | jq -r .token)
+          code=$(curl -s -o /tmp/cat-resp.json -w '%{http_code}' -X PATCH \
+            "https://hub.docker.com/v2/repositories/${REPO}/categories/" \
+            -H "Authorization: JWT ${jwt}" \
+            -H 'Content-Type: application/json' \
+            -d '[{"name":"Content management system","slug":"content-management-system"}]')
+          echo "PATCH /categories/ -> ${code}"
+          head -c 300 /tmp/cat-resp.json || true
+
+      - name: What the world can actually see now
+        if: env.HAS_HUB == 'true'
+        run: |
+          set -euo pipefail
+          curl -fsS "https://hub.docker.com/v2/repositories/${REPO}/" > /tmp/repo.json
+          {
+            echo "### ${REPO} listing"
+            echo
+            echo "- short description: $(jq -r 'if (.description // "") == "" then "**still empty**" else .description end' /tmp/repo.json)"
+            echo "- overview: $(jq -r 'if (.full_description // "") == "" then "**still empty**" else ((.full_description | length | tostring) + " characters") end' /tmp/repo.json)"
+            cats=$(jq -r '[.categories[].name] | join(", ")' /tmp/repo.json)
+            if [ -z "$cats" ]; then
+              cats="**still empty** - set them by hand at https://hub.docker.com/repository/docker/${REPO}/settings"
+            fi
+            echo "- categories: ${cats}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Note when the Hub was skipped
+        if: env.HAS_HUB != 'true'
+        run: |
+          echo "Skipped - no DOCKERHUB_TOKEN secret on this repository." >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,373 @@
+// Taxonomy, series, redirects, settings, trash, activity, cache.
+//
+// The one with real teeth is the trash `in_use` guard: without it, permanently deleting a
+// trashed image silently breaks whatever published page still points at it, and nothing
+// tells anyone until a reader sees a broken image.
+import { describe, it, expect, beforeEach, afterAll } from 'bun:test'
+import { freshDatabase, dropDatabase } from '@/test/db'
+import { db } from '@/test/sqlite'
+import { createApp } from '@/web/app'
+import { createUser } from '@/auth/users'
+import { COOKIE_NAME, createSession } from '@/auth/sessions'
+import { resetSecretCache } from '@/auth/secret'
+import { resetLimits } from '@/server/rate-limit'
+import { pageCache } from '@/server/cache'
+import { blobUrl } from '@/media/blob'
+import { payload } from '@/test/api'
+
+const DIR = './.tmp/test-admin-site'
+freshDatabase(DIR)
+afterAll(() => dropDatabase(DIR))
+
+const app = createApp()
+let cookie = ''
+
+beforeEach(async () => {
+  for (const t of ['sessions', 'users', 'posts', 'pages', 'post_terms', 'media', 'files',
+                   'comments', 'redirects', 'activity_log', 'settings', 'server_secrets']) {
+    db().run(`delete from ${t}`)
+  }
+  pageCache.clear()
+  resetSecretCache()
+  resetLimits()
+  const user = await createUser({ username: 'hung', email: 'h@example.com', password: 'wandering violet cassette' })
+  cookie = `${COOKIE_NAME}=${createSession(user.id).token}`
+})
+
+const asOwner = (path: string, init: RequestInit = {}) =>
+  app.request(path, {
+    ...init,
+    headers: { cookie, 'content-type': 'application/json', 'sec-fetch-site': 'same-origin' },
+  })
+
+const post = (path: string, data: unknown) =>
+  asOwner(path, { method: 'POST', body: JSON.stringify(data) })
+
+const newPost = (data: unknown) => post('/api/posts', data)
+
+const put = (path: string, data: unknown) =>
+  asOwner(path, { method: 'PUT', body: JSON.stringify(data) })
+
+// The list's path is a THIRD occupant of the /{slug} namespace once the home page stops
+// being the list. The guard has to ask what the settings will BE, not what this particular
+// payload mentions, or the two commonest shapes walk straight past it.
+describe('the post list cannot be pointed at a slug something already holds', () => {
+  const PAST = '2020-01-01T00:00:00.000Z'
+
+  it('refuses a payload that names both the mode and the path', async () => {
+    await newPost({ title: 'Post', status: 'published', date: PAST })
+    const res = await put('/api/settings', { home: { mode: 'front', page: '', listPath: '/post', front: {} } })
+    expect(res.status).toBe(409)
+    expect((await payload<{ error: string }>(res)).error).toContain('list_path_taken')
+  })
+
+  it('refuses a payload that moves only the path, with the mode already set', async () => {
+    await put('/api/settings', { home: { mode: 'front', page: '', listPath: '/writing', front: {} } })
+    await newPost({ title: 'Journal', status: 'published', date: PAST })
+    const res = await put('/api/settings', { home: { listPath: '/journal' } })
+    expect(res.status).toBe(409)
+  })
+
+  it('refuses a payload that flips only the mode onto the default path', async () => {
+    await newPost({ title: 'Post', status: 'published', date: PAST })
+    const res = await put('/api/settings', { home: { mode: 'front' } })
+    expect(res.status).toBe(409)
+  })
+
+  it('still allows a free path', async () => {
+    await newPost({ title: 'Post', status: 'published', date: PAST })
+    const res = await put('/api/settings', { home: { mode: 'front', page: '', listPath: '/writing', front: {} } })
+    expect(res.status).toBe(200)
+  })
+})
+
+describe('the gate', () => {
+  it('refuses every one of these without a session', async () => {
+    const routes: Array<[string, string]> = [
+      ['POST', '/api/taxonomy'], ['POST', '/api/series'],
+      ['GET', '/api/redirects'], ['POST', '/api/redirects'], ['DELETE', '/api/redirects/1'],
+      ['PUT', '/api/settings'],
+      ['GET', '/api/activity'], ['DELETE', '/api/activity'],
+      ['POST', '/api/cache/clear'], ['POST', '/api/trash'],
+    ]
+    for (const [method, path] of routes) {
+      const res = await app.request(path, {
+        method,
+        headers: { 'content-type': 'application/json', 'sec-fetch-site': 'same-origin' },
+        ...(method === 'GET' || method === 'DELETE' ? {} : { body: '{}' }),
+      })
+      expect(`${method} ${path} -> ${res.status}`).toBe(`${method} ${path} -> 401`)
+    }
+  })
+})
+
+describe('taxonomy', () => {
+  it('renames a tag across every post that carries it', async () => {
+    await newPost({ title: 'One', tags: ['draft-tag'], status: 'published' })
+    await newPost({ title: 'Two', tags: ['draft-tag'], status: 'published' })
+    const res = await post('/api/taxonomy', { kind: 'tag', name: 'draft-tag', action: 'rename', newName: 'final-tag' })
+    expect(res.status).toBe(200)
+    expect(await payload<{ changed: number }>(res)).toEqual({ changed: 2 })
+    expect((await app.request('/tag/final-tag')).status).toBe(200)
+  })
+
+  it('removes a term', async () => {
+    await newPost({ title: 'One', categories: ['gone'], status: 'published' })
+    const res = await post('/api/taxonomy', { kind: 'category', name: 'gone', action: 'delete' })
+    expect((await payload<{ changed: number }>(res)).changed).toBe(1)
+  })
+
+  it('rejects a missing kind, a missing name, and a rename with no new name', async () => {
+    expect((await post('/api/taxonomy', { name: 'x', action: 'delete' })).status).toBe(400)
+    expect((await post('/api/taxonomy', { kind: 'tag', action: 'delete' })).status).toBe(400)
+    expect((await post('/api/taxonomy', { kind: 'tag', name: 'x', action: 'rename' })).status).toBe(400)
+  })
+})
+
+describe('series', () => {
+  it('renames, reorders and removes', async () => {
+    await newPost({ title: 'Part one', series: 'A Series', seriesOrder: 1, status: 'published' })
+    await newPost({ title: 'Part two', series: 'A Series', seriesOrder: 2, status: 'published' })
+
+    const renamed = await post('/api/series', { action: 'rename', name: 'A Series', newName: 'Better Name' })
+    expect((await payload<{ changed: number }>(renamed)).changed).toBe(2)
+
+    const reordered = await post('/api/series', {
+      action: 'reorder', name: 'Better Name', order: ['part-two', 'part-one'],
+    })
+    expect(reordered.status).toBe(200)
+
+    const removed = await post('/api/series', { action: 'delete', name: 'Better Name' })
+    expect((await payload<{ changed: number }>(removed)).changed).toBe(2)
+  })
+
+  it('rejects a missing name, an unknown action and an empty reorder', async () => {
+    expect((await post('/api/series', { action: 'rename' })).status).toBe(400)
+    expect((await post('/api/series', { action: 'sideways', name: 'x' })).status).toBe(400)
+    expect((await post('/api/series', { action: 'reorder', name: 'x', order: [] })).status).toBe(400)
+  })
+})
+
+describe('redirects', () => {
+  it('creates, lists and deletes', async () => {
+    expect((await post('/api/redirects', { source: '/old', destination: '/new' })).status).toBe(201)
+    const list = await payload<Array<{ id: number; source: string; permanent: boolean }>>(asOwner('/api/redirects'))
+    expect(list.length).toBe(1)
+    expect(list[0].source).toBe('/old')
+    // 301 unless explicitly told otherwise.
+    expect(list[0].permanent).toBe(true)
+    expect((await asOwner(`/api/redirects/${list[0].id}`, { method: 'DELETE' })).status).toBe(200)
+    expect((await payload<unknown[]>(asOwner('/api/redirects'))).length).toBe(0)
+  })
+
+  it('makes a redirect temporary only on an explicit false', async () => {
+    await post('/api/redirects', { source: '/a', destination: '/b', permanent: false })
+    const list = await payload<Array<{ permanent: boolean }>>(asOwner('/api/redirects'))
+    expect(list[0].permanent).toBe(false)
+  })
+
+  // The validation message IS for the caller, unlike the generic 500 path.
+  it('passes a validation message through as a 400', async () => {
+    const res = await post('/api/redirects', { source: '', destination: '/b' })
+    expect(res.status).toBe(400)
+    expect((await payload<{ error: string }>(res)).error).not.toBe('Internal error')
+  })
+
+  it('rejects a non-numeric id', async () => {
+    expect((await asOwner('/api/redirects/abc', { method: 'DELETE' })).status).toBe(400)
+  })
+
+  // A redirect on `/login` was saved and took effect: the sign-in page answered 301 for
+  // everybody, and the owner was locked out the moment the session ran out.
+  it('refuses the owner\'s way in, the feeds and the root', async () => {
+    for (const source of ['/login', '/login/2fa', '/setup', '/', '/feed.xml', '/sitemap.xml', '/api/health', '/.well-known/x']) {
+      const res = await post('/api/redirects', { source, destination: '/elsewhere' })
+      expect(`${source} → ${res.status}`).toBe(`${source} → 400`)
+    }
+  })
+
+  it('and a row stored before the refusal existed does nothing', async () => {
+    db().run(`insert into redirects (source, destination, permanent, created_at) values ('/login', '/x', 1, 0)`)
+    expect((await app.request('/login')).status).not.toBe(301)
+    db().run(`delete from redirects where source = '/login'`)
+  })
+})
+
+describe('settings', () => {
+  it('saves and returns the merged settings', async () => {
+    const res = await asOwner('/api/settings', { method: 'PUT', body: JSON.stringify({ title: 'A New Title' }) })
+    expect(res.status).toBe(200)
+    expect((await payload<{ title: string }>(res)).title).toBe('A New Title')
+  })
+
+  // Invariant 1. Settings are site-wide, so every cached page is now wrong.
+  it('clears the page cache', async () => {
+    await app.request('/')
+    expect(pageCache.size).toBeGreaterThan(0)
+    await asOwner('/api/settings', { method: 'PUT', body: JSON.stringify({ title: 'Changed' }) })
+    expect(pageCache.size).toBe(0)
+  })
+})
+
+describe('the activity log', () => {
+  it('reports what the admin did, and clears', async () => {
+    await newPost({ title: 'Logged' })
+    const entries = await payload<Array<{ action: string }>>(asOwner('/api/activity'))
+    expect(entries.some((e) => e.action === 'post.create')).toBe(true)
+    expect((await asOwner('/api/activity', { method: 'DELETE' })).status).toBe(200)
+    expect((await payload<unknown[]>(asOwner('/api/activity'))).length).toBe(0)
+  })
+})
+
+describe('the cache purge', () => {
+  it('empties the page cache', async () => {
+    await app.request('/')
+    expect(pageCache.size).toBeGreaterThan(0)
+    expect((await post('/api/cache/clear', {})).status).toBe(200)
+    expect(pageCache.size).toBe(0)
+  })
+})
+
+describe('trash', () => {
+  it('rejects an unknown kind or action, and an empty id list', async () => {
+    expect((await post('/api/trash', { kind: 'widgets', action: 'purge', ids: ['x'] })).status).toBe(400)
+    expect((await post('/api/trash', { kind: 'posts', action: 'sideways', ids: ['x'] })).status).toBe(400)
+    expect((await post('/api/trash', { kind: 'posts', action: 'restore', ids: [] })).status).toBe(400)
+  })
+
+  it('restores a soft-deleted post to the public site', async () => {
+    const created = await newPost({ title: 'Comes back', status: 'published' })
+    const { slug } = await payload<{ slug: string }>(created)
+    await asOwner(`/api/posts/${slug}`, { method: 'DELETE' })
+    expect(await (await app.request('/')).text()).not.toContain('Comes back')
+
+    const res = await post('/api/trash', { kind: 'posts', action: 'restore', ids: [slug] })
+    expect(res.status).toBe(200)
+    // Invariant 1 again: the restore has to be visible without a cold hit.
+    expect(await (await app.request('/')).text()).toContain('Comes back')
+  })
+
+  it('purges permanently', async () => {
+    const created = await newPost({ title: 'Gone for good' })
+    const { slug } = await payload<{ slug: string }>(created)
+    await asOwner(`/api/posts/${slug}`, { method: 'DELETE' })
+    expect((await post('/api/trash', { kind: 'posts', action: 'purge', ids: [slug] })).status).toBe(200)
+    const restored = await post('/api/trash', { kind: 'posts', action: 'restore', ids: [slug] })
+    // Nothing left to restore; the row is really gone.
+    expect(restored.status).toBe(200)
+    expect((await asOwner(`/api/posts/${slug}`)).status).toBe(404)
+  })
+
+  /**
+   * The guard with teeth. Purging a trashed image that a published post still references
+   * silently breaks that post, and nobody finds out until a reader sees a broken image.
+   * `in_use:<n>` is what lets the admin re-ask with `force`.
+   */
+  it('refuses to purge media a live post still references', async () => {
+    // Stored store-relative (Invariant 3): the column is `path`, and the key must live
+    // under `media/` because that is the prefix usedMediaKeys scans content for.
+    const path = 'media/photo.jpg'
+    const url = blobUrl(path)
+    db().run(`insert into media (path, filename, uploaded_at) values (?, ?, ?)`,
+      [path, 'photo.jpg', Date.now()])
+    await newPost({ title: 'Has an image', content: `![alt](${url})`, status: 'published' })
+    db().run(`update media set deleted_at = ?`, [Date.now()])
+
+    const refused = await post('/api/trash', { kind: 'media', action: 'purge', ids: [url] })
+    expect(refused.status).toBe(409)
+    expect((await payload<{ error: string }>(refused)).error).toBe('in_use:1')
+
+    // ...and goes ahead when the caller confirms.
+    const forced = await post('/api/trash', { kind: 'media', action: 'purge', ids: [url], force: true })
+    expect(forced.status).toBe(200)
+  })
+
+  it('refuses to purge media a TRASHED post references, because a trashed post comes back', async () => {
+    // The audit read the live index, so trashing a post made its images look unused: they
+    // could be permanently deleted, and then the post came back out of the trash with a hole
+    // in it. Nothing else about the trash works that way.
+    const path = 'media/only-in-the-bin.jpg'
+    const url = blobUrl(path)
+    db().run(`insert into media (path, filename, uploaded_at) values (?, ?, ?)`,
+      [path, 'only-in-the-bin.jpg', Date.now()])
+    const created = await newPost({ title: 'Binned but not gone', content: `![alt](${url})`, status: 'published' })
+    const { slug } = await payload<{ slug: string }>(created)
+    await asOwner(`/api/posts/${slug}`, { method: 'DELETE' })
+    db().run(`update media set deleted_at = ? where path = ?`, [Date.now(), path])
+
+    const refused = await post('/api/trash', { kind: 'media', action: 'purge', ids: [url] })
+    expect(refused.status).toBe(409)
+    expect((await payload<{ error: string }>(refused)).error).toBe('in_use:1')
+  })
+
+  // The question named nothing and offered all or nothing (2026-09-30): the answer names what
+  // is in use, and `skipUsed` deletes the free ones and leaves those in the trash.
+  it('names what is in use, and can delete only the rest', async () => {
+    const used = blobUrl('media/on-a-page.jpg')
+    const free = blobUrl('media/nobody.jpg')
+    for (const [path, name] of [['media/on-a-page.jpg', 'on-a-page.jpg'], ['media/nobody.jpg', 'nobody.jpg']]) {
+      db().run(`insert into media (path, filename, uploaded_at) values (?, ?, ?)`, [path!, name!, Date.now()])
+    }
+    await newPost({ title: 'Pictured', content: `![alt](${used})`, status: 'published' })
+    db().run(`update media set deleted_at = ?`, [Date.now()])
+    const refused = await post('/api/trash', { kind: 'media', action: 'purge', ids: [used, free] })
+    expect(await refused.json()).toMatchObject({ error: 'in_use:1', inUse: ['on-a-page.jpg'], total: 2 })
+    expect((await post('/api/trash', { kind: 'media', action: 'purge', ids: [used, free], skipUsed: true })).status).toBe(200)
+    const left = db().query<{ path: string }, []>(`select path from media order by path`).all().map((r) => r.path)
+    expect(left).toEqual(['media/on-a-page.jpg'])
+  })
+
+  it('lets an unreferenced image be purged without force', async () => {
+    const url = blobUrl('media/orphan.jpg')
+    db().run(`insert into media (path, filename, uploaded_at, deleted_at) values (?, ?, ?, ?)`,
+      ['media/orphan.jpg', 'orphan.jpg', Date.now(), Date.now()])
+    expect((await post('/api/trash', { kind: 'media', action: 'purge', ids: [url] })).status).toBe(200)
+  })
+})
+
+// "Settings saved" over an emptied title, and the old title back at the next load (2026-09-30).
+describe('the site title', () => {
+  it('is refused when emptied, and left as it was', async () => {
+    await put('/api/settings', { title: 'Kept title' })
+    const res = await put('/api/settings', { title: '   ' })
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ success: false, error: 'title_required' })
+    const { getSettings } = await import('@/content/settings')
+    expect((await getSettings()).title).toBe('Kept title')
+  })
+})
+
+// "Settings saved" over a Site address that was then stored as `''` — wiping the one already
+// there — and the same through the author link and the repository name (2026-10-08).
+describe('a free-text setting the save cannot keep', () => {
+  it('is refused by name, and what was stored stays', async () => {
+    await put('/api/settings', { siteUrl: 'https://kept.example', author: { url: 'https://kept.example/me' } })
+    for (const [body, error] of [
+      [{ siteUrl: 'not a url' }, 'field_url: siteUrl'],
+      [{ author: { url: 'my site' } }, 'field_url: author.url'],
+      [{ sourceRepo: 'nobody' }, 'field_invalid: sourceRepo'],
+    ] as const) {
+      const res = await put('/api/settings', body)
+      expect(res.status).toBe(400)
+      expect(await res.json()).toEqual({ success: false, error })
+    }
+    const { getSettings } = await import('@/content/settings')
+    const now = await getSettings()
+    expect(now.siteUrl).toBe('https://kept.example')
+    expect(now.author.url).toBe('https://kept.example/me')
+  })
+
+  it('refuses the WHOLE save, so nothing beside the bad field lands either', async () => {
+    await put('/api/settings', { title: 'Before' })
+    expect((await put('/api/settings', { title: 'After', siteUrl: 'nope' })).status).toBe(400)
+    const { getSettings } = await import('@/content/settings')
+    expect((await getSettings()).title).toBe('Before')
+  })
+
+  it('still clears on an empty answer, and keeps an address as its origin', async () => {
+    expect((await put('/api/settings', { siteUrl: '' })).status).toBe(200)
+    const res = await put('/api/settings', { siteUrl: 'https://example.org/blog/' })
+    expect(res.status).toBe(200)
+    expect(((await res.json()) as { data: { siteUrl: string } }).data.siteUrl).toBe('https://example.org')
+  })
+})

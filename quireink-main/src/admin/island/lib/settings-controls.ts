@@ -1,0 +1,345 @@
+// THE CONTROLS THE BROWSER CANNOT MOVE ON ITS OWN.
+//
+// Most of the settings screen needs no JavaScript at all: a text field, a number, a textarea, a
+// select and a checkbox all hold their own value, and `settings-form.ts` reads them straight off
+// the DOM when it is time to save. What is here is the short list of controls that are NOT
+// native form elements and therefore have to be told what they are:
+//
+//   · the SWITCH, which is a `<button role="switch">` because a switch draws no text of its own
+//     and a `<label>` cannot name a `<button>`;
+//   · the SEGMENTED CHOICE, which is a row of buttons carrying `aria-pressed`;
+//   · the COLOUR, which is two inputs over one value and has to keep them in step;
+//   · the SLIDER's readout;
+//   · the GATE and the CURTAIN, which show a row that depends on another row's answer;
+//   · a THEME's suggestion, which moves another choice on the same form when a theme is picked.
+//
+// Every one of them ships drawn in the state the server could see. Nothing here builds a row.
+import { KNOB_OFF, KNOB_ON, SWITCH_OFF, SWITCH_ON } from '@/admin-shared/controls'
+import { pressKey } from './press-key'
+import { applyThemeOffers } from './settings-offers'
+
+/** What a control reports when it moves, so the form can recount without knowing what moved. */
+export type OnMove = () => void
+
+const html = (el: Element | null): HTMLElement | null => el instanceof HTMLElement ? el : null
+
+/**
+ * A switch is a button, so its state is `aria-checked` and two class strings.
+ *
+ * The pair lives in `@/admin-shared/controls`, where the server reads it too: the two faces
+ * differ by a Tailwind colour with a dark variant, and a CSS rule keyed on `aria-checked` would
+ * be a second copy of that token in `admin.css`.
+ */
+export function setSwitch(el: HTMLElement, on: boolean): void {
+  el.setAttribute('aria-checked', String(on))
+  el.className = on ? SWITCH_ON : SWITCH_OFF
+  const knob = el.firstElementChild
+  if (knob instanceof HTMLElement) knob.className = on ? KNOB_ON : KNOB_OFF
+}
+
+export const switchOn = (el: HTMLElement): boolean => el.getAttribute('aria-checked') === 'true'
+
+/**
+ * Everything the panels hold, wired in one pass.
+ *
+ * ONE listener on the root and not one per control: this screen draws around three hundred of
+ * them, and three hundred listeners is three hundred closures held for the life of the page to
+ * do what one `closest()` does on the click that actually happens.
+ */
+export function wireControls(root: HTMLElement, moved: OnMove): void {
+  root.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement
+
+    const sw = target.closest<HTMLElement>('[data-switch]')
+    if (sw && !(sw as HTMLButtonElement).disabled) {
+      const on = !switchOn(sw)
+      setSwitch(sw, on)
+      mirror(root, sw, (twin) => setSwitch(twin, on))
+      applyGates(root)
+      moved()
+      return
+    }
+
+    const seg = target.closest<HTMLElement>('[data-choice]')
+    const track = seg?.closest<HTMLElement>('[data-choice-track]')
+    if (seg && track) {
+      const value = seg.dataset.choice ?? ''
+      pickChoice(track, value)
+      mirror(root, track, (twin) => pickChoice(twin, value))
+      // The owner's own hand, which a theme's suggestion never moves until the next save.
+      markPicked(root, track, 'owner')
+      if (seg.hasAttribute('data-suggests')) applySuggests(root, seg.dataset.suggests ?? '')
+      applyGates(root)
+      moved()
+    }
+  })
+
+  // `input` and not `change`: a number typed into is dirty before it is left, and the Save key
+  // has to say so while the finger is still on the keyboard.
+  root.addEventListener('input', (e) => {
+    const el = e.target
+    if (!(el instanceof HTMLElement)) return
+    if (el instanceof HTMLInputElement && el.type === 'range') readout(el)
+    if (el.dataset.kEcho) echoColour(root, el as HTMLInputElement)
+    if (el.dataset.k && el.classList.contains('font-mono')) echoWell(root, el as HTMLInputElement)
+    moved()
+  })
+
+  root.addEventListener('change', (e) => {
+    const el = e.target
+    if (el instanceof HTMLElement && (el.dataset.k || el.dataset.kEcho)) {
+      applyGates(root)
+      moved()
+    }
+  })
+
+  for (const el of root.querySelectorAll<HTMLInputElement>('input[type=range]')) readout(el)
+  applyGates(root)
+}
+
+/**
+ * ONE SETTING CAN BE DRAWN ON TWO TABS, and then both copies have to move together.
+ *
+ * The comments master switch is deliberately on both Posts ("should there be comments") and
+ * Comments & mail ("how do readers answer back") — React drew one component twice and both read
+ * one piece of state, so flipping either moved both. Two independent DOM controls do not do
+ * that on their own: one would move, the other would keep showing the old answer, and the
+ * form's diff would send whichever it walked into first.
+ *
+ * So a control's twins are found by the key it stores and told what it just did. `settle` moves
+ * every copy's baseline for the same reason.
+ */
+function mirror(root: HTMLElement, el: HTMLElement, tell: (twin: HTMLElement) => void): void {
+  const key = el.dataset.k
+  if (!key) return
+  for (const twin of root.querySelectorAll<HTMLElement>(`[data-k="${CSS.escape(key)}"]`)) {
+    if (twin !== el) tell(twin)
+  }
+}
+
+/** The strip's chosen key is CARVED into the track, and `aria-pressed` is what says so. */
+function pickChoice(track: HTMLElement, value: string): void {
+  // Each key's own two faces: copying one key's class to its siblings took its corners along,
+  // and a strip drawn with nothing pressed never changed class at all (2026-09-30).
+  for (const b of track.querySelectorAll<HTMLElement>('[data-choice]')) pressKey(b, b.dataset.choice === value)
+  track.dataset.value = value
+}
+
+const markPicked = (root: HTMLElement, track: HTMLElement, by: 'owner' | 'theme'): void => {
+  track.dataset.pickedBy = by
+  mirror(root, track, (twin) => { twin.dataset.pickedBy = by })
+}
+
+/**
+ * A THEME'S SUGGESTION, moved onto the form when its tile is pressed.
+ *
+ * The tile carries `data-suggests`, a JSON object of setting key to value (`chromeFont` today,
+ * from `suggests` in `content/themes-builtin.ts`), so this knows nothing about any theme. Each
+ * named choice is moved ON SCREEN, unsaved, where the owner can see it and press another; the
+ * one Save then sends both. A choice the owner pressed themselves since the last save is theirs
+ * and is left alone. A choice a previous tile moved, which this tile does not name, goes back
+ * to what is saved, so trying a theme and leaving it leaves nothing behind.
+ */
+function applySuggests(root: HTMLElement, raw: string): void {
+  let wanted: Record<string, unknown> = {}
+  try {
+    const parsed: unknown = JSON.parse(raw || '{}')
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) wanted = parsed as Record<string, unknown>
+  } catch {
+    // Markup the server wrote; one that does not parse suggests nothing rather than half of it.
+    console.error('settings: a theme tile carries data-suggests that is not JSON', raw)
+  }
+  for (const track of root.querySelectorAll<HTMLElement>('[data-choice-track][data-picked-by="theme"]')) {
+    if (!Object.hasOwn(wanted, track.dataset.k ?? '')) {
+      const saved = track.dataset.was ?? ''
+      pickChoice(track, saved)
+      mirror(root, track, (twin) => { pickChoice(twin, saved); delete twin.dataset.pickedBy })
+      delete track.dataset.pickedBy
+    }
+  }
+  for (const [key, value] of Object.entries(wanted)) {
+    if (typeof value !== 'string') continue
+    const track = root.querySelector<HTMLElement>(`[data-choice-track][data-k="${CSS.escape(key)}"]`)
+    if (!track || track.dataset.pickedBy === 'owner') continue
+    if (!track.querySelector(`[data-choice="${CSS.escape(value)}"]`)) continue
+    pickChoice(track, value)
+    mirror(root, track, (twin) => pickChoice(twin, value))
+    markPicked(root, track, 'theme')
+  }
+}
+
+/** What a segmented choice currently holds, for the form's diff. */
+export const choiceValue = (track: HTMLElement): string =>
+  track.querySelector<HTMLElement>('[aria-pressed="true"]')?.dataset.choice ?? ''
+
+/** The number beside a slider, which is the only thing that says what it is set to. */
+function readout(el: HTMLInputElement): void {
+  const box = el.parentElement?.querySelector<HTMLElement>('[data-readout]')
+  if (!box) return
+  const unit = box.dataset.unit ?? ''
+  box.textContent = `${el.value}${unit}`
+}
+
+/** The OS picker moved: put its answer in the hex field, which is the one that saves. */
+function echoColour(root: HTMLElement, el: HTMLInputElement): void {
+  const key = el.dataset.kEcho
+  const hex = root.querySelector<HTMLInputElement>(`input[data-k="${CSS.escape(key ?? '')}"]`)
+  if (hex) hex.value = el.value.replace(/^#/, '').toUpperCase()
+  const well = html(el.parentElement)
+  if (well) well.style.background = el.value
+}
+
+/** The hex was typed into: move the picker and the well to match, once it is a colour. */
+function echoWell(root: HTMLElement, el: HTMLInputElement): void {
+  const key = el.dataset.k ?? ''
+  const full = `#${el.value.replace(/^#/, '')}`
+  if (!/^#[0-9a-fA-F]{6}$/.test(full)) return
+  const echo = root.querySelector<HTMLInputElement>(`input[data-k-echo="${CSS.escape(key)}"]`)
+  if (echo) echo.value = full
+  const well = html(echo?.parentElement ?? null)
+  if (well) well.style.background = full
+}
+
+/**
+ * A ROW THAT DEPENDS ON ANOTHER ROW'S ANSWER.
+ *
+ * `data-gate="<key>"` shows while that key is on; `data-gate-when="<key>=<value>"` while it holds
+ * a particular value. A curtain (`data-reveal`) is the same question with an animation and the
+ * `inert` that keeps the Tab key out of a row nobody can see.
+ *
+ * Read from the DOM every time rather than kept in a variable: the answer is already on the
+ * screen, and a second copy of it is a second thing that can be wrong.
+ */
+/** What a settings key is answering, read off the screen wherever it is drawn. */
+function answerIn(root: HTMLElement, key: string): string {
+  const sw = root.querySelector<HTMLElement>(`[data-switch][data-k="${CSS.escape(key)}"]`)
+  if (sw) return switchOn(sw) ? '1' : '0'
+  const track = root.querySelector<HTMLElement>(`[data-choice-track][data-k="${CSS.escape(key)}"]`)
+  if (track) return choiceValue(track)
+  const field = root.querySelector<HTMLInputElement>(`[data-k="${CSS.escape(key)}"]`)
+  if (!field) return ''
+  return field.type === 'checkbox' ? (field.checked ? '1' : '0') : field.value
+}
+
+/**
+ * ⚠️ THE GATES THAT FOLLOW THE SAVED ANSWER, NOT THE ONE IN THE FORM.
+ *
+ * `applyGates` below deliberately does NOT touch `data-gate-live`, and the MCP card explains
+ * why at length: flipping its switch leaves the endpoint off until the card's own Save is
+ * pressed, so opening the address block on the flip handed out a URL, and the manager below it
+ * handed out a token, for a door that was still shut. Measured on a fresh install: every call
+ * answered 404 until the settings row was actually written.
+ *
+ * What was missing is the other half. Nothing re-read the hook after a save, so the blocks
+ * stayed shut until the page was reloaded: the owner switched the MCP server on, saved, watched
+ * the lamp go green, and the address and the "mint a token" key simply were not there. The hook
+ * was drawn twice and read by nobody.
+ *
+ * Called from the card's Save, which is the one moment the two answers are the same: the card
+ * has just written what is in it, so what is in it IS what is stored.
+ */
+export function applyLiveGates(card: HTMLElement): void {
+  for (const box of card.querySelectorAll<HTMLElement>('[data-gate-live]')) {
+    box.hidden = answerIn(card, box.dataset.gateLive ?? '') !== '1'
+  }
+}
+
+/**
+ * THE CONTROLS THE CHOSEN THEME DRAWS ITSELF.
+ *
+ * The pressed theme tile lists in `data-owns` the settings keys the theme decides (JSON, from
+ * `ownsSettings` in `content/themes-builtin.ts`) and its name in `data-name`. A control marked
+ * `data-ownable="<key>"` (with its label in `data-label`) is hidden whole while its key is
+ * listed. For each group of keys (the part before the dot) ONE line shows, at the first hidden
+ * control: its `data-template` with the theme's name and the hidden controls' labels, joined
+ * the way the page's language joins a list. Nothing about a field is touched, so its value
+ * still reads as saved and the control is back as soon as another tile is pressed. A tile that
+ * is not pressed (a theme from a later build) owns nothing.
+ */
+function applyOwned(root: HTMLElement): void {
+  const tile = root.querySelector<HTMLElement>('[data-choice-track][data-k="theme"] [aria-pressed="true"]')
+  let owned: string[] = []
+  try {
+    const parsed: unknown = JSON.parse(tile?.dataset.owns || '[]')
+    if (Array.isArray(parsed)) owned = parsed.filter((k): k is string => typeof k === 'string')
+  } catch {
+    console.error('settings: a theme tile carries data-owns that is not JSON', tile?.dataset.owns)
+  }
+  const groups = new Map<string, HTMLElement[]>()
+  for (const box of root.querySelectorAll<HTMLElement>('[data-ownable]')) {
+    const key = box.dataset.ownable ?? ''
+    box.hidden = owned.includes(key)
+    if (!box.hidden) continue
+    const group = key.split('.')[0] ?? ''
+    groups.set(group, [...(groups.get(group) ?? []), box])
+  }
+  for (const line of root.querySelectorAll<HTMLElement>('[data-owned-note]')) line.hidden = true
+  const lang = document.documentElement.lang || 'en'
+  for (const boxes of groups.values()) {
+    const line = root.querySelector<HTMLElement>(`[data-owned-note="${CSS.escape(boxes[0]?.dataset.ownable ?? '')}"]`)
+    if (!line) continue
+    // No quotation marks around the names: their shape differs per language and the template is
+    // where language lives, so a mark added here would be English quotes in German or Japanese.
+    const names = boxes.map((b) => b.dataset.label ?? '')
+    let parts = names.join(', ')
+    try { parts = new Intl.ListFormat(lang, { style: 'long', type: 'conjunction' }).format(names) } catch { /* a tag the engine lacks: the plain list above */ }
+    line.textContent = (line.dataset.template ?? '').replace('{theme}', tile?.dataset.name ?? '').replace('{parts}', parts)
+    line.hidden = false
+  }
+}
+
+export function applyGates(root: HTMLElement): void {
+  const valueOf = (key: string): string => answerIn(root, key)
+  applyOwned(root)
+  // What an installed theme adds to the palette and font pickers, shown with its tile.
+  applyThemeOffers(root)
+
+  for (const box of root.querySelectorAll<HTMLElement>('[data-gate]')) {
+    box.hidden = valueOf(box.dataset.gate ?? '') !== '1'
+  }
+  for (const box of root.querySelectorAll<HTMLElement>('[data-gate-when]')) {
+    const [key = '', want = ''] = (box.dataset.gateWhen ?? '').split('=')
+    box.hidden = valueOf(key) !== want
+  }
+  // "Either of these", which is how the comment integrations ask about themselves: the block
+  // of keys belongs on screen while EITHER sign-in method is switched on.
+  for (const box of root.querySelectorAll<HTMLElement>('[data-gate-any]')) {
+    const keys = (box.dataset.gateAny ?? '').split(' ').filter(Boolean)
+    box.hidden = !keys.some((k) => valueOf(k) === '1')
+  }
+  // "Any value but one", which is how the front page asks about its own mode: the list path
+  // applies to every arrangement EXCEPT the plain list.
+  for (const box of root.querySelectorAll<HTMLElement>('[data-gate-not]')) {
+    const [key = '', avoid = ''] = (box.dataset.gateNot ?? '').split('=')
+    box.hidden = valueOf(key) === avoid
+  }
+  // A row that stays VISIBLE and goes dead, which is not the same question as a row that goes
+  // away: a switch whose feature has no engine behind it has to look unavailable rather than
+  // off, or the owner flips it, sees it flip back, and concludes the admin is broken.
+  for (const box of root.querySelectorAll<HTMLElement>('[data-dim-when], [data-disable-when]')) {
+    const spec = box.dataset.dimWhen ?? box.dataset.disableWhen ?? ''
+    const [key = '', when = ''] = spec.split('=')
+    const dead = valueOf(key) === when
+    box.classList.toggle('opacity-50', dead && box.hasAttribute('data-dim-when'))
+    const inside = box.matches('button, input, select, textarea')
+      ? [box]
+      : [...box.querySelectorAll<HTMLElement>('button, input, select, textarea')]
+    for (const el of inside) (el as HTMLButtonElement).disabled = dead
+  }
+  for (const box of root.querySelectorAll<HTMLElement>('[data-reveal]')) {
+    const spec = box.dataset.reveal ?? ''
+    // `!=` as well as `=`: the mat colour opens on every frame EXCEPT none, and a curtain that
+    // only knows equality stays shut forever on a condition written the other way round.
+    const not = spec.includes('!=')
+    const [key = '', want] = spec.split(not ? '!=' : '=')
+    const open = want === undefined
+      ? valueOf(key) === '1'
+      : not ? valueOf(key) !== want : valueOf(key) === want
+    // The height animates in `admin.css`; `inert` and `aria-hidden` are what keep a screen
+    // reader and the Tab key out of a row that is still in the document.
+    if (open) box.setAttribute('data-open', '')
+    else box.removeAttribute('data-open')
+    box.setAttribute('aria-hidden', String(!open))
+    box.toggleAttribute('inert', !open)
+  }
+}

@@ -1,0 +1,152 @@
+// Runtime configuration, read once at boot and validated here rather than at the call
+// site. A missing value that only surfaces on the request that needs it is the shape of
+// outage the frozen tree's `src/env.ts` existed to prevent, and the reason is unchanged.
+
+export type Env = {
+  port: number
+  /**
+   * The interface to listen on. Defaults to `127.0.0.1`.
+   *
+   * It used to be nothing at all: `Bun.serve` with no `hostname` listens on `0.0.0.0`, while
+   * the line printed underneath it said `127.0.0.1`. Measured 2026-08-01 on two servers, all
+   * four instances were `*:port`, and nothing was exposed only because a firewall rule said
+   * so — a defence one rule deep, under a log telling whoever checked the opposite of the
+   * truth. Every instance sits behind nginx on the same box (`proxy_pass http://127.0.0.1:…`
+   * in all four vhosts, checked), so loopback is the right default for every one of them.
+   *
+   * A self-hoster whose proxy is on another machine, or who runs this in a container that has
+   * to be reachable from outside it, sets `HOST=0.0.0.0` and means it.
+   */
+  host: string
+  dataDir: string
+  /**
+   * Canonical origin for absolute URLs (feeds, OG, emails).
+   *
+   * Empty means the admin field is asked next and then `http://localhost:3000` is used — NOT
+   * "derive per request", which is what this comment said until 2026-08-11 while nothing
+   * derived anything. `content/settings.ts` has the reason it must stay a constant, and it is
+   * a cache-poisoning one rather than a taste.
+   */
+  siteUrl: string
+  /**
+   * A Content-Security-Policy to send on every response, or '' to send none.
+   *
+   * EMPTY BY DEFAULT, and that is the safe answer rather than the lazy one. A browser
+   * enforces the INTERSECTION of every policy it receives, so a default from here would
+   * silently narrow a policy a proxy has already tuned — the recommended nginx and Caddy
+   * configs both widen `frame-src` for YouTube, Vimeo and Spotify, and an embed that stops
+   * loading reports nothing to the owner. So the app says nothing unless an operator asks.
+   *
+   * It exists because two shipped install paths put no proxy of ours in front: a Kubernetes
+   * cluster terminates TLS at its own ingress, and a NAS has its own reverse proxy with its
+   * own header UI. Both were serving the whole site with no policy at all, and the only
+   * documented one lived in a vhost neither of them uses. `docs/self-host.md` carries a
+   * policy to paste.
+   */
+  csp: string
+  /**
+   * Largest single upload the SOFTWARE will store, in bytes. `0` = no cap.
+   *
+   * This is the DEPLOYMENT'S CEILING, not the owner's preference: the admin setting can
+   * lower it and can never raise it (`content/settings.ts`). That asymmetry is the whole
+   * point — an operator hosting a blog for somebody else sets the number the blog cannot
+   * argue with, and an operator hosting their own sets it once and forgets it.
+   */
+  maxUploadBytes: number
+  /**
+   * Largest the whole blob store may grow, in bytes. `0` = no cap. Same ceiling rule.
+   *
+   * Checked against a real walk of the store (`media/storage-stats.ts`), so it counts
+   * derived variants and icons too — every byte on the disk, not the sum of what was
+   * uploaded.
+   */
+  storeQuotaBytes: number
+  /**
+   * How much rendered HTML the in-process page cache may hold, in bytes.
+   *
+   * THE DEPLOYMENT'S CEILING, like the two above, and for the same reason: how much memory
+   * this process may spend is a fact about the machine, not a preference about the blog. The
+   * owner's switch beside it (`settings.cache.enabled`) decides WHETHER there is a cache;
+   * this decides how big it may get. `server/cache.ts` carries the measurements.
+   *
+   * It is not a page count. Pages are not the same size, and a cap counted in pages is a cap
+   * that means something different on every blog.
+   */
+  pageCacheBytes: number
+  /**
+   * Which of the three packages this install came from (ADR 0065): `source` (a checkout, run by
+   * Bun), `docker` (the published image) or `cloudflare` (the Cloudflare bundle). Set BY THE
+   * PACKAGE, not by the owner: the `Dockerfile` bakes `docker` in, `install.sh` writes `source`
+   * into `.env`. The admin reads it to show the upgrade that actually applies to this install,
+   * and `/api/health` reports it so an install test can tell what it is looking at.
+   */
+  package: Package
+}
+
+export const PACKAGES = ['source', 'docker', 'cloudflare'] as const
+export type Package = (typeof PACKAGES)[number]
+
+const MB = 1024 * 1024
+const GB = 1024 * MB
+
+/**
+ * A byte size from a human-facing environment variable.
+ *
+ * Refuses rather than falls back, like `PORT` above and for the same reason: a typo in a
+ * limit that silently becomes the default is a limit nobody can trust, and a quota is
+ * exactly the setting somebody will check by reading the unit file.
+ */
+function readSize(source: NodeJS.ProcessEnv, name: string, unit: number, fallback: number): number {
+  const raw = source[name]
+  if (raw === undefined || raw === '') return fallback
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`env: ${name} must be a non-negative number, got ${JSON.stringify(raw)}`)
+  }
+  return Math.round(value * unit)
+}
+
+export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
+  const port = Number(source.PORT ?? 3000)
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`env: PORT must be a valid port number, got ${JSON.stringify(source.PORT)}`)
+  }
+  return {
+    port,
+    host: source.HOST || '127.0.0.1',
+    // Both database files live here. One directory, so the server and `import-v1` cannot
+    // disagree about where they are.
+    dataDir: source.DATA_DIR ?? './data',
+    siteUrl: (source.SITE_URL ?? '').replace(/\/+$/, ''),
+    // One line, verbatim. Not assembled from parts: a policy is a sentence an operator has
+    // to be able to read back and compare against the one in the docs.
+    csp: (source.CSP ?? '').trim(),
+    // 64 MB matches the `client_max_body_size` in the recommended vhost, so the software
+    // and the proxy in `docs/self-host.md` refuse the same upload rather than one of them
+    // being the only thing that does.
+    // 25 MB on Cloudflare: a request body is held whole by `formData()` plus one copy of the file,
+    // in an isolate of 128 MB with 60 or so already in use (runtime review, 2026-10-03). Raise it
+    // and an upload past it resets the Durable Object, failing every request in flight.
+    maxUploadBytes: readSize(source, 'MAX_UPLOAD_MB', MB, source.QUIREINK_PACKAGE === 'cloudflare' ? 25 * MB : 64 * MB),
+    storeQuotaBytes: readSize(source, 'STORAGE_QUOTA_GB', GB, 5 * GB),
+    // 8 MB, chosen for the SMALLEST box this is meant to run on rather than the largest.
+    // Measured 2026-09-21, 1,000 posts in a `--memory=128m --cpus=0.25` container: 8 MB of
+    // HTML is about 315 of those pages and leaves the process at 90 MB of 128. Unbounded, the
+    // same corpus reached 117.6 MB and was OOM-killed on restart. A blog of ordinary size is
+    // nowhere near it and behaves exactly as it always did; an operator with memory to spare
+    // raises it and gets the old behaviour back.
+    pageCacheBytes: readSize(source, 'PAGE_CACHE_MB', MB, 8 * MB),
+    package: readPackage(source.QUIREINK_PACKAGE),
+  }
+}
+
+/**
+ * `QUIREINK_PACKAGE`, refused rather than guessed when it names nothing we ship — the same rule as
+ * `PORT`. Unset is `source`: a checkout started by hand is the one install no package labelled.
+ */
+function readPackage(raw: string | undefined): Package {
+  if (raw === undefined || raw === '') return 'source'
+  const value = raw.trim().toLowerCase()
+  if ((PACKAGES as readonly string[]).includes(value)) return value as Package
+  throw new Error(`env: QUIREINK_PACKAGE must be one of ${PACKAGES.join(', ')}, got ${JSON.stringify(raw)}`)
+}

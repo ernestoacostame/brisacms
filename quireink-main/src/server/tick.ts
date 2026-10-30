@@ -1,0 +1,310 @@
+// What a maintenance tick DOES, and the clock that runs it.
+//
+// Split out of `web/admin/ops.ts` on 2026-08-27 with [ADR 0031], which made the process
+// schedule itself. The body had to move first: two callers writing out the same eight steps
+// is two descriptions of one job, and they drift within a release. The route is now a
+// bearer check, a rate limit and one call.
+//
+// [ADR 0031]: ../../docs/decisions/0031-the-blog-winds-its-own-clock.md
+
+import { one } from '@/store/query'
+import { finalizePendingThumbs, finalizePendingVariants } from '@/media/finalize'
+import { maybeRunUpdateCheck } from '@/server/update-check'
+import { purgeExpiredSessions } from '@/auth/sessions'
+import { sweepActivityLog } from '@/server/activity'
+import { sweepReaderMarks } from '@/server/reader-marks'
+import { sweepWebmentions } from '@/server/webmention'
+import { sweepPendingSubscribers } from '@/news/subscribers'
+import { pruneRendered } from '@/render/render-cache'
+import { sweepScheduled, PUBLISH_TICK_LOOKBACK_MS, HOURLY_LOOKBACK_MS } from '@/server/scheduled'
+import { maybeRunBackup } from '@/server/backup'
+import { purgeEdge } from '@/server/edge-cache'
+import { clearCache } from '@/server/cache'
+import { sweepLinkCards } from '@/server/link-fetch'
+import { apTick } from '@/ap/tick'
+import { sweepParts } from '@/server/restore-parts'
+import { resumeBroadcast } from '@/news/broadcast'
+
+export type FullTick = {
+  purged: boolean
+  finalized: number
+  thumbs: number
+  published: number
+  sessions: number
+  staleSignups: number
+  /** Activity-log rows dropped by the retention sweep. */
+  activityRows: number
+  /** A reader's marks and codes untouched for a year (ADR 0047). */
+  readerRows: number
+  /** Webmention rows that never verified, and anything past the table's ceiling. */
+  mentionRows: number
+  renderRows: number
+  backup: { ran: boolean; name?: string; error?: string }
+}
+
+/**
+ * The frequent tick: flip due scheduled posts live, and read a few link cards.
+ *
+ * Its lookback matches its cadence. One indexed query when there is nothing due, which is
+ * why it can afford to run every minute on a clock the operator did not have to configure.
+ *
+ * The link sweep and the fediverse sweep are both here rather than on the hour, and for one
+ * reason each: a card that took an hour would read as broken, and a post that took an hour
+ * to reach a follower would read as a blog nobody maintains.
+ *
+ * ⚠️ THE LINK SWEEP IS HERE AND NOT ON THE HOUR because of what it is for: an owner publishes
+ * a post with a link in it and looks at the page. An hour is long enough that the card would
+ * read as broken rather than as coming. It keeps the tick's character — its "anything to do?"
+ * is one lookup in a PARTIAL index holding only rows nobody has read yet, so on a blog with
+ * nothing waiting it is empty and the query costs what the one above costs.
+ *
+ * It is deliberately NOT in `FullTick`'s report. A count of pages read is not a maintenance
+ * figure the owner is being shown, and the hourly summary is that report.
+ */
+export async function publishTick(): Promise<number> {
+  // The cheapest possible read, which doubles as a liveness probe for whoever called this
+  // over HTTP.
+  one<{ id: number }>(`select id from settings limit 1`)
+  // The sweep flushes and purges on its own when anything crossed.
+  const published = await sweepScheduled(PUBLISH_TICK_LOOKBACK_MS)
+  // Isolated: a link nobody can reach must not stop a post going live at the minute it was
+  // scheduled for, which is the one thing this tick exists to do.
+  try {
+    await sweepLinkCards()
+  } catch (error) {
+    console.error(`[ERROR] tick.linkCards: ${(error as Error).message}`)
+  }
+  // ⚠️ THE FEDIVERSE IS ON THE MINUTE TICK, NOT THE HOUR, and it has to be: a post published now
+  // should be in a follower's timeline in a minute or two, which is what everyone else on that
+  // network does. It declines in one settings read while the feature is off, and its own step is
+  // isolated for the same reason the one above is — somebody else's server being unreachable
+  // must not stop a scheduled post going live here.
+  try {
+    await apTick()
+  } catch (error) {
+    console.error(`[ERROR] tick.activitypub: ${(error as Error).message}`)
+  }
+  resumeNewsletter()
+  return published
+}
+
+/**
+ * A newsletter cut off by a restart carries on from where it stopped (`news/broadcast.ts`). One
+ * lookup when nothing is going out. On BOTH ticks, because the Durable Object's alarm runs the
+ * full one instead of the minute one on the hour. Not awaited: the runner outlives the tick, as it
+ * outlives the press that started it, and a scheduled post must not wait behind a mailing list.
+ */
+function resumeNewsletter(): void {
+  try {
+    void resumeBroadcast()?.catch((error: unknown) => {
+      console.error(`[ERROR] tick.newsletter: ${(error as Error).message}`)
+    })
+  } catch (error) {
+    console.error(`[ERROR] tick.newsletter: ${(error as Error).message}`)
+  }
+}
+
+/**
+ * The hourly tick: everything else, each step isolated.
+ *
+ * A finalize failure must not skip the publish sweep, and neither must skip the session
+ * purge. That isolation is why these are not one try block.
+ */
+export async function fullTick(opts: { purge?: boolean } = {}): Promise<FullTick> {
+  one<{ id: number }>(`select id from settings limit 1`)
+
+  // Deploy hook. A code deploy runs no admin write, so nothing would otherwise flush the
+  // edge; the caller asks for this explicitly. The origin cache is a Map and empties free.
+  const purged = opts.purge === true
+  if (purged) {
+    clearCache()
+    await purgeEdge().catch(() => { /* the edge is best-effort */ })
+  }
+
+  // The daily version check, from the CLOCK as well as from a reader.
+  //
+  // It has only ever fired from `updatePing()`, middleware on the public request path — so a
+  // blog that is running, updated and healthy but had no visitor that day never asked, and
+  // was counted as not there. On a personal blog that is most days, and it is the largest
+  // source of undercounting in the figure the project reads to decide what to build next.
+  //
+  // Nothing here needs a guard of its own: `maybeRunUpdateCheck` is memoised per epoch day,
+  // holds the same conditional day-claim in `update_check` that the reader path takes, and
+  // still waits out `spreadMinutes` so a thousand blogs on an hourly tick do not arrive at
+  // the endpoint in the same second. Whichever of the two paths gets there first takes the
+  // day and the other returns without a request.
+  maybeRunUpdateCheck()
+
+  let finalized = 0
+  let thumbs = 0
+  try {
+    finalized = await finalizePendingVariants()
+    thumbs = await finalizePendingThumbs()
+  } catch (error) {
+    console.error(`[ERROR] tick finalize: ${(error as Error).message}`)
+  }
+  // A finalised straggler changes rendered output (a plain <img> becomes a <picture>), and
+  // the pages embedding it were cached without those sources.
+  if (finalized > 0) clearCache()
+
+  let published = 0
+  try {
+    published = await sweepScheduled(HOURLY_LOOKBACK_MS)
+  } catch (error) {
+    console.error(`[ERROR] tick publish sweep: ${(error as Error).message}`)
+  }
+
+  // Sessions expire but their rows do not remove themselves, and the request path
+  // deliberately only deletes the one it has in hand.
+  let sessions = 0
+  try {
+    sessions = purgeExpiredSessions()
+  } catch (error) {
+    console.error(`[ERROR] tick session purge: ${(error as Error).message}`)
+  }
+
+  // Pending sign-ups that never confirmed. Same standing as the session purge: rows that
+  // expire but do not remove themselves, swept here because nothing on the request path
+  // should ever pay for it.
+  let staleSignups = 0
+  try {
+    staleSignups = await sweepPendingSubscribers()
+  } catch (error) {
+    console.error(`[ERROR] tick subscriber sweep: ${(error as Error).message}`)
+  }
+
+  // The activity log, which had no retention at all: it is copied whole into every backup,
+  // and one of the things it records is a refused sign-in, written whatever the owner's
+  // toggle says. Anybody could grow this blog's database one slow guess at a time.
+  const activityRows = sweepActivityLog()
+
+  // A reader's marks (ADR 0047) are the one thing here a reader wrote and the owner never
+  // sees; a year untouched and they go, like a code nobody has used in one.
+  const readerRows = sweepReaderMarks()
+
+  // Webmentions, which had no retention either. The row is written by a public endpoint
+  // before anything is verified, so the table grows at whatever rate strangers knock.
+  const mentionRows = sweepWebmentions()
+
+  // The render cache is insert-only for the same reason it needs no invalidation, so this
+  // is the only thing that ever removes a row from it. Bounded per tick, and it swallows
+  // its own failures.
+  const renderRows = pruneRendered()
+
+  // A backup sent in parts and never loaded (G4): somebody closed the tab, or claimed the blog the
+  // other way. One listing when there is nothing to sweep; a day after it began, it goes. Not in
+  // the report, which is the owner's: these were never the owner's files.
+  try {
+    await sweepParts()
+  } catch (error) {
+    console.error(`[ERROR] tick parts sweep: ${(error as Error).message}`)
+  }
+
+  resumeNewsletter()
+
+  // Last, and isolated like the rest: a snapshot is the slowest thing in the tick (it reads
+  // both databases and the whole uploads tree), and nothing above it should wait on that or
+  // be skipped by its failure.
+  let backup: FullTick['backup'] = { ran: false }
+  try {
+    backup = await maybeRunBackup()
+  } catch (error) {
+    backup = { ran: false, error: (error as Error).message }
+    console.error(`[ERROR] tick backup: ${(error as Error).message}`)
+  }
+
+  return { purged, finalized, thumbs, published, sessions, staleSignups, activityRows, readerRows, mentionRows, renderRows, backup }
+}
+
+// ----- the clock ------------------------------------------------------------------------
+
+/** Every minute. The documented crontab said five; a timer that costs one query can afford
+ *  better, and "published within the minute" is what a person means by "at 09:00". */
+const PUBLISH_EVERY_MS = 60_000
+
+/** Hourly, matching the crontab this replaces. */
+const FULL_EVERY_MS = 60 * 60_000
+
+/**
+ * Two minutes, and not zero.
+ *
+ * A process that crash-loops would otherwise run a backup and a sharp sweep on every boot,
+ * which is the worst possible response to a machine already in trouble. Two minutes is long
+ * enough that a loop never reaches it and short enough that a normal restart loses nothing.
+ */
+const FIRST_FULL_DELAY_MS = 2 * 60_000
+
+/** `NODE_ENV` values that mean somebody is working on the software rather than running it. */
+const DEV_ENVS = new Set(['test', 'development', 'dev', 'ci'])
+
+/** Bun's own reload flags. Either one means a person is editing the files underneath. */
+const WATCH_FLAGS = new Set(['--watch', '--hot'])
+
+/**
+ * Why the clock is not running, or `null` when it is.
+ *
+ * The same three questions the update check asks, for the same reason: a background timer
+ * inside `bun test` fails a different test later with no visible cause, and one inside
+ * `bun --watch` runs a backup every time a file is saved.
+ */
+export function clockBlockedBy(source: NodeJS.ProcessEnv = process.env): string | null {
+  if (source.CRON_INTERNAL === '0') return 'CRON_INTERNAL=0'
+  const env = (source.NODE_ENV ?? '').trim().toLowerCase()
+  if (DEV_ENVS.has(env)) return `NODE_ENV=${env}`
+  const watch = process.execArgv.find((flag) => WATCH_FLAGS.has(flag))
+  if (watch !== undefined) return watch
+  return null
+}
+
+/**
+ * Start the internal clock. Returns a function that stops it.
+ *
+ * Both timers are `unref`'d: they must never be the reason the process stays alive, and a
+ * shutdown mid-tick loses nothing that is not idempotent on the next one.
+ */
+export function startClock(): () => void {
+  const blocked = clockBlockedBy()
+  if (blocked !== null) return () => { /* never started */ }
+
+  const publish = setInterval(() => {
+    void publishTick().catch((error: unknown) => {
+      console.error(`[ERROR] clock publish: ${(error as Error).message}`)
+    })
+  }, PUBLISH_EVERY_MS)
+
+  let full: ReturnType<typeof setInterval> | undefined
+  // ONE line, on the first sweep only, and it exists because of what the log could not say.
+  // A stopped clock and a running one looked identical from outside: the only evidence was
+  // the ABSENCE of the "clock off" line at boot, which proves the timer was created and
+  // nothing about whether it ever fired. An operator asking "is this thing sweeping?" now
+  // has an answer that is not an inference. Every sweep after it stays silent, because a
+  // line an hour for years is how a log stops being read.
+  let announced = false
+  const first = setTimeout(() => {
+    const run = () => {
+      void fullTick().then((result) => {
+        if (announced) return
+        announced = true
+        console.log(
+          `clock: first sweep done (published ${result.published}, variants ${result.finalized},`
+          + ` sessions ${result.sessions}, log rows ${result.activityRows}, reader rows ${result.readerRows},`
+          + ` mention rows ${result.mentionRows}, cached rows ${result.renderRows})`,
+        )
+      }).catch((error: unknown) => {
+        console.error(`[ERROR] clock full: ${(error as Error).message}`)
+      })
+    }
+    run()
+    full = setInterval(run, FULL_EVERY_MS)
+    full.unref?.()
+  }, FIRST_FULL_DELAY_MS)
+
+  publish.unref?.()
+  first.unref?.()
+
+  return () => {
+    clearInterval(publish)
+    clearTimeout(first)
+    if (full !== undefined) clearInterval(full)
+  }
+}

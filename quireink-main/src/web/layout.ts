@@ -1,0 +1,288 @@
+// The HTML shell every public page is rendered into.
+//
+// The resource-loading law (docs/performance.md, carried into 04-frontend.md) is enforced
+// structurally here rather than by convention:
+//
+//   * Critical CSS is INLINE. One stylesheet request removed from the critical path, and
+//     the public sheet is small precisely because it is hand-written.
+//   * Reading-font subsets are PRELOADED, chosen by language, because the font is the LCP
+//     resource and the browser cannot discover it until the CSS has parsed.
+//   * Scripts are opt-in per route and their sizes are a BUDGET the build enforces
+//     (`scripts/build-assets.ts`), so a listing pays for the beacon and the header alone
+//     and an article adds one more file. Nothing is inlined, and there is no framework.
+
+import type { SiteSettings, SiteLang } from '@/types'
+import { fontPreloadHrefs } from '@/content/themes'
+import { resolveAppIcon, getDefaultTheme } from '@/content/settings'
+import { penStyleFor, themeSheet } from '@/web/assets'
+import { resolveTheme } from '@/content/chosen-theme'
+import { drawnFonts, drawnPalettes } from '@/content/theme-choices'
+import { deepenMetaInkCss } from '@/web/layout-styles'
+import { inLayer } from '@/web/css-layers'
+import { CUSTOM_COL_ATTR, DEFAULT_RAIL_WIDTH } from '@/render/rail-css'
+
+// The settings half of the sheet lives in `layout-styles.ts` now, and is re-exported here for
+// the same reason `utils.ts` re-exports the two clock helpers: nine call sites had this import
+// and the split is about where the code lives rather than about what anybody may ask for.
+export { pageStyles } from '@/web/layout-styles'
+/**
+ * THE ONE PLACE THE SOFTWARE NAMES ITSELF THAT AN OWNER CANNOT EDIT AWAY.
+ *
+ * `LICENSE-EXCEPTION.md` §2(c) requires that "wherever the software displays its own name and
+ * version, that stays visible", and until 2026-08-29 there was nowhere it did. The only
+ * public mention was the FOOTER, which is a setting — and §2(a) says in as many words that
+ * anything set through the admin is not a change to the source. So a commercial licensee
+ * could delete every trace of Quire Ink from their pages without touching a line of code and
+ * still be inside the permission, which is the exact thing the permission exists to prevent.
+ *
+ * A `generator` meta is the standard answer (WordPress, Ghost and Hugo all emit one), costs
+ * a reader nothing, shows nothing on the page, and makes the condition CHECKABLE from
+ * outside instead of only stated. It is not a lock — anyone modifying the source can remove
+ * it, and doing so is then a source change, which is precisely the line the licence draws.
+ */
+import pkg from '../../package.json' with { type: 'json' }
+
+const VERSION = (pkg as { version: string }).version
+
+export type Head = {
+  title: string
+  description?: string
+  canonical?: string
+  /** Absolute URL of the Open Graph image. Undefined means no card. */
+  image?: string
+  /** `article` for a post, `website` for everything else. */
+  ogType?: 'article' | 'website'
+  /**
+   * `<meta name="robots">`, when a page has to say it is not for the index. A search
+   * results page and the sign-in page both do: the results page mints a URL per query, so
+   * without this a crawler is invited to index an unbounded set of near-duplicates of the
+   * same list.
+   */
+  robots?: string
+  /**
+   * JSON-LD, as the JSON payload alone — `render/schema.ts` builds it and this wraps it in
+   * the script element. Gated on `seo.autoSchema` by the caller, because the setting is
+   * per-site and this file has no opinion about it.
+   */
+  jsonLd?: string
+  /** Rendered verbatim into <head>. Callers pass already-escaped markup. */
+  extra?: string
+  /**
+   * The language of THIS DOCUMENT, when it is not the site's (ADR 0056).
+   *
+   * `<html lang>` picks the hyphenation dictionary, the quote marks, the voice a screen
+   * reader reads in and the CJK fallback face. The reader it is most wrong for is the one
+   * listening to it.
+   */
+  lang?: SiteLang
+  /**
+   * The hashed, immutable stylesheet to link BEFORE the inline settings block. Every
+   * public page passes `PUBLIC_SHEET`; the sign-in page passes nothing, because it renders
+   * off its own small sheet and has no cacheable half worth a request.
+   */
+  stylesheet?: string
+}
+
+/** The parts of the document outside `<head>` that a route can vary. */
+export type Shell = {
+  /**
+   * `data-*` attributes on `<body>`. Every string an island shows a reader is translated
+   * on the server and handed over here, so a bundle carries no locale table and cannot
+   * disagree with the page it is running on. A key of `backToTop` becomes
+   * `data-back-to-top`, which the browser reads back as `dataset.backToTop`.
+   */
+  bodyData?: Record<string, string>
+  /** Script tags, rendered last so nothing blocks the parse. */
+  scripts?: string
+  /**
+   * The owner's own markup, verbatim, at each end of the document.
+   *
+   * Passed IN rather than read from `settings` here, and that is the safety property: this
+   * function also renders the sign-in page and a draft preview, and neither should carry a
+   * tracker. Making it an argument means a page gets the owner's code only by asking for
+   * it, so the two public shells ask and the other two do not — see `types.ts`.
+   */
+  customHead?: string
+  customBodyEnd?: string
+}
+
+/** `backToTop` -> `data-back-to-top`. The inverse of the browser's `dataset` mapping. */
+const dataAttr = (key: string) => `data-${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`
+
+
+
+
+
+import { escapeAttr, escapeHtml } from '@/utils'
+import { siteZone } from '@/i18n/format'
+import { themePreviewBar } from '@/web/theme-preview-bar'
+
+
+export function renderDocument(
+  settings: SiteSettings,
+  head: Head,
+  styles: string,
+  body: string,
+  shell: Shell = {},
+): string {
+  const bodyAttrs = Object.entries(shell.bodyData ?? {})
+    .map(([k, v]) => ` ${dataAttr(k)}="${escapeAttr(v)}"`)
+    .join('')
+  const theme = resolveTheme(settings)
+  const fonts = drawnFonts(settings, theme)
+  // A theme's own reading font is preloaded as an uploaded one is: not at all (`fontFaceCss`).
+  const preloads = fontPreloadHrefs(fonts.readingPreset, settings.language,
+    !!settings.customFont.family || fonts.reading !== null, fonts.chromeFont, theme.display?.slug ?? null)
+    .map((href) => `<link rel="preload" href="${escapeAttr(href)}" as="font" type="font/woff2" crossorigin>`)
+    .join('')
+  const description = head.description
+    ? `<meta name="description" content="${escapeAttr(head.description)}">`
+    : ''
+  const canonical = head.canonical ? `<link rel="canonical" href="${escapeAttr(head.canonical)}">` : ''
+  // The owner's theme preview, on no page a reader gets (`web/theme-preview-bar.ts`): never indexed.
+  const preview = themePreviewBar(settings)
+  const robots = preview ? preview.robots : head.robots ? `<meta name="robots" content="${escapeAttr(head.robots)}">` : ''
+  // Not escaped, and it does not need to be: `schema.ts` emits JSON with every `<` replaced
+  // by its unicode escape, so nothing in it can close this element. Escaping it as HTML
+  // here would corrupt the JSON instead, which is the mistake this comment exists to stop.
+  const jsonLd = head.jsonLd
+    ? `<script type="application/ld+json">${head.jsonLd}</script>`
+    : ''
+
+  // Open Graph and Twitter. Written out rather than generated from a map: there are seven
+  // of them, they are not going to become a hundred, and a loop here would be harder to
+  // read than the tags themselves.
+  //
+  // `summary_large_image` ONLY when there is an image. With `summary_large_image` and no
+  // image, X renders a bare card with the site's favicon stretched across it.
+  const meta = (property: string, content: string) =>
+    `<meta property="${property}" content="${escapeAttr(content)}">`
+  const og = [
+    meta('og:title', head.title),
+    meta('og:type', head.ogType ?? 'website'),
+    head.description ? meta('og:description', head.description) : '',
+    head.canonical ? meta('og:url', head.canonical) : '',
+    meta('og:site_name', settings.title),
+    head.image ? meta('og:image', head.image) : '',
+    `<meta name="twitter:card" content="${head.image ? 'summary_large_image' : 'summary'}">`,
+  ].filter(Boolean).join('')
+  // Before the inline block, because that block is allowed to win: it carries the palette,
+  // the type scale and the owner's own CSS, all of which override the sheet. Since ADR 0072 it
+  // wins whatever the selectors weigh: the two linked sheets are served inside `@layer base` and
+  // `@layer theme` and the inline block is unlayered (`web/css-layers.ts`).
+  //
+  // The pen follows the same rule, and only boards the pages that used it — and since ADR 0070
+  // only the strokes they used: `penStyleFor` reads the assembled body for the elements the
+  // gestures render as and inlines the rules those elements match (`web/assets.ts` says why
+  // inline beats a sheet here). It sits exactly where the two pen links sat, after site.css
+  // and the dialect and before the settings block, so the cascade reads as it did when the
+  // ink lived inside site.css — and the settings block's pen toggles still win by coming
+  // later — which is also why the reader's pen puts the whole sheets in front of the FIRST
+  // `<style>` in the head when a reader starts marking, rather than after everything. Gated on
+  // `head.stylesheet` because a page that declines the public sheet (sign-in) has no prose to
+  // ink. `data-pen-ink` names the block for a test or a person reading the source; nothing
+  // selects on it.
+  const ink = head.stylesheet ? penStyleFor(body, settings.inks) : ''
+  // The theme's meta-ink switch rides straight behind its sheet (`deepenMetaInkCss` says why),
+  // and in the theme's layer with it: it is the theme's rule, so the owner's settings and custom
+  // CSS win over it as they win over the sheet.
+  const deepen = inLayer('theme', deepenMetaInkCss(theme))
+  const sheet = head.stylesheet
+    ? [head.stylesheet, themeSheet(theme)]
+        .filter(Boolean)
+        .map((href) => `<link rel="stylesheet" href="${escapeAttr(href)}">`)
+        .join('') + (deepen ? `<style data-meta-ink>${deepen}</style>` : '')
+        + (ink ? `<style data-pen-ink>${ink}</style>` : '')
+    : ''
+  // `rel="icon"` stays conditional ON PURPOSE, and an audit that wants it unconditional is
+  // asking for bytes that buy nothing: `/favicon.ico` is the path a browser asks for when
+  // nothing tells it otherwise, and `app.ts` answers there whether or not the owner has set
+  // one. Naming the conventional path in the head only repeats what the browser was going
+  // to do anyway.
+  //
+  // `apple-touch-icon` is different and is why this line moved at all. Nothing else on the
+  // page points iOS at `/app-icon.png`: the manifest does, and iOS has only read manifest
+  // icons since 16.4, so on anything older "Add to Home Screen" takes a screenshot of the
+  // page instead of the site's own mark. One tag, and it is the only route to that icon.
+  const icon = (settings.faviconUrl ? `<link rel="icon" href="${escapeAttr(settings.faviconUrl)}">` : '')
+    + `<link rel="apple-touch-icon" href="${escapeAttr(resolveAppIcon(settings))}">`
+  // Without this link the manifest route exists and nothing ever asks for it, so the site
+  // is not installable no matter what the route returns.
+  const manifest = '<link rel="manifest" href="/manifest.webmanifest">'
+  // Same failure as the manifest, and it went unnoticed for longer: /feed.xml answers
+  // correctly and NOTHING on the site points at it, so a reader's aggregator cannot find the
+  // feed and neither can anything crawling for one. Gated on the setting the route is gated
+  // on, so a site with the feed switched off does not advertise a 404.
+  // The open standards a reader's tools look for (ADR 0046): the notebook's Webmention
+  // endpoint always; the IndieAuth and Micropub doors only while the switch that gates them
+  // (Settings → Server & connections, the MCP switch) is on, so a site never advertises a 503.
+  const standards = '<link rel="webmention" href="/webmention">' + (settings.mcp.enabled
+    ? '<link rel="indieauth-metadata" href="/.well-known/oauth-authorization-server">'
+      + '<link rel="authorization_endpoint" href="/api/mcp/authorize">'
+      + '<link rel="token_endpoint" href="/api/mcp/token"><link rel="micropub" href="/micropub">'
+    : '')
+  // BOTH formats, because both are documents a reader's app may subscribe to and neither is
+  // discoverable without a link element. The type attribute is the whole of how an aggregator
+  // tells them apart, so the two lines differ in nothing else.
+  const feed = settings.seo.rss
+    ? `<link rel="alternate" type="application/rss+xml"`
+      + ` title="${escapeAttr(settings.title)}" href="/feed.xml">`
+      + `<link rel="alternate" type="application/feed+json"`
+      + ` title="${escapeAttr(settings.title)}" href="/feed.json">`
+    : ''
+
+  // `data-motion` and `data-chrome-font` are both read by CSS, not by script: the motion
+  // switch zeroes every duration in one rule, and the chrome font selects the tracking
+  // correction for the two mono faces. Both were missed in the port, so the owner's Motion
+  // toggle did nothing and a mono chrome rendered untracked.
+  const motion = settings.motion.enabled ? 'on' : 'off'
+  // The third of the same kind, and stamped here for the same reason: CSS reads it, the
+  // server writes it, so the first paint is already right and no island has to run for the
+  // page to look like itself. ABSENT on plain, so a blog wearing no dialect carries no
+  // attribute, links no dialect sheet, and cannot be told from one built before looks
+  // existed. Each built-in sheet's whole ruleset hangs off this one attribute selector.
+  const look = theme.dataLook ? ` data-look="${escapeAttr(theme.dataLook)}"` : ''
+  // `data-theme` names the theme on EVERY page, plain included (ADR 0072): what a theme's
+  // stylesheet and the engine's per-theme rules select on. It is the only `data-theme` on the
+  // page: the light/dark button's translated label rides `<body data-theme-label>` instead.
+  const themeAttr = ` data-theme="${escapeAttr(theme.id)}"`
+  // The reading column is not the default one: the hashed sheet's rail geometry (written for
+  // the default) stands down and the page's own inline copy takes over (`CUSTOM_COL_ATTR`).
+  const col = settings.contentWidth === DEFAULT_RAIL_WIDTH ? '' : ` ${CUSTOM_COL_ATTR}="custom"`
+  // And the fourth, for the scroll fade: the cards easing in at the foot of a listing and
+  // the text dimming at the edges of an article are one effect on two screens, so they are
+  // one attribute. Written only when it is ON, so the whole ruleset is a selector that
+  // simply never matches when it is off — nothing to override and nothing to un-hide.
+  const fade = settings.features.scrollFade ? ' data-scroll-fade="on"' : ''
+  /**
+   * What the phone paints around the page: Android Chrome's toolbar and the strip iOS
+   * Safari retracts its bars from.
+   *
+   * TWO of them, one per scheme, because the reader's choice lives in their own storage and
+   * the page cache is keyed by URL alone (Invariant 1) — a single tag would have to pick a
+   * side and would then be wrong for everyone on the other one. Without either, a blog whose
+   * default is dark met the reader with a white bar over a black page. The phone book reader
+   * already did this for the length of a read; this is the same answer for every other page.
+   */
+  const palettes = drawnPalettes(settings, theme)
+  const paper = getDefaultTheme(palettes.themes, palettes.themePreset)
+  const themeColor = `<meta name="theme-color" media="(prefers-color-scheme: light)" content="${
+    escapeAttr(paper.light.bg)}">\n<meta name="theme-color" media="(prefers-color-scheme: dark)" content="${
+    escapeAttr(paper.dark.bg)}">\n`
+  return `<!DOCTYPE html>
+<html lang="${escapeAttr(head.lang ?? settings.language)}" data-tz="${escapeAttr(siteZone(settings.timezone))}" data-motion="${motion}" data-chrome-font="${escapeAttr(fonts.chromeFont)}"${themeAttr}${look}${fade}${col}>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+${themeColor}<meta name="generator" content="Quire Ink ${escapeAttr(VERSION)}">
+<title>${escapeHtml(head.title)}</title>
+${description}${canonical}${robots}${icon}${manifest}${feed}${standards}${og}${sheet}${preloads}${jsonLd}
+<style>${styles}</style>${preview?.style ?? ''}
+${head.extra ?? ''}${shell.customHead ?? ''}
+</head>
+<body${bodyAttrs}>
+${preview?.bar ?? ''}${body}
+${shell.scripts ?? ''}${shell.customBodyEnd ?? ''}</body>
+</html>
+`
+}

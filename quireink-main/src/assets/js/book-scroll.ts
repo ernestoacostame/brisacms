@@ -1,0 +1,247 @@
+// Book mode ON A PHONE: one column, scrolled, with the chrome that gets out of the way.
+//
+// A separate door from the desktop spread, and the reason is the browser's own furniture.
+// The spread is a <dialog>, and a modal dialog takes the scroll off the document — which on
+// iOS means Safari's address bar and toolbar STAY, because they only retract while the page
+// itself is scrolling. Measured on an iPhone: 844px of glass, 190px of it Safari's, another
+// 56 of ours, leaving under 600 for the words; turning nineteen pages of that is turning a
+// page every four sentences.
+//
+// So on a phone the reader is not a dialog at all. The page's own content is hidden, the
+// article is laid out as one tall column IN THE DOCUMENT, and the reader scrolls the
+// document — which is what hands the toolbars back to the words. Leaving book mode puts the
+// page back exactly where it was, scroll position included.
+//
+// The chrome then behaves the way a reading app's does: gone on the way down, back on the
+// way up, always one short scroll away. It is fixed rather than sticky so that Safari
+// collapsing its own bars does not shove it around mid-gesture.
+import { el, label } from './dom'
+import { onScrollFrame } from './motion'
+
+/** Where the article was before the reader opened it, so closing is exact rather than near. */
+type Session = { close: () => void }
+
+/**
+ * The a / A pair, and the reader's stored preference — ONE definition for both readers.
+ *
+ * The spread and the phone reader need the same control, the same clamps and the same
+ * stored value, and the only thing that differs is what has to happen afterwards: the
+ * spread re-paginates, the scrolled column does not.
+ */
+export function sizeControl(limits: { min: number; max: number; step: number; key: string }, after: () => void) {
+  const smaller = el('button', { type: 'button', class: 'book-size book-smaller',
+    'aria-label': label('bookModeSmaller'), title: label('bookModeSmaller') }, 'a')
+  const larger = el('button', { type: 'button', class: 'book-size book-larger',
+    'aria-label': label('bookModeLarger'), title: label('bookModeLarger') }, 'A')
+  const sizes = el('span', { class: 'book-sizes' }, smaller, larger)
+  let host: HTMLElement | null = null
+  const read = (): number => {
+    const v = host ? parseFloat(getComputedStyle(host).getPropertyValue('--type-scale')) : NaN
+    return Number.isFinite(v) ? v : 1
+  }
+  const set = (v: number) => {
+    const c = Math.round(Math.min(limits.max, Math.max(limits.min, v)) * 100) / 100
+    host?.style.setProperty('--type-scale', String(c))
+    try { localStorage.setItem(limits.key, String(c)) } catch { /* private mode */ }
+    smaller.disabled = c <= limits.min
+    larger.disabled = c >= limits.max
+    after()
+  }
+  smaller.addEventListener('click', () => set(read() - limits.step))
+  larger.addEventListener('click', () => set(read() + limits.step))
+  return {
+    sizes,
+    /** Bind to the element the scale lives on, apply anything stored, and pin the ends. */
+    attach(el: HTMLElement) {
+      host = el
+      let stored = NaN
+      try { stored = parseFloat(localStorage.getItem(limits.key) ?? '') } catch { /* private mode */ }
+      if (Number.isFinite(stored)) {
+        el.style.setProperty('--type-scale', String(Math.min(limits.max, Math.max(limits.min, stored))))
+      }
+      smaller.disabled = read() <= limits.min
+      larger.disabled = read() >= limits.max
+    },
+  }
+}
+
+/**
+ * Give a cloned article its own anchors.
+ *
+ * A copy of the body carries a copy of every heading id and every footnote marker, so while
+ * a reader is open the document holds two `#fn-1` and two of each heading. A footnote link
+ * then lands on whichever the browser picks first, which is as often as not the copy that is
+ * `display:none`. Prefixing both the ids and the same-document hrefs keeps the copy's links
+ * inside the copy and leaves the original's alone, with no listener to carry.
+ */
+export function renameAnchors(clone: HTMLElement): void {
+  for (const node of clone.querySelectorAll<HTMLElement>('[id]')) node.id = `bk-${node.id}`
+  // The lightbox makes each picture a Tab stop that promises a dialog, and it listens on the
+  // ARTICLE, not on this copy: cloned, the promise came along with nothing to keep it, and
+  // focusing a picture on a later page scrolled the book off its spread (release review,
+  // 2026-09-23). The copy's pictures are pictures again.
+  for (const img of clone.querySelectorAll<HTMLElement>('img[aria-haspopup]')) {
+    img.removeAttribute('tabindex')
+    img.removeAttribute('aria-haspopup')
+    img.style.cursor = ''
+  }
+  for (const a of clone.querySelectorAll<HTMLAnchorElement>('a[href^="#"]')) {
+    a.setAttribute('href', `#bk-${a.getAttribute('href')!.slice(1)}`)
+  }
+}
+
+/**
+ * The article as the reader sets it: a copy with its own anchors, behind a TITLE PAGE. Returns
+ * the title, for the running head.
+ *
+ * A book opens on its title, and this one opened straight into the body with the title as a
+ * faint running head. The page is read off the article's own header as TEXT and set in fresh
+ * elements, so it carries no id of the header's, no link, and no copy of the book-mode button.
+ * The reader is a dialog (or hides the page), so the real header is out of the accessibility
+ * tree while this is open; the running head is `aria-hidden`, so the title page's h1 is the
+ * only place a screen reader meets the title. A short post has no h1 and so no
+ * title page: the words are the piece, there is nothing to put on it.
+ *
+ * The selectors are the whole contract with `article.ts`: `article>header` with `h1`,
+ * `.post-cat`, `.deck`, `.byline`, `time` and `.meta-part`, and the series card's `.series-name`
+ * and `.series-part` (two elements, so they are joined here rather than read as one run). A part that is not there is left out, never an error.
+ */
+export function fillFlow(flow: HTMLElement, source: HTMLElement): string {
+  flow.innerHTML = source.innerHTML
+  renameAnchors(flow)
+  const said = (s: string) => [...document.querySelectorAll(s)]
+    .map((n) => n.textContent!.trim()).filter(Boolean).join(' · ')
+  const title = said('article>header h1')
+  const line = (c: string, text: string) => el('div', { class: c }, text)
+  if (title) {
+    flow.prepend(el('div', { class: 'book-tp' },
+      line('tp-kick', said('article>header .post-cat,aside.series :is(.series-name,.series-part)')),
+      el('h1', { class: 'reading-font' }, title),
+      line('tp-deck', said('article>header .deck')),
+      line('tp-by', said('article>header :is(time,.meta-part,.byline)'))))
+  }
+  return title
+}
+
+export function openScrollReader(
+  source: HTMLElement,
+  chrome: { sizes: HTMLElement; onScale: (el: HTMLElement) => void },
+  /**
+   * Where focus goes on the way out, asked for at that moment rather than remembered.
+   * An article carries the control twice (the meta line and the gutter panel) and exactly
+   * one of them has a box at any width, so the one that was clicked is not necessarily the
+   * one a reader can be sent back to.
+   */
+  opener?: () => HTMLElement | null | undefined,
+): Session {
+  const html = document.documentElement
+  const wasAt = scrollY
+
+  const flow = el('div', { class: 'book-flow prose' })
+  // A CLONE, like the spread's: the document's own article is untouched, so a screen reader
+  // and a crawler see exactly what they saw before.
+  const heading = fillFlow(flow, source)
+
+  const close = el('button', {
+    type: 'button', class: 'book-x', 'aria-label': label('bookModeClose'), title: label('bookModeClose'),
+  }, '✕')
+  const bar = el('div', { class: 'book-chrome book-top' },
+    el('span', { class: 'book-title', 'aria-hidden': 'true' }, heading),
+    el('span', { class: 'book-topright' }, chrome.sizes, close))
+  const reader = el('div', { class: 'book-reader' }, bar, el('div', { class: 'book-page' }, flow))
+  chrome.onScale(reader)
+
+  // Hidden by CSS (`html.book-reading body > :not(.book-reader)`) rather than by touching
+  // every sibling: one rule reverses cleanly, and nothing in the page has to be remembered
+  // and put back.
+  // VIEWPORT-FIT=COVER, for the length of the read only.
+  //
+  // Without it iOS keeps the page below the status bar and the paper stops at a seam a
+  // centimetre from the top of the glass — which is the whole difference the owner
+  // photographed between this reader and an ordinary page. With it the paper runs edge to
+  // edge, `env(safe-area-inset-top)` starts reporting a real number, and the stylesheet uses
+  // that for both the top padding and the strip that catches a line scrolling under the
+  // clock. Put back on close: it is the reader's frame, not the site's.
+  // The original is restored on close, so appending unconditionally cannot accumulate.
+  // Always present: `layout.ts` writes it into every page this island can run on.
+  const meta = document.querySelector<HTMLMetaElement>('meta[name=viewport]')!
+  const viewport = meta.content
+  meta.content = viewport + ', viewport-fit=cover'
+  // THEME-COLOR, for the length of the read: Safari tints its status bar and the strip its
+  // address bar retracts from with this when it is present, and with the document's
+  // background when it is not. The sheet paints the document paper too (book-phone.css.ts);
+  // this is the same answer for the engine that asks the meta first. Removed on close, so
+  // the site is left exactly as it was found.
+  const tint = el('meta', { name: 'theme-color', content: '#faf8f3' })
+  document.head.appendChild(tint)
+
+  html.classList.add('book-reading')
+  document.body.appendChild(reader)
+  scrollTo(0, 0)
+  // Focus follows the reader in. Everything outside `.book-reader` is display:none while
+  // this is open, and the button that opened it is one of those things — so focus fell to
+  // `<body>` and a keyboard reader had to Tab from the top of a page they could not see.
+  reader.tabIndex = -1
+  reader.focus()
+
+  // THE CHROME FOLLOWS THE DIRECTION, not the position: away on the way down, back on the
+  // way up. The 8px threshold is what keeps it still — iOS reports a few pixels of scroll
+  // from the rubber-band at both ends and from its own bars resizing the viewport, and
+  // without it the bar flickered on and off while the thumb was doing nothing.
+  let last = 0
+  const stop: () => void = onScrollFrame(() => Math.max(0, scrollY), (y) => {
+    if (Math.abs(y - last) < 8) return
+    // Always visible at the very top: that is where a reader looks for the way out.
+    reader.classList.toggle('chrome-away', y > last && y > 64)
+    last = y
+  })
+
+  const teardown = () => {
+    html.classList.remove('book-reading')
+    // Back to the control that opened it. AFTER a frame, and for the same reason the scroll
+    // restore below waits: the opener is `display:none` until the class above comes off and
+    // the style recalculates, and `focus()` on a hidden element does nothing at all.
+    const returning = reader.contains(document.activeElement)
+    if (returning) requestAnimationFrame(() => opener?.()?.focus())
+    reader.remove()
+    stop()
+    removeEventListener('keydown', onKey)
+    removeEventListener('popstate', onPop)
+    // AFTER TWO FRAMES, and it is not politeness. The page's own content is display:none
+    // until the class comes off, so at this instant the document is barely taller than the
+    // window and a scroll to where the reader was is clamped to 0 — measured: asked for 700,
+    // got 0, and a reader who was halfway down came back to the top. The second frame is for
+    // the browser's own restoration on a popstate, which lands after the first.
+    requestAnimationFrame(() => requestAnimationFrame(() => scrollTo(0, wasAt)))
+    meta.content = viewport
+    tint.remove()
+    try { history.scrollRestoration = restoration } catch { /* see above */ }
+    dispatchEvent(new Event('quire:book-closed'))
+  }
+  // The ✕ leaves through the SAME door the back gesture uses, rather than tearing down and
+  // then also popping: doing both ran the teardown twice and let the browser's own scroll
+  // restoration land between them, which is how a reader who was 700px in came back at 0.
+  const shut = () => {
+    if ((history.state as { quireBook?: number } | null)?.quireBook) history.back()
+    else teardown()
+  }
+  const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') shut() }
+  // The phone's own way back. A reader who swipes in from the edge expects to leave the
+  // READER, not the article — without this they left the page entirely.
+  const onPop = () => teardown()
+  close.addEventListener('click', shut)
+  addEventListener('keydown', onKey)
+  // Ours, not the browser's: it restores the scroll of the entry being returned to, which
+  // here is the same document with everything hidden — so it would put the reader at 0 and
+  // the line below could not correct it in time.
+  const restoration = history.scrollRestoration
+  try {
+    history.scrollRestoration = 'manual'
+    history.pushState({ quireBook: 1 }, '')
+  } catch { /* file:// and the like */ }
+  addEventListener('popstate', onPop)
+
+  // Later images are far down one long column rather than off to the side, so lazy loading
+  // is right here — the opposite of the spread, where it would never fire at all.
+  return { close: shut }
+}

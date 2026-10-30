@@ -1,0 +1,319 @@
+// The rest of the content-adjacent admin API: taxonomy, series, redirects, settings,
+// trash, the activity log and the cache purge.
+//
+// Ported from `src/app/api/{taxonomy,series,redirects,settings,trash,activity,cache}`.
+// Same paths, same request shapes, same status codes. The per-handler `requireOwner()`,
+// the `logRequest`/`logError` pairs and the try/catch are gone for the reasons set out in
+// `content.ts`, not because any behaviour was reconsidered.
+
+import type { Context } from 'hono'
+import { readJson } from '@/web/admin/piece-input'
+import type { SiteSettings } from '@/types'
+import { reorderSeries, updateSeries } from '@/content/series'
+import { getSettings, saveSettings } from '@/content/settings'
+import { describeSettingsSave, isDeskOnly } from '@/content/settings-diff'
+import { sanitizeListPath } from '@/content/settings-sanitize'
+import { refusedSetting } from '@/content/settings-refuse'
+import { slugTaken } from '@/content/slugs'
+import {
+  restorePost, purgePost, emptyPostsTrash, updateTerm, type TermKind,
+} from '@/content/posts'
+import { restorePage, purgePage, emptyPagesTrash } from '@/content/pages'
+import { restoreNote, purgeNote, emptyNotesTrash } from '@/content/notes'
+import {
+  restoreMediaBatch, purgeMediaBatch, emptyMediaTrash, getTrashedMedia,
+} from '@/media/media'
+import { usedMediaKeys } from '@/media/media-usage'
+import { collapseBlob } from '@/media/blob'
+import { restoreFilesBatch, purgeFilesBatch, emptyFilesTrash } from '@/media/files'
+import { restoreComment, purgeComment, emptyCommentsTrash } from '@/comments/comments'
+import { restoreSubscriber, purgeSubscriber, emptySubscribersTrash } from '@/news/subscribers'
+import { getRedirects, saveRedirect, deleteRedirect, RedirectInputError } from '@/server/redirects'
+import { purgeEdge } from '@/server/edge-cache'
+import { clearCache } from '@/server/cache'
+import { clearActivity, getActivity, logActivity, type ActivityAction } from '@/server/activity'
+import { logThemeChoice } from '@/content/theme-choice-log'
+import { fail, json } from '@/web/api'
+import { ownerRouter, param } from '@/web/guard'
+import { siteZone } from '@/analytics/types'
+
+const body = async <T>(c: Context): Promise<Partial<T>> =>
+  (await c.req.json().catch(() => ({}))) as Partial<T>
+
+const strings = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((x): x is string => typeof x === 'string') : []
+
+type Kind = 'posts' | 'pages' | 'notes' | 'media' | 'files' | 'comments' | 'subscribers'
+type Action = 'restore' | 'purge' | 'empty'
+const KINDS: Kind[] = ['posts', 'pages', 'notes', 'media', 'files', 'comments', 'subscribers']
+const ACTIONS: Action[] = ['restore', 'purge', 'empty']
+// The activity log uses singular per-kind verbs, matching the actions that already exist.
+const SINGULAR: Record<Kind, string> = {
+  posts: 'post', pages: 'page', notes: 'note', media: 'media', files: 'file', comments: 'comment',
+  subscribers: 'subscriber',
+}
+
+export function siteRoutes() {
+  const router = ownerRouter()
+
+  // ----- taxonomy and series --------------------------------------------------
+  // Both rewrite every affected post's front matter, so both can take a while on a large
+  // blog. That was `maxDuration = 60` in the frozen tree; here there is no platform
+  // timeout to declare, which is one of the things leaving serverless bought.
+
+  router.post('/api/taxonomy', async (c) => {
+    const input = await body<{ kind: string; name: string; action: string; newName: string }>(c)
+    const kind: TermKind | null =
+      input.kind === 'tag' ? 'tag' : input.kind === 'category' ? 'category' : null
+    const name = input.name?.trim()
+    if (kind === null || !name) return fail(c, 'kind and name are required', 400)
+
+    const newName = input.action === 'rename' ? (input.newName?.trim() ?? '') : null
+    if (input.action === 'rename' && !newName) return fail(c, 'newName is required to rename', 400)
+
+    const changed = await updateTerm(kind, name, newName)
+    clearCache()
+    void logActivity(
+      'taxonomy.update',
+      `${kind} "${name}"${newName ? ` → "${newName}"` : ' (removed)'} · ${changed} post(s)`,
+    )
+    return json({ changed })
+  })
+
+  router.post('/api/series', async (c) => {
+    const input = await body<{ action: string; name: string; newName: string; order: string[] }>(c)
+    const name = input.name?.trim()
+    if (!name) return fail(c, 'name is required', 400)
+
+    let changed = 0
+    let detail = ''
+    if (input.action === 'rename') {
+      const newName = input.newName?.trim() ?? ''
+      if (!newName) return fail(c, 'newName is required to rename', 400)
+      changed = await updateSeries(name, newName)
+      detail = `"${name}" → "${newName}"`
+    } else if (input.action === 'delete') {
+      changed = await updateSeries(name, null)
+      detail = `"${name}" (removed)`
+    } else if (input.action === 'reorder') {
+      const order = strings(input.order)
+      if (order.length === 0) return fail(c, 'order is required to reorder', 400)
+      changed = await reorderSeries(name, order)
+      detail = `"${name}" reordered`
+    } else {
+      return fail(c, 'unknown action', 400)
+    }
+
+    clearCache()
+    void logActivity('series.update', `${detail} · ${changed} post(s)`)
+    return json({ changed })
+  })
+
+  // ----- redirects ------------------------------------------------------------
+
+  router.get('/api/redirects', async () => json(await getRedirects()))
+
+  router.post('/api/redirects', async (c) => {
+    const input = await body<{ source: unknown; destination: unknown; permanent: unknown; replace: unknown }>(c)
+    try {
+      await saveRedirect({
+        source: typeof input.source === 'string' ? input.source : '',
+        destination: typeof input.destination === 'string' ? input.destination : '',
+        // Default 301. Only an explicit `false` makes it temporary.
+        permanent: input.permanent !== false,
+        // Asked, not assumed: an existing source is replaced only once the owner said so.
+        replace: input.replace === true,
+      })
+    } catch (error) {
+      // The message is the validation reason and IS meant for the caller, unlike the
+      // generic 500 path where an exception string could carry anything.
+      if (error instanceof RedirectInputError) return fail(c, error.message, error.message.startsWith('exists:') ? 409 : 400)
+      throw error
+    }
+    clearCache()
+    void logActivity('redirect.save', String(input.source ?? ''))
+    return json({ ok: true }, 201)
+  })
+
+  router.delete('/api/redirects/:id', async (c) => {
+    const id = Number(param(c, 'id'))
+    if (!Number.isInteger(id)) return fail(c, 'Invalid id', 400)
+    const gone = (await getRedirects()).find((r) => r.id === id)
+    await deleteRedirect(id)
+    clearCache()
+    void logActivity('redirect.delete', gone ? `${gone.source} → ${gone.destination}` : `#${id}`)
+    return json({ id })
+  })
+
+  // ----- settings -------------------------------------------------------------
+  // No public GET: every public read goes through `getSettings()` server-side.
+
+  router.put('/api/settings', async (c) => {
+    // A malformed body is a 400, not "change nothing": read as `{}`, it answered 200 and wrote a
+    // settings entry to the activity log for a save that never happened.
+    const raw = await readJson(c)
+    if (!raw.ok || raw.value === null || typeof raw.value !== 'object' || Array.isArray(raw.value)) {
+      return fail(c, 'body must be a JSON object', 400)
+    }
+    const input = raw.value as Partial<SiteSettings>
+    // An emptied title is REFUSED, not quietly kept: the sanitizer falls back, so the save said
+    // "Settings saved" over an empty field and the old title was back at the next load (2026-09-30).
+    if ('title' in input && (typeof input.title !== 'string' || input.title.trim() === '')) {
+      return fail(c, 'title_required', 400)
+    }
+    // The same for an address or a repository name that does not read: the merge would store `''`
+    // or keep the old value, and the screen said "Settings saved" over either. `field_<why>: <key>`
+    // is what the screen reads to put the sentence under the right field.
+    const refused = refusedSetting(input)
+    if (refused) return fail(c, `field_${refused.why}: ${refused.k}`, 400)
+    // Read BEFORE the write, so the log can say what moved, and so the guard below can ask
+    // what the settings will BE rather than what this payload happens to mention. One
+    // extra read on a route that is pressed by hand a few times an hour.
+    const before = await getSettings()
+    // The other half of the slug guard in `content/slugs.ts`. That one stops a POST taking
+    // the list's path; this stops the list being pointed at a path a post already holds,
+    // which the sanitizer cannot see because it is pure and this needs the database.
+    // Refusing is the only honest answer: whichever of the two lost would simply disappear,
+    // and it is the post that goes, because `slugRole` answers 'list' before it looks for
+    // a row.
+    //
+    // MERGED, not read off the payload. Reading the payload let two shapes through, and
+    // both are ordinary: moving only the path while the mode is already `front`, and
+    // switching only the mode while the default `/post` is already somebody's post.
+    const nextMode = input?.home?.mode ?? before.home.mode
+    const nextListPath = input?.home?.listPath === undefined
+      ? before.home.listPath
+      : sanitizeListPath(input.home.listPath, before.home.listPath)
+    if (nextMode !== 'list' && nextListPath) {
+      const slug = nextListPath.slice(1)
+      if (slugTaken(slug)) return fail(c, `list_path_taken: ${slug}`, 409)
+    }
+    const next = await saveSettings(input)
+    // The frozen tree purged everything and then re-warmed several pages, because a cold
+    // ISR miss was expensive. Here a page re-renders from SQLite in well under a
+    // millisecond, so warming would be work done to avoid work that is already free.
+    clearCache()
+    // A save that ONLY moved the admin's own sidebar rows is not an event in the blog's
+    // ledger. Arrange mode writes on every drop and every nudge, so one minute of tidying
+    // filled the activity card with `navOrder.primary` and pushed the last real change off
+    // the home page. Nothing else about a settings save is filtered — this is the one field
+    // that describes the desk rather than the site.
+    // A save that changed nothing still goes in — see `settings-diff.ts` for why that is a
+    // fact worth reading.
+    if (!isDeskOnly(before, next)) void logActivity('settings.save', describeSettingsSave(before, next))
+    // A theme chosen is also its own line, naming the theme: `settings.save` names only the field.
+    void logThemeChoice(before, next)
+    // `zone`: what an empty timezone MEANS here, so the page can move `<html data-tz>` without
+    // knowing the operator's environment.
+    return json({ ...next, zone: siteZone(next.timezone) })
+  })
+
+  // ----- the activity log -----------------------------------------------------
+
+  router.get('/api/activity', async () => json(await getActivity()))
+
+  router.delete('/api/activity', async () => {
+    await clearActivity()
+    return json({ cleared: true })
+  })
+
+  // ----- the cache purge ------------------------------------------------------
+
+  router.post('/api/cache/clear', async () => {
+    clearCache()
+    // The origin cache is a Map and is already empty; what is left to purge is the edge,
+    // which this server does not control and cannot re-render.
+    await purgeEdge()
+    void logActivity('cache.clear')
+    return json({ purged: true })
+  })
+
+  // ----- trash ----------------------------------------------------------------
+
+  router.post('/api/trash', async (c) => {
+    const input = await body<{ kind: unknown; action: unknown; ids: unknown; force: unknown; skipUsed: unknown }>(c)
+    const kind = input.kind as Kind
+    const action = input.action as Action
+    const force = input.force === true
+    // Delete what nothing uses and leave the rest in the trash: the answer to a mixed batch.
+    const skipUsed = input.skipUsed === true
+    if (!KINDS.includes(kind) || !ACTIONS.includes(action)) {
+      return fail(c, 'Invalid kind or action', 400)
+    }
+    const ids = strings(input.ids)
+    if (action !== 'empty' && ids.length === 0) return fail(c, 'No ids provided', 400)
+
+    let count = ids.length
+    switch (kind) {
+      case 'posts':
+        if (action === 'restore') await Promise.all(ids.map(restorePost))
+        else if (action === 'purge') await Promise.all(ids.map(purgePost))
+        else count = await emptyPostsTrash()
+        break
+      case 'pages':
+        if (action === 'restore') await Promise.all(ids.map(restorePage))
+        else if (action === 'purge') await Promise.all(ids.map(purgePage))
+        else count = await emptyPagesTrash()
+        break
+      case 'notes':
+        if (action === 'restore') await Promise.all(ids.map(restoreNote))
+        else if (action === 'purge') await Promise.all(ids.map(purgeNote))
+        else count = await emptyNotesTrash()
+        break
+      case 'media': {
+        if (action === 'restore') { await restoreMediaBatch(ids); break }
+        // Refuse to PERMANENTLY delete an image a live post, page, revision or setting
+        // still references, unless the caller confirms. Without this a purge silently
+        // breaks a published page. `in_use:<n>` is what lets the admin re-ask with force.
+        if (!force) {
+          const targets = action === 'purge' ? ids : (await getTrashedMedia()).map((m) => m.url)
+          const used = targets.length > 0 ? await usedMediaKeys() : new Set<string>()
+          const inUse = targets.filter((url) => used.has(collapseBlob(url)))
+          if (skipUsed) {
+            // Only the free ones go; the ones still on the site stay in the trash.
+            const free = targets.filter((url) => !used.has(collapseBlob(url)))
+            if (free.length > 0) await purgeMediaBatch(free)
+            count = free.length
+            break
+          }
+          // The NAMES, so the question can say which: it said "1 of these is still used in a
+          // post" for a dark logo, and for a single file (2026-09-30).
+          if (inUse.length > 0) {
+            return c.json({
+              success: false, error: `in_use:${inUse.length}`,
+              inUse: inUse.map((url) => decodeURIComponent(url.split('/').pop() ?? url)),
+              total: targets.length,
+            }, 409)
+          }
+        }
+        if (action === 'purge') await purgeMediaBatch(ids)
+        else count = await emptyMediaTrash()
+        break
+      }
+      case 'files':
+        if (action === 'restore') await restoreFilesBatch(ids)
+        else if (action === 'purge') await purgeFilesBatch(ids)
+        else count = await emptyFilesTrash()
+        break
+      case 'comments':
+        if (action === 'restore') await Promise.all(ids.map((id) => restoreComment(Number(id))))
+        else if (action === 'purge') await Promise.all(ids.map((id) => purgeComment(Number(id))))
+        else count = await emptyCommentsTrash()
+        break
+      case 'subscribers':
+        if (action === 'restore') await Promise.all(ids.map((id) => restoreSubscriber(Number(id))))
+        else if (action === 'purge') await Promise.all(ids.map((id) => purgeSubscriber(Number(id))))
+        else count = await emptySubscribersTrash()
+        break
+    }
+
+    // Invariant 1. The frozen tree revalidated selectively here, per kind and per action,
+    // and the media branch had to remember `revalidateEverything()` in two places.
+    clearCache()
+    const logged = (action === 'empty' ? 'trash.empty' : `${SINGULAR[kind]}.${action}`) as ActivityAction
+    void logActivity(logged, action === 'empty' ? `${kind}: ${count} item(s)` : ids.join(', '))
+    return json({ kind, action, count })
+  })
+
+  return router
+}

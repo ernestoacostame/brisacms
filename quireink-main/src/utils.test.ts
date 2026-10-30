@@ -1,0 +1,368 @@
+import { describe, it, expect } from '@/test/vitest'
+import {
+  slugify,
+  titleSlug,
+  toPlainText,
+  deriveExcerpt,
+  clampExcerpt,
+  readingMinutes,
+  wordCount,
+  isPublicallyVisible,
+  fill,
+  isoToZonedInput,
+  zonedInputToIso,
+  isScheduled,
+  extractImageUrls,
+  untitledNumbers,
+} from './utils'
+
+describe('slugify', () => {
+  it('strips Vietnamese diacritics and maps đ -> d', () => {
+    expect(slugify('Suy nghĩ về Đời')).toBe('suy-nghi-ve-doi')
+  })
+
+  it('transliterates Cyrillic, so a Russian title is a readable URL', () => {
+    expect(slugify('Почерк и время: зачем писать медленно')).toBe('pocherk-i-vremya-zachem-pisat-medlenno')
+    expect(slugify('Щи да каша')).toBe('shchi-da-kasha')
+  })
+
+  it('still yields nothing for CJK — the timestamp fallback is deliberate there', () => {
+    expect(slugify('中文标题')).toBe('')
+  })
+
+  it('collapses spaces/symbols and trims leading/trailing hyphens', () => {
+    expect(slugify('  Hello, World!  ')).toBe('hello-world')
+  })
+
+  // A title with no sluggable characters yields '' — why savePost/savePage must
+  // fall back to a timestamped slug so a post never persists an empty (unreachable) slug.
+  it('returns empty for punctuation/emoji-only input', () => {
+    expect(slugify('!!! --- ...')).toBe('')
+    expect(slugify('🔦')).toBe('')
+  })
+
+  it('yields a URL segment that needs no escaping, whatever it is given', () => {
+    // WHY THIS IS PINNED. A slug is interpolated into paths all over the admin, and on
+    // 2026-09-16 one of those sites was escaping it and the site three lines below was not
+    // (the editor's preview link; CodeQL alert 43). Escaping it there is now a no-op for
+    // every slug this function can produce, and this is the assertion that keeps it one: if
+    // `slugify` ever widened its alphabet, `encodeURIComponent` would start changing the
+    // string and the two call sites would stop agreeing about what the URL is.
+    for (const title of [
+      'Suy nghĩ về Đời', 'Почерк и время: зачем писать медленно', '  Hello, World!  ',
+      'a/b?c#d&e', '100% sure', "it's a plan", 'a+b=c', 'tab\there', '<script>x</script>',
+      'a  b   c', '---edges---', 'MiXeD CaSe 42',
+    ]) {
+      const slug = slugify(title)
+      expect({ title, slug: encodeURIComponent(slug) }).toEqual({ title, slug })
+      expect(slug).toMatch(/^[a-z0-9-]*$/)
+    }
+  })
+})
+
+describe('wordCount', () => {
+  it('counts whitespace-split words with markup stripped', () => {
+    expect(wordCount('# Title\n\nHello **bold** world')).toBe(4) // Title, Hello, bold, world
+  })
+
+  it('agrees with readingMinutes (~200 wpm)', () => {
+    const words = Array(600).fill('word').join(' ')
+    expect(wordCount(words)).toBe(600)
+    expect(readingMinutes(words)).toBe(3)
+  })
+})
+
+describe('readingMinutes', () => {
+  it('is at least 1 minute for short content', () => {
+    expect(readingMinutes('a few words here')).toBe(1)
+  })
+
+  it('approximates ~200 words per minute', () => {
+    const words = Array(400).fill('word').join(' ')
+    expect(readingMinutes(words)).toBe(2)
+  })
+})
+
+describe('deriveExcerpt', () => {
+  it('returns the whole text when under the word limit', () => {
+    expect(deriveExcerpt('short body text', 50)).toBe('short body text')
+  })
+
+  it('cuts at maxWords and appends an ellipsis', () => {
+    const body = Array(60).fill('w').join(' ')
+    const out = deriveExcerpt(body, 50)
+    expect(out.endsWith('...')).toBe(true)
+    expect(out.split(' ')).toHaveLength(50) // 50 words; "..." sticks to the last one
+  })
+
+  it('strips markdown image/link syntax from the excerpt', () => {
+    expect(deriveExcerpt('![alt](media/x.jpg) real [text](/l) here')).toBe('real text here')
+  })
+
+  // ⚠️ FOUR SURFACES READ THIS ONE STRING: the deck over the title, the meta description, the
+  // OG card and the RSS summary. Every shape below put its own notation into all four.
+  it('keeps a bracket inside a link label out of the summary', () => {
+    // The old pattern said a label holds no `]` and a URL holds no `)`, so neither of these
+    // matched AT ALL and the whole line went out as the characters somebody typed.
+    expect(deriveExcerpt('Xem [Theo nghiên cứu [1]](https://e.com) nhé.')).toBe('Xem Theo nghiên cứu [1] nhé.')
+    expect(deriveExcerpt('Đọc [bài](https://en.wikipedia.org/wiki/A_(b)) đi.')).toBe('Đọc bài đi.')
+  })
+
+  it('leaves a footnote at the foot of the piece, not in the summary of it', () => {
+    expect(deriveExcerpt('Nguồn[^1] nói vậy.\n\n[^1]: Wikipedia')).toBe('Nguồn nói vậy.')
+    expect(deriveExcerpt('Nguồn[^ghi-chú] nói vậy.')).toBe('Nguồn nói vậy.')
+  })
+
+  it("drops a callout's tag, which is a marker and not a sentence", () => {
+    expect(deriveExcerpt('> [!NOTE]\n> Lời nhắc.')).toBe('Lời nhắc.')
+  })
+
+  it('reads a table as its cells', () => {
+    // The rule row is notation entire and the pipes are a grid: counted as words, a four-cell
+    // table read fifteen, so the reading time and the panel beside the editor were both wrong.
+    expect(deriveExcerpt('| a | b |\n| --- | --- |\n| 1 | 2 |')).toBe('a b 1 2')
+    expect(wordCount('| a | b |\n| --- | --- |\n| 1 | 2 |')).toBe(4)
+  })
+
+  it('reads a table written with ONE hyphen per cell the same way', () => {
+    // GFM's delimiter row is "one or more hyphens", so all four of these are the same table.
+    // The rule here asked for two or more, and every fixture in this file happened to use
+    // three — which is what an editor produces and not what a person typing a small table by
+    // hand does. So a post opening with `| - | - |` had `- -` in its excerpt, its meta
+    // description, its OG card and its RSS summary, and nothing here could see it.
+    // Found 2026-09-19 by reading an exported post, not by a test.
+    for (const rule of ['| - | - |', '| -- | -- |', '| :- | -: |', '|-|-|']) {
+      const table = `| a | b |\n${rule}\n| 1 | 2 |`
+      expect(deriveExcerpt(table), rule).toBe('a b 1 2')
+      expect(wordCount(table), rule).toBe(4)
+    }
+  })
+
+  it('reads a divider as a divider, in all three spellings', () => {
+    for (const rule of ['---', '***', '___']) {
+      expect(deriveExcerpt(`${rule}\n\nThân bài.`)).toBe('Thân bài.')
+      expect(wordCount(`${rule}\n\nThân bài.`)).toBe(2)
+    }
+  })
+
+  it('still keeps a hyphen, a pipe and a bracket that belong to the prose', () => {
+    // The rules above are anchored for a reason: every one of these is ordinary writing.
+    expect(deriveExcerpt('một blog self-hosted, 2020-2026.')).toBe('một blog self-hosted, 2020-2026.')
+    expect(deriveExcerpt('Dùng a | b để ngăn cách.')).toBe('Dùng a | b để ngăn cách.')
+    expect(deriveExcerpt('Theo [1] thì vậy.')).toBe('Theo [1] thì vậy.')
+  })
+})
+
+describe('clampExcerpt', () => {
+  it('cuts on a word boundary with an ellipsis past the char limit', () => {
+    const out = clampExcerpt('one two three four five', 11)
+    expect(out).toBe('one two...')
+  })
+})
+
+describe('isPublicallyVisible', () => {
+  it('is false for a draft regardless of date', () => {
+    expect(isPublicallyVisible('draft', '2000-01-01')).toBe(false)
+  })
+
+  it('is false for a published post dated in the future', () => {
+    const future = new Date(Date.now() + 86_400_000).toISOString()
+    expect(isPublicallyVisible('published', future)).toBe(false)
+  })
+
+  it('is true for a published post dated in the past', () => {
+    expect(isPublicallyVisible('published', '2000-01-01')).toBe(true)
+  })
+})
+
+describe('isScheduled', () => {
+  it('is true for a published post dated in the future', () => {
+    const future = new Date(Date.now() + 86_400_000).toISOString()
+    expect(isScheduled('published', future)).toBe(true)
+  })
+
+  it('is false for a published post already live (past date)', () => {
+    expect(isScheduled('published', '2000-01-01')).toBe(false)
+  })
+
+  it('is false for a draft even with a future date', () => {
+    const future = new Date(Date.now() + 86_400_000).toISOString()
+    expect(isScheduled('draft', future)).toBe(false)
+  })
+
+  it('is false for a malformed date', () => {
+    expect(isScheduled('published', '')).toBe(false)
+  })
+
+  // A post is either live now or scheduled — never both (the read-layer complement).
+  it('is the exact complement of isPublicallyVisible for published posts', () => {
+    const future = new Date(Date.now() + 86_400_000).toISOString()
+    expect(isScheduled('published', future)).toBe(!isPublicallyVisible('published', future))
+    expect(isScheduled('published', '2000-01-01')).toBe(!isPublicallyVisible('published', '2000-01-01'))
+  })
+})
+
+describe('extractImageUrls', () => {
+  it('collects de-duped image URLs in order', () => {
+    const content = '![a](https://h/x.jpg) <img src="https://h/y.png"> again https://h/x.jpg'
+    expect(extractImageUrls(content)).toEqual(['https://h/x.jpg', 'https://h/y.png'])
+  })
+
+  // Self-hosted images are stored store-relative — these MUST be picked up too, else the
+  // Lightbox (gated by this) never mounts for local images.
+  it('also collects root-relative image URLs', () => {
+    const content = '![a](/uploads/media/foo.png) and ![b](/uploads/media/bar.webp)'
+    expect(extractImageUrls(content)).toEqual(['/uploads/media/foo.png', '/uploads/media/bar.webp'])
+  })
+})
+
+// The untitled draft numbering shared by the writing sidebar and the dashboard band.
+const uRow = (kind: 'post' | 'page', slug: string, title: string, created: number) => ({ kind, slug, title, created })
+
+describe('untitledNumbers', () => {
+  it('numbers only the untitled ones, oldest first, whitespace counting as untitled', () => {
+    const n = untitledNumbers([
+      uRow('post', 'has-title', 'A Real Title', 300),
+      uRow('post', 'post-3', '', 300),
+      uRow('post', 'post-1', '', 100),
+      uRow('post', 'post-2', '  ', 200),
+    ])
+    expect(n.get('post:post-1')).toBe(1)
+    expect(n.get('post:post-2')).toBe(2)
+    expect(n.get('post:post-3')).toBe(3)
+    expect(n.has('post:has-title')).toBe(false)
+  })
+
+  it('keeps a draft its number when a newer untitled draft appears above it', () => {
+    const after = untitledNumbers([uRow('post', 'a', '', 100), uRow('post', 'b', '', 200), uRow('post', 'c', '', 300)])
+    expect(after.get('post:a')).toBe(1)
+    expect(after.get('post:b')).toBe(2)
+    expect(after.get('post:c')).toBe(3)
+  })
+
+  it('is deterministic when two untitled drafts share a timestamp', () => {
+    const a = untitledNumbers([uRow('post', 'y', '', 100), uRow('post', 'x', '', 100)])
+    const b = untitledNumbers([uRow('post', 'x', '', 100), uRow('post', 'y', '', 100)])
+    expect(a.get('post:x')).toBe(b.get('post:x'))
+    expect(a.get('post:y')).toBe(b.get('post:y'))
+  })
+
+  it('numbers posts and pages in one sequence, so the two surfaces agree', () => {
+    const n = untitledNumbers([uRow('page', 'page-1', '', 150), uRow('post', 'post-1', '', 100)])
+    expect(n.get('post:post-1')).toBe(1)
+    expect(n.get('page:page-1')).toBe(2)
+  })
+})
+
+// `String.replace(pattern, replacement)` reads `$&`, `$'` and `` $` `` in the REPLACEMENT as
+// instructions, and every locale substitution on this site puts text somebody typed there.
+describe('fill', () => {
+  it('treats a value as a value, whatever dollar signs are in it', () => {
+    expect(fill('{n} results for "{q}"', { n: 2, q: "$'" })).toBe('2 results for "$\'"')
+    expect(fill('{n} results for "{q}"', { n: 2, q: '$&' })).toBe('2 results for "$&"')
+    expect(fill('Every post on {site} filed under {name}.', { site: 'A$`B', name: '$1' }))
+      .toBe('Every post on A$`B filed under $1.')
+  })
+
+  it('leaves a placeholder it was given nothing for', () => {
+    expect(fill('{a} and {b}', { a: 'one' })).toBe('one and {b}')
+  })
+})
+
+// A schedule is a wall-clock time in the SITE's zone. Read through the browser's zone it is
+// simply a different moment: "10 Sep 09:00" set from a laptop on UTC published at 16:00 in
+// Hanoi, and the line under the field agreed with the laptop, so nothing on screen said so.
+describe('the site clock', () => {
+  it('shows an instant as the site reads it, not as the machine does', () => {
+    expect(isoToZonedInput('2026-09-10T02:00:00.000Z', 'Asia/Ho_Chi_Minh')).toBe('2026-09-10T09:00')
+    expect(isoToZonedInput('2026-09-10T02:00:00.000Z', 'UTC')).toBe('2026-09-10T02:00')
+    expect(isoToZonedInput('2026-09-10T02:00:00.000Z', 'America/New_York')).toBe('2026-09-09T22:00')
+  })
+
+  it('reads a typed time back as the instant that wall clock names', () => {
+    expect(zonedInputToIso('2026-09-10T09:00', 'Asia/Ho_Chi_Minh')).toBe('2026-09-10T02:00:00.000Z')
+    expect(zonedInputToIso('2026-09-10T02:00', 'UTC')).toBe('2026-09-10T02:00:00.000Z')
+  })
+
+  it('round-trips across a daylight-saving boundary, which is what the second pass is for', () => {
+    // 02:30 on the night New York springs forward does not exist; the hour either side does.
+    for (const local of ['2026-03-08T01:30', '2026-03-08T03:30', '2026-11-01T00:30']) {
+      const iso = zonedInputToIso(local, 'America/New_York')
+      expect(isoToZonedInput(iso, 'America/New_York')).toBe(local)
+    }
+  })
+
+  it('falls back rather than throwing on a zone nobody has heard of', () => {
+    expect(isoToZonedInput('2026-09-10T02:00:00.000Z', 'Mars/Olympus_Mons')).toBe('2026-09-10T02:00')
+    expect(zonedInputToIso('2026-09-10T02:00', 'Mars/Olympus_Mons')).toBe('2026-09-10T02:00:00.000Z')
+  })
+})
+
+describe('toPlainText and reference links', () => {
+  // Found 2026-09-19: the definition and the label both went into the excerpt, the meta
+  // description, the OG card and the RSS summary as the characters somebody typed.
+  it('takes the text of a full, collapsed or shortcut reference link, and drops the definition', () => {
+    expect(toPlainText('See [the docs][d] now.\n\n[d]: https://example.com/docs "Docs"\n')).toBe('See the docs now.')
+    expect(toPlainText('A [collapsed][] and [shortcut] link.\n\n[collapsed]: https://a.test\n[shortcut]: https://b.test'))
+      .toBe('A collapsed and shortcut link.')
+  })
+
+  it('leaves brackets alone when nothing defines them', () => {
+    expect(toPlainText('Brackets [like this] stay.')).toBe('Brackets [like this] stay.')
+  })
+
+  it('never lets a link reach across a blank line, which is where its paragraph ended', () => {
+    expect(toPlainText('Start [a\n\nb](x) end')).toBe('Start [a b](x) end')
+  })
+})
+
+describe('toPlainText reads a backslash escape as the character it escapes', () => {
+  // The serializer writes `\_`, `\*` and `\[` on every save, so every saved post carried them
+  // into its excerpt, meta description, OG card and RSS summary (release review, 2026-09-23).
+  it('keeps what was escaped and drops the backslash', () => {
+    expect(toPlainText('TBWA\\\\Chiat\\\\Day')).toBe('TBWA\\Chiat\\Day')
+    expect(toPlainText('snake\\_case and 2\\*3')).toBe('snake_case and 2*3')
+    expect(toPlainText('Theo \\[1] as cited')).toBe('Theo [1] as cited')
+  })
+  it('still strips the markers nobody escaped', () => {
+    expect(toPlainText('# Head\n\n**bold** and _it_')).toBe('Head bold and it')
+  })
+})
+
+// A dollar the author escaped is a dollar: `\$a+b$` summarised as "\a+b", into the deck, the meta
+// description, the OG card and the feed (2026-09-30).
+describe('toPlainText and an escaped dollar', () => {
+  it('keeps it as a dollar and opens no formula with it', () => {
+    expect(toPlainText('inline \\$a+b$ math')).toBe('inline $a+b$ math')
+    expect(toPlainText('a formula \\(\\frac{a}{b}\\) still loses its notation')).not.toContain('frac')
+  })
+})
+
+// A Greek title became `post-<clock>`: only CJK and emoji should reach that (ADR 0064).
+describe('slugify and the Greek alphabet', () => {
+  it('writes a Greek title in Latin letters, accents off, final sigma included', () => {
+    expect(slugify('Ωμέγα Ελληνικά')).toBe('omega-ellinika')
+    expect(slugify('Ψυχή και λόγος')).toBe('psychi-kai-logos')
+  })
+})
+
+// A Chinese or Japanese post has no spaces between words and read "1 min" at any length.
+describe('reading time for writing without word spaces', () => {
+  it('counts Han and kana characters two to a word, and leaves spaced text as it was', () => {
+    expect(readingMinutes('字'.repeat(800))).toBe(2)
+    expect(readingMinutes('か'.repeat(1200))).toBe(3)
+    expect(wordCount('three plain words')).toBe(3)
+    expect(wordCount('한국어는 띄어쓰기를 합니다')).toBe(3)
+  })
+})
+
+// A 287-character title made a 287-character address (2026-09-30).
+describe('titleSlug', () => {
+  it('cuts a long title back to a whole word within 80 characters, and leaves a short one', () => {
+    const long = titleSlug('A very long title '.repeat(16))
+    expect(long.length).toBeLessThanOrEqual(80)
+    expect(long.endsWith('-')).toBe(false)
+    expect('a-very-long-title-'.repeat(16)).toContain(long)
+    expect(titleSlug('Short title')).toBe('short-title')
+  })
+})

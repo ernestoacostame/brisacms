@@ -1,0 +1,398 @@
+// The admin kit says a thing ONCE. This check is what makes that true.
+//
+// Every drift found on 2026-08-02 had the same shape: a primitive exists in the kit or
+// `ui/`, a screen needs it, and the screen copies the class list instead of importing it.
+// The copy then diverges by a shade, two pixels or a missing `shrink-0`, and nothing says so
+// — a settings field two pixels taller than the button beside it does not fail a type check
+// and does not fail a test. Four primary buttons, three tab tracks, two form controls and two
+// stat tiles were all found by photographing the running admin, which is not a thing anyone
+// does on every commit.
+//
+// So the signatures are checked here instead. Each one is a string that appears in exactly
+// one primitive and has no reason to appear anywhere else. Adding a variant to a primitive is
+// fine; re-typing its class list into a screen is what this stops.
+
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+import { checkOffScale } from './admin-kit-scale'
+
+type Rule = {
+  /** What the primitive is, for the error message. */
+  what: string
+  /** The class fragment that only the primitive has any business containing. */
+  signature: string
+  /** Where it legitimately lives, as a path suffix. */
+  home: string
+  /** What the offender should do instead. */
+  instead: string
+  /** What the home holds when it BUILDS the signature from another constant. Defaults to the signature. */
+  homeText?: string
+}
+
+const RULES: Rule[] = [
+  {
+    // Added 2026-08-22, after MediaLibrary was found carrying a byte-identical copy of this
+    // string. The copy had also missed the tap-target padding that went onto the original,
+    // which is exactly the drift this file exists to stop: a screen re-types a primitive,
+    // the primitive later grows, and the copy stays behind where nothing can see it.
+    what: 'the quiet sheet-top tool',
+    signature: 'text-xs text-neutral-500 transition hover:text-neutral-900',
+    // Moved to `src/admin-shared` on 2026-09-14 with ADR 0054's first screens: the server
+    // draws a sheet now and may not import from `src/admin`, which is the browser's half.
+    home: 'src/admin-shared/kit.ts',
+    instead: 'import SHEET_TOOL from @/admin-shared/kit',
+  },
+  {
+    what: 'the form-control chrome',
+    signature: 'focus:ring-2 focus:ring-neutral-200',
+    // Moved with the sheet's tool, and for the same reason.
+    home: 'src/admin-shared/kit.ts',
+    instead: 'import CONTROL from @/admin-shared/kit',
+  },
+  {
+    what: 'the segmented tab track',
+    signature: 'items-end gap-6 border-b border-neutral-200',
+    // Moved out of the editor's half when the trash became a page (ADR 0054): the server draws
+    // that screen's kind strip and cannot import from `src/admin`.
+    home: 'src/admin-shared/tabs.ts',
+    instead: 'use tabs() from web/admin/kit (size="lg" is the section strip, size="sm" the inline filter)',
+  },
+  {
+    what: 'the button shape',
+    signature: 'whitespace-nowrap rounded-md',
+    // Moved out of the browser's half on 2026-09-14: the server renders admin markup now and
+    // cannot import from `src/admin`. Every caller reads this string directly since React
+    // left with ADR 0054's step 6.
+    home: 'src/admin-shared/kit.ts',
+    instead: 'use buttonClass() from @/admin-shared/kit',
+  },
+  {
+    what: 'the stat tile',
+    signature: 'text-[1.875rem] font-medium leading-none tracking-[-0.02em] tabular-nums',
+    home: 'src/admin-shared/scale.ts',
+    instead: 'use statCard() from web/admin/kit-figures, and statBand() for the row it stands in',
+  },
+  {
+    // The one that costs a COLOUR the admin does not have. A native checkbox or radio with
+    // no `accent-color` is not unstyled — it is painted in the OS accent, which is blue.
+    // Five controls shipped that way (both editors' status radios, the redirect's
+    // "permanent", the newsletter's picker and its resend confirmation) and the two that had
+    // remembered disagreed on the shade, so the admin drew its tick three ways.
+    what: 'the checkbox / radio tick',
+    signature: 'accent-neutral-900 dark:accent-white',
+    // Moved on 2026-09-14 with ADR 0054's newsletter screen: the server draws the send
+    // picker and may not import from `src/admin`.
+    home: 'src/admin-shared/kit.ts',
+    instead: 'import CHECK from @/admin-shared/kit',
+  },
+  {
+    // `CHECK` above is what a NATIVE box is painted with; this is the drawn one that replaced
+    // it where a native box reads as a form pasted into a page of writing. `appearance-none`
+    // on a checkbox is the whole trick, and it is the fragment a screen would copy: the
+    // border, the fill, the focus ring and the overlaid stroke all have to arrive with it or
+    // the box comes out invisible.
+    what: 'the drawn checkbox',
+    signature: 'cursor-pointer appearance-none rounded border border-neutral-300',
+    // Moved for the same reason as the tab track, and by the same screen: the trash's rows
+    // carry a tick each; `tick()` in `web/admin/kit` draws it from this string.
+    home: 'src/admin-shared/kit.ts',
+    instead: 'use tick() from web/admin/kit',
+  },
+  {
+    // Thirty-eight screens hand-typed this rather than import it, plus three that went as far
+    // as declaring `const HINT` with the same string — and twenty-five of the copies carried
+    // `text-neutral-400 dark:text-neutral-500`, lighter than the primitive in light mode and
+    // darker in dark mode, so they were the hardest hints to read in both. It used to cost a
+    // FACE as well as a shade; since the admin went to one face (2026-08-15) a copy costs the
+    // size and the leading, which is still the difference between a readable hint and the
+    // smallest text on the screen.
+    what: 'the hint text style',
+    // `italic` since 2026-08-29, and the signature moved with it — a hint is set apart from
+    // its label by SLANT because it cannot be set apart by shade: measured at 4.74:1 on a
+    // white card against the 4.5:1 floor, with `neutral-400` two steps down at 2.58:1.
+    //
+    // The SHAPE without the colour, since 2026-08-31: a note that has to be noticed keeps the
+    // size, the slant and the leading and swaps the ink (`NOTE_ALERT`), and a signature that
+    // still named the grey would have been a rule this kit could no longer satisfy.
+    signature: 'text-[0.8125rem] italic leading-[1.55]',
+    homeText: '${NOTE_SIZE} italic leading-[1.55]',
+    home: 'src/admin-shared/scale.ts',
+    instead: 'import NOTE_TEXT from @/admin-shared/scale — or pass `note` to settingRow / textField in web/admin/fields',
+  },
+]
+
+/**
+ * WHERE ADMIN MARKUP IS WRITTEN, which stopped being one directory on 2026-09-14.
+ *
+ * ADR 0054 moves the admin to server-rendered HTML, so `src/web/admin` now writes class lists
+ * too — and the shared modules at `src/` hold the class strings themselves, because a server
+ * module may not import from `src/admin`. A guard that still scanned one tree would have been
+ * green while a primitive was re-typed in the other, which is the precise failure it exists to
+ * stop.
+ */
+const TREES = ['src/admin', 'src/web/admin', 'src/admin-shared']
+
+/** Source only. `dist/` is the built bundle and contains every signature by construction. */
+function sources(dir: string): string[] {
+  const out: string[] = []
+  for (const name of readdirSync(dir)) {
+    if (name === 'dist' || name === 'node_modules') continue
+    const path = join(dir, name)
+    if (statSync(path).isDirectory()) out.push(...sources(path))
+    else if (name.endsWith('.tsx') || name.endsWith('.ts')) out.push(path)
+  }
+  return out
+}
+
+let failed = false
+const files = TREES.flatMap(sources)
+
+if (files.length < 50) {
+  console.error(`✗ check:admin-kit: only ${files.length} source files found, which cannot be right`)
+  process.exit(1)
+}
+
+for (const rule of RULES) {
+  let seenAtHome = false
+  for (const file of files) {
+    const text = readFileSync(file, 'utf8')
+    // Windows hands back backslashes; the rules are written with the repo's own separator.
+    if (file.replaceAll('\\', '/') === rule.home) {
+      if (text.includes(rule.homeText ?? rule.signature)) seenAtHome = true
+      continue
+    }
+    if (!text.includes(rule.signature)) continue
+    console.error(`✗ check:admin-kit: ${file} re-declares ${rule.what}`)
+    console.error(`  Found ${JSON.stringify(rule.signature)}, which belongs to ${rule.home}.`)
+    console.error(`  ${rule.instead}.`)
+    failed = true
+  }
+  // A signature that no longer matches its own primitive means the primitive was reworded and
+  // this rule went quietly dead — the exact way `check:css-literal` stopped guarding two
+  // sheets while still reporting ok.
+  if (!seenAtHome) {
+    console.error(`✗ check:admin-kit: ${rule.home} no longer contains ${JSON.stringify(rule.homeText ?? rule.signature)}`)
+    console.error('  The rule is guarding nothing. Update the signature in this file.')
+    failed = true
+  }
+}
+
+/**
+ * A RAISED WHITE PILL, by shape rather than by exact string — the rule the exact strings above
+ * could not have caught.
+ *
+ * `signature` matching assumes a copy is a COPY. Six segmented controls proved otherwise: the
+ * language picker, the analytics range strip and four editor pickers all drew the tab strip's
+ * pill, and every one had chosen `bg-neutral-100` where the primitive said `bg-neutral-200/70`.
+ * One shade apart, so the check passed for months while the admin carried seven of one control.
+ * They were found by photographing the running admin — exactly the thing this check exists so
+ * nobody has to do.
+ *
+ * So this matches the IDEA: a white fill lifted on a shadow, which the admin does not draw
+ * anywhere. `sticky` or `fixed` is exempt, read off the SAME LINE rather than kept as a list of
+ * filenames — a list goes stale silently and says nothing about why. `admin-design.md` reserves
+ * the shadow for overlays, and a bar pinned over content being scrolled past is genuinely one.
+ */
+// STILL `sm|md`, and the card's contact step did not need this widened. Those two are the
+// shadows of a card PRETENDING to float while sitting in the flow, which is the costume this
+// guards against; `lg` and above is what a real overlay wears, and the admin has three. The
+// card's own step (2026-08-29) is an arbitrary 1px at 4% — an edge, not a lift.
+const RAISED = /bg-white[^'"`\n]*\bshadow-(sm|md)\b/
+const PINNED = /\b(sticky|fixed)\b/
+for (const file of files) {
+  const path = file.replaceAll('\\', '/')
+  for (const line of readFileSync(file, 'utf8').split('\n')) {
+    if (!RAISED.test(line) || PINNED.test(line)) continue
+    console.error(`✗ check:admin-kit: ${path} raises a white surface on a shadow`)
+    console.error('  The admin draws no shadow except on an overlay. For a segmented control use')
+    console.error('  <Tabs size="sm">; for a panel use CARD, which is a sheet with a hairline.')
+    failed = true
+  }
+}
+
+/**
+ * The other half of the same idea: no screen names a TYPEFACE.
+ *
+ * Which of the two faces a thing is set in is a question about its ROLE, and the roles are
+ * `NOTE_TEXT` / `READING` / `data-prose`. A `fontFamily` on a screen answers it locally and
+ * permanently, and answering it locally is how the admin ended up deciding faces by HTML TAG:
+ * a `.admin p` rule in `admin.css`, under which `Setting` (whose hint is a `<p>`) and
+ * `ui/Input` (whose identical hint is a `<span>`) rendered two hints of one kind, on one card,
+ * in two different faces.
+ *
+ * The exception is a SPECIMEN: a picker tile painted in the face it offers. It must name a
+ * family, because naming it is the whole control. So a `fontFamily` is allowed only in a file
+ * that also marks that surface `data-specimen` — the same attribute that stops `admin.css`
+ * normalising its x-height, so the two cannot be marked one without the other.
+ */
+// A DECLARATION, not a mention: the colon is required. Without it the check failed on a
+// locale key called `fontFamilyLabel` and on this file's own prose about font families —
+// and a guard that cries wolf is a guard somebody switches off.
+//
+// AND NOT A `var()`, since 2026-09-14. `font-family: var(--font-sans), system-ui, …` names no
+// typeface — it READS a role and lists the platform's fallbacks behind it, which is the
+// opposite of the thing this rule is about. The shell does exactly that once, to set the
+// admin's base face from the variable it has just declared, and widening the scan to
+// `src/web/admin` (where the server renders admin markup now) is what first asked the
+// question. Expressed as the distinction itself rather than as a filename, because a list of
+// exempt files goes stale in silence and says nothing about why.
+const FAMILY = /(?:fontFamily|font-family)\s*:\s*(?!var\()/
+for (const file of files) {
+  const text = readFileSync(file, 'utf8')
+  if (!FAMILY.test(text) || text.includes('data-specimen')) continue
+  console.error(`✗ check:admin-kit: ${file} names a typeface`)
+  console.error('  A face belongs to a role, not to a screen: use NOTE_TEXT, READING or data-prose.')
+  console.error('  A picker painted in the face it offers marks that surface data-specimen.')
+  failed = true
+}
+
+/**
+ * A HAND-DRAWN FIELD, by its FOCUS — the third thing the exact strings could not catch.
+ *
+ * `signature` matching assumes a copy is a copy, and `RAISED` catches a shape. This catches a
+ * REWRITE: ten fields across the settings screens had each drawn their own text input rather
+ * than importing `CONTROL`, and every one of them landed on `outline-none` with a darkened
+ * border and NO RING — so the check sailed past all ten while looking for the ring.
+ *
+ * What that cost, measured against `CONTROL`: no minimum height, so 38px beside a 40px button
+ * on three cards that put one there; an 8px radius against the kit's 6; 12px of side padding
+ * against 14; and no `placeholder:` shade — which mattered most on the three key forms whose
+ * LABEL is the placeholder, so the naming of every field was left to the browser. The ten also
+ * disagreed among themselves four ways, one of them a whole type size.
+ *
+ * NO EXEMPTION, unlike `FAMILY` above, and none is needed. The kit's own focused border is
+ * `focus:border-neutral-500` (`CONTROL_CHROME` in `admin-shared/kit.ts`), so the home of the
+ * rule does not carry the string the rule bans; the only copy of it in the repository is the
+ * constant below, and this file is not one of the trees scanned.
+ */
+const HAND_DRAWN = 'focus:border-neutral-900'
+for (const file of files) {
+  const path = file.replaceAll('\\', '/')
+  if (!readFileSync(file, 'utf8').includes(HAND_DRAWN)) continue
+  console.error(`✗ check:admin-kit: ${path} draws its own focus state`)
+  console.error(`  Found ${JSON.stringify(HAND_DRAWN)}. The focused field is CONTROL's to define.`)
+  console.error('  Use textField()/textArea() from web/admin/fields.ts, or CONTROL itself for a')
+  console.error('  control they do not cover. A field with a measured size of its own takes')
+  console.error('  CONTROL_CHROME and states only that size.')
+  failed = true
+}
+
+/**
+ * THE BROWSER'S OWN DIALOGS, and they stay gone.
+ *
+ * Sixteen `confirm()` and four `prompt()` were counted in `src/admin` on 2026-09-07, and each
+ * cost the same three things: the browser draws them, so the box deciding whether a post is
+ * destroyed forever wears none of this product's grammar; they name nothing, because
+ * `confirm()` takes one string and "Delete this?" leaves WHICH to whatever row the pointer was
+ * over; and they block the main thread, freezing the page behind them mid-render for as long
+ * as somebody thinks about it. A product-drawn dialog replaced all twenty.
+ *
+ * WHAT REPLACED THEM IS AN EVENT, not an import. The box is markup the server draws once into
+ * the shell (`src/web/admin/overlays.ts`) and the rail island wires
+ * (`src/admin/island/lib/overlay-confirm.ts`); a caller asks for it by dispatching a cancelable
+ * `quire:confirm` and answering on the callback it carries. `src/admin/island/lib/ask-link.ts`
+ * is the shortest example, and `src/admin/components/editor-link.ts` is the half that only sees
+ * the answer. Cancelable, so an unheard ask is a refusal rather than a promise that never
+ * settles: that is the one behaviour the browser's dialogs could not get wrong.
+ *
+ * ⚠️ MATCHED WITH A LEADING BOUNDARY, because `askForLink(`, `wireConfirm(` and the word
+ * inside a comment are not calls to the global. A guard that fires on prose about the thing
+ * rather than the thing is a guard somebody switches off: this file's own header, and
+ * `one-face.test.ts`, have each paid for that lesson once.
+ */
+const NATIVE = /(?<![.\w])(?:window\s*\.\s*)?(confirm|prompt)\s*\(/
+// No exemption. Nothing in these trees is allowed to reach for the globals, not even the module
+// that replaces them: `overlay-confirm.ts` draws a dialog, it does not call one.
+for (const file of files) {
+  const path = file.replaceAll('\\', '/')
+  const code = readFileSync(file, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n')
+  const hit = NATIVE.exec(code)
+  if (!hit) continue
+  console.error(`✗ check:admin-kit: ${path} calls the browser's ${hit[1]}()`)
+  console.error("  Dispatch a cancelable 'quire:confirm' instead (see island/lib/ask-link.ts):")
+  console.error('  it names the object, wears the product, closes on Esc, can carry a typed')
+  console.error('  answer, and does not freeze the page behind it.')
+  failed = true
+}
+
+/**
+ * TYPE SMALLER THAN THE SCALE'S FLOOR.
+ *
+ * The scale runs 30 · 28 · 17 · 16 · 14 · 13 · 12 (`admin-shared/scale.ts`), and 12 is the
+ * floor on purpose: measured `#737373` on white is 4.74:1 against the 4.5 a 13px line has to
+ * clear, and the next neutral step is 2.58 — there is no room under it. Thirteen runs of
+ * `text-[11px]` and two of `text-[10px]` were counted on 2026-09-07, every one of them on a
+ * chip, a badge or a chord — the things people read least carefully, set smaller than
+ * everything else on the screen.
+ *
+ * A hand-typed size is also a size that answers to nobody: it does not move when the scale
+ * moves, which is how the home page kept a 22px title through a change that took every other
+ * page's to 28.
+ */
+// ⚠️ IN REM AS WELL AS IN PX, and the rem half was added on 2026-09-16 after three live sites
+// were found spelling 11px as `text-[0.6875rem]` and walking straight past this. A guard that
+// names one spelling of a banned value teaches the next author the other spelling.
+// 0.5625rem = 9px · 0.625rem = 10px · 0.6875rem = 11px.
+const TINY = /text-\[(?:9|10|11)px\]|text-\[0\.(?:5625|625|6875)rem\]/
+/**
+ * ⚠️ AND THE SCAN SKIPS COMMENTS, or the note explaining the ban is the ban being broken. The
+ * first run after the rem spelling was added failed on the very comment that records why it was
+ * added — and a guard that can be tripped by prose about itself is a guard people route around
+ * by not writing the prose.
+ */
+const bare = (src: string): string => src
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .replace(/(^|\n)\s*\/\/[^\n]*/g, '$1')
+for (const file of files) {
+  const path = file.replaceAll('\\', '/')
+  const hit = TINY.exec(bare(readFileSync(file, 'utf8')))
+  if (!hit) continue
+  console.error(`✗ check:admin-kit: ${path} sets type below the scale's floor (${hit[0]})`)
+  console.error("  Twelve is the smallest this admin sets, and it is a contrast limit rather")
+  console.error('  than a taste: use META or UTIL from admin-shared/scale.ts.')
+  failed = true
+}
+
+if (!checkOffScale(files)) failed = true
+/**
+ * A CLAMP STANDING NEXT TO A DISPLAY UTILITY, which is a clamp that does nothing.
+ *
+ * `line-clamp-N` works by switching the box to `display:-webkit-box`. Put `block` (or `flex`,
+ * or a `lg:` variant of either) in the same class list and that utility wins the cascade, the
+ * box is no longer a webkit box, and the clamp is silently ignored — no warning anywhere, and
+ * the only symptom is text that is longer than it was meant to be.
+ *
+ * Measured 2026-09-12 on the write pane, where the summary line carried `line-clamp-2 block`:
+ * it rendered 112px, which is seven lines against the two it asked for, and the rows of the
+ * list ran from 44px to 199px. Ten pieces fit on a 900px screen afterwards where five had.
+ *
+ * The clamp already makes the box block-level, so the display utility beside it is never
+ * needed — which is why this is a flat refusal rather than a judgement call.
+ */
+const CLAMP = /line-clamp-\d/g
+const DISPLAY = /(?:^|\s)(?:[a-z-]+:)*(block|flex|grid|inline-block|inline-flex|inline-grid|table|flow-root|contents)(?=\s|$)/
+for (const file of files) {
+  const path = file.replaceAll('\\', '/')
+  const code = readFileSync(file, 'utf8')
+  for (const hit of code.matchAll(CLAMP)) {
+    // The class list this clamp lives in, and nothing else on the line: bounded by the quote
+    // or backtick that opened the string, so a neighbouring element's classes cannot be read
+    // as this one's.
+    const open = Math.max(code.lastIndexOf('"', hit.index), code.lastIndexOf("'", hit.index), code.lastIndexOf('`', hit.index))
+    const close = Math.min(
+      ...['"', "'", '`'].map((q) => { const i = code.indexOf(q, hit.index); return i === -1 ? code.length : i }),
+    )
+    const clash = DISPLAY.exec(code.slice(open + 1, close))
+    if (!clash) continue
+    console.error(`✗ check:admin-kit: ${path} puts ${JSON.stringify(clash[1])} beside ${hit[0]}`)
+    console.error('  The display utility wins and the clamp is ignored — the text runs to full')
+    console.error('  length with nothing to say so. Drop the display utility: the clamp already')
+    console.error('  makes the box block-level.')
+    failed = true
+  }
+}
+
+if (failed) process.exit(1)
+console.log(`✓ check:admin-kit: ok (${RULES.length} primitive(s), ${files.length} file(s))`)

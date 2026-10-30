@@ -1,0 +1,298 @@
+# Publishing the image, on a tag and only on a tag.
+#
+# `ci.yml` already proves the image builds and boots on every push — including on a
+# root-owned bind mount, which is the shape a NAS produces. This workflow is the other half:
+# taking the thing that passed and putting it where somebody can `docker pull` it without
+# cloning the repository, installing Bun or building anything. That is the whole reason it
+# exists, and the audience is specific: a Synology, QNAP or Unraid owner whose container UI
+# offers a name to pull and a folder to mount, and nothing else.
+#
+# TWO NATIVE RUNNERS, NOT QEMU. The obvious shape is one job with `platforms: amd64,arm64`
+# and binfmt emulation, and it would work — slowly. The expensive part of this build is
+# `bun install` twice plus the admin bundle (React, Tiptap, the Tailwind CLI), and that is
+# exactly the sort of CPU-bound work emulation is worst at; a build measured in seconds
+# natively turns into tens of minutes under QEMU, on a job that fires at the worst possible
+# moment, which is a release. GitHub's arm64 runners are free for public repositories, so
+# each architecture is built where it is native and the two are stitched into one manifest
+# afterwards. A reader pulling `quireink/quireink` gets their own architecture and never
+# knows this happened.
+#
+# GHCR IS THE ONE THAT ALWAYS RUNS. It authenticates with the token this workflow already
+# has, so it cannot be broken by a missing secret. Docker Hub is where a NAS search box
+# actually looks, so it matters more for the audience — but it needs credentials a person
+# has to create, and a release that fails because a secret was never added would be a bad
+# trade. So the Hub push is a copy of an image that has already been published, guarded on
+# the secret being present: no secret, no Hub, and the release still happens.
+#
+# To turn the Hub on, add two repository secrets:
+#   DOCKERHUB_USERNAME  the account name
+#   DOCKERHUB_TOKEN     a Read/Write access token from hub.docker.com -> Account settings
+#                       -> Personal access tokens. NOT the account password.
+name: Publish
+
+on:
+  push:
+    tags: ['v*']
+  # So a release that failed on plumbing can be retried against the SAME tag, without
+  # deleting and re-pushing it — moving a tag people may already have fetched to work around
+  # a broken workflow is a bad trade.
+  #
+  # AND FROM A BRANCH IT IS ALWAYS A DRY RUN (2026-09-23). A branch has no version to publish:
+  # the semver patterns resolve to nothing and the one tag left is `latest`, moved to whatever
+  # the branch held. Dry, it builds both architectures through every action here and pushes
+  # nothing, which is how an action's new major gets proven before the release tag that would
+  # otherwise be its first run. On a tag, `dry_run` does the same by choice.
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build and resolve the tags, push nothing (always on from a branch)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  HUB_IMAGE: quireink/quireink
+  # 'true' for a manual run from a branch, or one that asked; a tag push is never dry.
+  DRY: ${{ github.event_name == 'workflow_dispatch' && (inputs.dry_run || !startsWith(github.ref, 'refs/tags/')) }}
+
+# UBUNTU 24.04 BY NAME, not ubuntu-latest (2026-09-23): the label moves to Ubuntu 26 from
+# 2026-10-19, and a runner image changing under a release is a failure nobody asked for. Moving
+# to 26 is a change to make on purpose, with CI watching, and then to pin again.
+jobs:
+  # THE GATE: nothing below runs until CI has said yes to the commit under the tag.
+  #
+  # A tag fires this workflow and `ci.yml` does not fire for a tag, so until 2026-09-04 the
+  # two never met: a tag on a commit whose tour was red, or pushed a minute before its CI
+  # finished, published `latest` to two registries with every job here green. `latest` is
+  # the install tag the docs recommend on purpose, which makes that the one image that must
+  # not be wrong. `main` carries no branch protection, deliberately, so the wait lives here
+  # on the publishing side rather than in a rule that fights the push-to-main workflow.
+  #
+  # It reads the CHECK RUNS on the tagged SHA and waits for the five `ci.yml` jobs AND the six
+  # cells of `release-matrix.yml` (ADR 0065: every tag is installed and upgraded through each
+  # package before anything is published) to complete successfully, polling for up to forty-five
+  # minutes (CI is under three; a matrix cell that builds the image takes about fifteen; the rest
+  # is for queued runners). Any conclusion but `success` on any of the eleven fails this job, and
+  # with it the release, with the job named in the log. A commit nothing ran on at all fails the
+  # same way: the absence of a verdict is not a verdict.
+  gate:
+    runs-on: ubuntu-24.04
+    permissions:
+      checks: read
+      contents: read
+    steps:
+      - name: Wait for CI on ${{ github.sha }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 180); do
+            runs=$(gh api "repos/${REPO}/commits/${SHA}/check-runs?per_page=100" \
+              --jq '[.check_runs[] | select(.name == "check" or .name == "tour" or .name == "image" or .name == "audit" or .name == "cf" or (.name | startswith("matrix (")))]')
+            done_ok=$(jq '[.[] | select(.status == "completed" and .conclusion == "success") | .name] | unique | length' <<< "$runs")
+            failed=$(jq -r '[.[] | select(.status == "completed" and .conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped") | "\(.name)=\(.conclusion)"] | join(" ")' <<< "$runs")
+            if [ -n "$failed" ]; then
+              echo "CI did not pass on ${SHA}: ${failed}"; exit 1
+            fi
+            # Eleven: the five CI jobs (cf since ADR 0066), and the six cells of release-matrix.yml
+            # (ADR 0065; cloudflare-dev since 2026-10-03).
+            if [ "$done_ok" -ge 11 ]; then
+              echo "CI and the release matrix passed on ${SHA}"; exit 0
+            fi
+            echo "waiting: ${done_ok}/11 jobs green on ${SHA} (attempt ${i}/180)"
+            sleep 15
+          done
+          echo "CI and the release matrix never finished on ${SHA} within forty-five minutes; not publishing"; exit 1
+
+  # One job per architecture, each pushing an untagged blob identified only by its digest.
+  # Tags come later, once both exist: tagging here would mean the two architectures fight
+  # over the same tag and the last one to finish wins, which is how a multi-arch image
+  # quietly becomes single-arch.
+  # PACKAGE C, THE CLOUDFLARE BUNDLE (ADR 0065, rule L11): built here and nowhere else, from the
+  # tagged commit, with its manifest of hashes, attested by GitHub (who built it, from what), and
+  # attached to the release the tag belongs to. A running Quire Ink installs or upgrades a Cloudflare
+  # blog from exactly this file and refuses one whose hashes do not match.
+  cloudflare:
+    needs: gate
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The whole history, so the release branch can be pushed as a fast-forward of itself.
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun run build && bun run build:worker && bun scripts/pack-worker.ts
+      - uses: actions/attest-build-provenance@v2
+        if: env.DRY != 'true'
+        with:
+          subject-path: dist/quireink-cf-*.tar
+      - name: Attach to the release
+        if: env.DRY != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${GITHUB_REF_NAME}" dist/quireink-cf-*.tar dist/quireink-cf-*.tar.sha256 --clobber
+      # THE BUTTON'S BRANCH. Deploy to Cloudflare copies one branch, and pointing it at main would
+      # install whatever was merged this morning — against ADR 0065, every way in installs a release.
+      # `release` is moved here, to this tag's commit, after CI and the matrix passed (the gate), and
+      # only forward: a push that is not a fast-forward fails, rather than moving installs back.
+      - name: Move the release branch to this tag
+        if: env.DRY != 'true'
+        run: |
+          git fetch --no-tags origin '+refs/heads/release:refs/remotes/origin/release' || true
+          git push origin "${GITHUB_SHA}:refs/heads/release"
+      - name: Dry run, so nothing is attached
+        if: env.DRY == 'true'
+        run: ls -la dist/quireink-cf-* >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    needs: gate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            platform: linux/amd64
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          # `provenance: false` deliberately. A provenance attestation rides in the manifest
+          # as an extra entry, and `imagetools create` then has to reason about entries that
+          # are not architectures — which is a known way for this exact pattern to produce a
+          # manifest a puller cannot resolve. Signing the release is worth doing and is not
+          # worth doing badly on the first tag; it is a follow-up, not a silent omission.
+          provenance: false
+          # The two labels that are facts about THIS build rather than about the source. The
+          # other eight are literals in the Dockerfile, so every build shape carries them,
+          # including a `docker compose up --build` on somebody's NAS; these two are empty
+          # there, which is honest, and filled here.
+          build-args: |
+            SOURCE_COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ github.event.repository.updated_at }}
+          outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=${{ env.DRY != 'true' }}
+
+      - name: Save the digest for the merge step
+        run: |
+          mkdir -p /tmp/digests
+          # The FILENAME is the bare hex, with `sha256:` stripped — the merge step puts that
+          # prefix back when it builds `name@sha256:<hex>`, and leaving it on here produces
+          # `@sha256:sha256:<hex>`, which the registry rejects.
+          digest='${{ steps.build.outputs.digest }}'
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: digest-${{ strategy.job-index }}
+          path: /tmp/digests/*
+          retention-days: 1
+
+  # One manifest list over both digests, and only now does anything carry a version.
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    # `secrets` is NOT one of the contexts a step-level `if` may read — the first cut of this
+    # file used `if: secrets.DOCKERHUB_TOKEN != ''` and GitHub refused the whole workflow
+    # before running a line of it. A secret CAN be read here, into an env var, and `env` is
+    # readable from `if`. The value is a string, hence the comparison against 'true'.
+    env:
+      HAS_HUB: ${{ secrets.DOCKERHUB_TOKEN != '' }}
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          path: /tmp/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 2.1.2, 2.1 and latest. The two-part tag is what an owner who wants security fixes
+      # but no surprises pins to; the full one is what an owner who wants nothing to move
+      # pins to; `latest` is for trying it. A pre-release tag (v2.2.0-beta.1) deliberately
+      # does NOT move `latest`.
+      - uses: docker/metadata-action@v6
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+
+      - name: Dry run, so nothing is stitched or pushed
+        if: env.DRY == 'true'
+        run: |
+          echo "Dry run: both architectures built, $(ls /tmp/digests | wc -l) digest(s) handed over." >> "$GITHUB_STEP_SUMMARY"
+          echo "A real run would publish: $(jq -cr '.tags | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON")" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Stitch the architectures into one image
+        if: env.DRY != 'true'
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf 'ghcr.io/${{ github.repository }}@sha256:%s ' *)
+
+      - name: Say what a puller will get
+        if: env.DRY != 'true'
+        run: docker buildx imagetools inspect ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }}
+
+      # --- Docker Hub, when it is configured ------------------------------------------------
+      # A copy of the manifest that GHCR already carries, not a second build: same digests,
+      # same bytes, so the two registries can never drift into serving different code under
+      # one version number.
+      - name: Log in to Docker Hub
+        if: env.HAS_HUB == 'true' && env.DRY != 'true'
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Copy the image to Docker Hub
+        if: env.HAS_HUB == 'true' && env.DRY != 'true'
+        run: |
+          for tag in $(jq -r '.tags[]' <<< "$DOCKER_METADATA_OUTPUT_JSON"); do
+            docker buildx imagetools create \
+              -t "${HUB_IMAGE}:${tag##*:}" \
+              "ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }}"
+          done
+          docker buildx imagetools inspect "${HUB_IMAGE}:${{ steps.meta.outputs.version }}"
+
+      - name: Note when the Hub was skipped
+        if: env.HAS_HUB != 'true' && env.DRY != 'true'
+        run: |
+          echo "Docker Hub was skipped: no DOCKERHUB_TOKEN secret on this repository." >> "$GITHUB_STEP_SUMMARY"
+          echo "GHCR published ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }}." >> "$GITHUB_STEP_SUMMARY"

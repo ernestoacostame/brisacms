@@ -1,0 +1,317 @@
+// Maintenance and operations: the cron tick, the health probe, the draft preview link,
+// and the WordPress import.
+//
+// Two of these are PUBLIC by necessity and are listed in `scripts/checks/routes-guarded.ts`
+// with their reasons — `/api/cron` is called by an external scheduler that has no session,
+// and `/api/health` is called by a reverse proxy that has no session either.
+
+import { timingSafeEqual } from 'node:crypto'
+import { Hono } from 'hono'
+import { one } from '@/store/query'
+import { savePost, getPost } from '@/content/posts'
+import { savePage, getPage } from '@/content/pages'
+import { saveNote, getNote } from '@/content/notes'
+import { saveUnique } from '@/content/slugs'
+import { saveRedirect } from '@/server/redirects'
+import { normalizePath } from '@/server/redirect-path'
+import { previewToken } from '@/content/preview'
+import { publishTick, fullTick } from '@/server/tick'
+// Still here for the importers below, which empty the page cache after a bulk insert.
+import { clearCache } from '@/server/cache'
+import { clientIp, rateLimited } from '@/server/rate-limit'
+import { logActivity } from '@/server/activity'
+import { fail, json } from '@/web/api'
+import { readEnv } from '@/env'
+import { storageWritable } from '@/runtime/impl/blob'
+import { APP_VERSION } from '@/version'
+import { maxImportBytes } from '@/web/body-cap'
+import { ownerRouter } from '@/web/guard'
+
+
+/** Per-IP cap on the cron tick. See the comment at the route for why it needs one. */
+const CRON_PER_MINUTE = 12
+
+/**
+ * Constant-time bearer comparison.
+ *
+ * A plain `===` returns as soon as two bytes differ, so an attacker can recover the secret
+ * one character at a time by measuring how long the rejection takes.
+ */
+function bearerOk(header: string | null, secret: string): boolean {
+  const given = Buffer.from(header ?? '')
+  const expected = Buffer.from(`Bearer ${secret}`)
+  // `timingSafeEqual` THROWS on a length mismatch, so the length has to be checked first —
+  // which does leak the length. That is not a useful leak: the length is fixed by the
+  // format, and the alternative is an exception on every wrong-length request.
+  return given.length === expected.length && timingSafeEqual(given, expected)
+}
+
+
+/** The owner-gated half. */
+export function opsRoutes() {
+  const router = ownerRouter()
+
+  // The client builds `${origin}/preview/${slug}?key=${token}` from this.
+  router.get('/api/preview-link', async (c) => {
+    const slug = c.req.query('slug')
+    if (!slug) return fail(c, 'Missing slug', 400)
+    return json({ token: previewToken(slug) })
+  })
+
+  router.post('/api/import/wordpress', async (c) => {
+    const form = await c.req.formData().catch(() => null)
+    const file = form?.get('file')
+    if (!(file instanceof File)) return fail(c, 'no_file', 400)
+    if (file.size > maxImportBytes()) return fail(c, 'file_too_large', 413)
+
+    const xml = await file.text()
+    // A cheap shape check before parsing 100 MB. The message is specific because "import
+    // failed" on the wrong file is the least useful thing to tell someone.
+    if (!xml.includes('<rss') || !xml.includes('wp:post_type')) {
+      return fail(c, 'not_a_wordpress_export', 400)
+    }
+
+    // Loaded here rather than at the top of the file: the parser pulls turndown, its GFM
+    // plugin and this repository's XML reader, none of which any other route touches. A blog
+    // that never came from WordPress — which is most of them, forever — never loads them. The
+    // shape check above runs first, so a wrong file is rejected without the import.
+    const { parseWxr } = await import('@/import/wordpress')
+    const now = new Date().toISOString()
+    return json(await persist(parseWxr(xml, now), 'wordpress', now))
+  })
+
+  // One save loop for every importer; the parsers are pure and the persistence is
+  // identical, so the difference between routes is only "who parsed it".
+  // A published item that lived at some other path — WordPress's /2020/05/hello/ shape,
+  // most of the time — gets a 301 from that path to its new slug, so the day the old
+  // domain points here, every old link and search result still lands. `saveRedirect`
+  // refuses the odd degenerate source; one bad path must not fail the import.
+  const redirectOldPath = async (path: string | undefined, slug: string): Promise<number> => {
+    if (!path) return 0
+    const source = normalizePath(path)
+    if (!source || source === `/${slug}`) return 0
+    // Never shadow live content: the redirect middleware answers BEFORE the router, so
+    // an import whose `hello` became `hello-2` must not put a redirect on /hello — the
+    // post already living there wins. Only a single-segment source can collide.
+    const sourceSlug = source.slice(1)
+    if (!sourceSlug.includes('/') && (await getPost(sourceSlug) !== null || await getPage(sourceSlug) !== null)) return 0
+    try {
+      // Never over a redirect the owner already has: an import is not asked, so it does not win.
+      await saveRedirect({ source, destination: `/${slug}`, permanent: true, replace: false })
+      return 1
+    } catch {
+      return 0
+    }
+  }
+
+  const persist = async (
+    result: import('@/import/convert').ImportResult,
+    source: string,
+    /** The date a parser gave an item that had none, which says nothing about sameness. */
+    parsedAt: string,
+  ) => {
+    let importedPosts = 0
+    let importedPages = 0
+    let importedNotes = 0
+    let redirects = 0
+    let skipped = result.skipped
+    // Read BEFORE anything is written. One unparseable date in a bundle threw half-way through,
+    // and running the file again then made `-2` copies of everything already in (2026-09-30).
+    // A date that will not parse skips its item; an item already here, same slug and same
+    // title and date, is not imported a second time.
+    const unparseable = (d: string | undefined) => d !== undefined && Number.isNaN(Date.parse(d))
+    const sameDate = (a: string, b: string | undefined) => b !== undefined && b !== parsedAt && Date.parse(a) === Date.parse(b)
+    for (const { slug, path, ...rest } of result.posts) {
+      if (unparseable(rest.date)) { skipped++; continue }
+      const here = await getPost(slug)
+      if (here && here.title === rest.title && sameDate(here.date, rest.date)) { skipped++; continue }
+      const finalSlug = await saveUnique(slug, (s) => savePost({ ...rest, slug: s }))
+      redirects += await redirectOldPath(path, finalSlug)
+      importedPosts += 1
+    }
+    for (const { slug, path, ...rest } of result.pages) {
+      const here = await getPage(slug)
+      if (here && here.title === rest.title && here.content === rest.content) { skipped++; continue }
+      const finalSlug = await saveUnique(slug, (s) => savePage({ ...rest, slug: s }))
+      redirects += await redirectOldPath(path, finalSlug)
+      importedPages += 1
+    }
+    // NOTES, and only ever from a Quire Ink bundle (ADR 0044 — no other platform has the
+    // kind). No `redirectOldPath`: a note's address is `/notes/<slug>` in a namespace of its
+    // own, so nothing it used to live at belongs to this blog.
+    for (const { slug, ...rest } of result.notes ?? []) {
+      if (unparseable(rest.date)) { skipped++; continue }
+      const here = await getNote(slug)
+      if (here && here.content === rest.content && sameDate(here.date, rest.date)) { skipped++; continue }
+      await saveUnique(slug, (s) => saveNote({ ...rest, slug: s }))
+      importedNotes += 1
+    }
+    if (importedPosts + importedPages + importedNotes > 0) clearCache()
+    // ⚠️ THE KIND IS WHAT THE LOG PRINTS, and there was one kind for four importers: a Ghost,
+    // Substack or Medium import was recorded as `import.wordpress`, which the activity log
+    // renders as "Imported from WordPress" in eleven languages. The detail line said `ghost:`
+    // underneath it and nobody reads a detail line to check a heading.
+    void logActivity(
+      source === 'wordpress' ? 'import.wordpress' : 'import.posts',
+      `${source}: ${importedPosts} posts + ${importedPages} pages`
+        + (importedNotes > 0 ? ` + ${importedNotes} notes` : ''),
+    )
+    return {
+      posts: importedPosts, pages: importedPages, notes: importedNotes,
+      skipped, redirects,
+    }
+  }
+
+  router.post('/api/import/ghost', async (c) => {
+    const form = await c.req.formData().catch(() => null)
+    const file = form?.get('file')
+    if (!(file instanceof File)) return fail(c, 'no_file', 400)
+    if (file.size > maxImportBytes()) return fail(c, 'file_too_large', 413)
+    let doc: unknown
+    try {
+      doc = JSON.parse(await file.text())
+    } catch {
+      return fail(c, 'not_a_ghost_export', 400)
+    }
+    const { looksLikeGhost, parseGhost } = await import('@/import/ghost')
+    if (!looksLikeGhost(doc)) return fail(c, 'not_a_ghost_export', 400)
+    const now = new Date().toISOString()
+    return json(await persist(parseGhost(doc, now), 'ghost', now))
+  })
+
+  router.post('/api/import/archive', async (c) => {
+    const form = await c.req.formData().catch(() => null)
+    const file = form?.get('file')
+    if (!(file instanceof File)) return fail(c, 'no_file', 400)
+    if (file.size > maxImportBytes()) return fail(c, 'file_too_large', 413)
+
+    // Substack and Medium both hand people a ZIP; nobody remembers which is which, so
+    // the server tells them apart by structure (posts.csv vs h-entry markup), not by
+    // asking. Only .html/.csv entries are read as text; images and everything else in
+    // the archive stay untouched — this importer, like the others, keeps image URLs.
+    const { unzipBlob, ZipError } = await import('@/import/unzip')
+    let entries: { name: string; text: string }[]
+    try {
+      // The filter is passed IN rather than applied after: `unzip` decompresses only what it
+      // is asked for, and a blog export is mostly images. `fflate` inflated the whole archive
+      // into memory first and these two lines then threw most of it away. And the archive is
+      // READ a slice at a time (`unzipBlob`): the directory from its end, then only the entries
+      // kept, so its pictures never pass through this process's memory either.
+      const decoder = new TextDecoder()
+      entries = (await unzipBlob(
+        file,
+        // `.md` and `site.json` are this blog's OWN bundle (`server/export-md.ts`). Widening
+        // the filter costs a Substack archive nothing, because those hold neither.
+        (name) => /\.(html|csv|md)$/i.test(name) || /(^|\/)site\.json$/.test(name),
+      )).map(({ name, bytes }) => ({ name, text: decoder.decode(bytes) }))
+    } catch (cause) {
+      // Two codes rather than four: `unzip` distinguishes a corrupt entry from an unreadable
+      // container, but this route's answers are part of the API's contract and the admin knows
+      // these two. An entry that will not fit is the same answer as a file that will not fit.
+      const tooBig = cause instanceof ZipError && cause.code === 'entry_too_large'
+      return fail(c, tooBig ? 'file_too_large' : 'not_a_zip', tooBig ? 413 : 400)
+    }
+    const { isSubstack, isMedium, parseSubstack, parseMedium } = await import('@/import/archive')
+    const { isQuireInk, parseQuireInk } = await import('@/import/quireink')
+    const now = new Date().toISOString()
+    // OURS FIRST, because its sniff is the most specific of the three: a `site.json` beside
+    // Markdown under `posts/`. Substack and Medium carry neither, so the order is not what
+    // keeps them apart — it is that the most exact test should not be the last one asked.
+    if (isQuireInk(entries)) return json(await persist(parseQuireInk(entries, now), 'quireink', now))
+    if (isSubstack(entries)) return json(await persist(parseSubstack(entries, now), 'substack', now))
+    if (isMedium(entries)) return json(await persist(parseMedium(entries, now), 'medium', now))
+    return fail(c, 'not_a_recognised_export', 400)
+  })
+
+  // After the words have moved, the pictures. One small batch per call; the admin
+  // client (and the MCP tool) loop until `remaining` is 0 or a call moves nothing —
+  // import/images.ts explains why this is not done inside the upload request.
+  router.post('/api/import/images', async () => {
+    const { bringImagesHome } = await import('@/import/images')
+    const report = await bringImagesHome()
+    if (report.moved > 0) void logActivity('import.images', `${report.moved} moved, ${report.remaining} left`)
+    return json(report)
+  })
+
+  return router
+}
+
+/**
+ * The two routes an external caller reaches without a session.
+ *
+ * Not on the owner router, and that is the point of them being in a separate function:
+ * a scheduler and a load balancer both call these, and neither can sign in.
+ */
+export function publicOpsRoutes(): Hono {
+  const app = new Hono()
+
+  // ----- the cron tick --------------------------------------------------------
+  //
+  // Run it hourly from cron or a panel. It does NOT email anyone: a scheduled post goes
+  // live on time, but the newsletter broadcast is always pressed by hand.
+
+  app.get('/api/cron', async (c) => {
+    // A cap BEFORE the token check, and the reason is what this route does rather than what
+    // it returns: one call clears the page cache, purges the CDN if one is configured, runs sharp
+    // over any pending image variants and may take a full backup of both databases and the
+    // uploads tree. On a fresh install CRON_SECRET is unset and the route is open — so it
+    // was an unauthenticated lever on the most expensive work the process can do, on a
+    // runtime with exactly one thread. A scheduler on the tightest sensible cadence spends
+    // one of these a minute; anything past twelve is not a scheduler.
+    if (rateLimited(`cron:${clientIp(c)}`, CRON_PER_MINUTE)) {
+      return fail(c, 'Too many requests', 429)
+    }
+    // No secret, no tick. This was "unset means open" until 2026-08-29, on the argument
+    // that a fresh install's keep-alive should work before anything is configured — but
+    // since ADR 0031 the process winds its own clock and a fresh install needs no external
+    // caller at all. What "open" actually meant was that anyone could pull the most
+    // expensive lever the process has, and the per-IP cap above dissolves against more
+    // than one IP. The only caller with a legitimate need for this route is a scheduler
+    // someone configured on purpose, and that someone can set a secret in the same breath.
+    const secret = process.env.CRON_SECRET
+    if (!secret) return fail(c, 'CRON_SECRET is not set; the internal clock covers this (self-host.md §8)', 401)
+    if (!bearerOk(c.req.header('authorization') ?? null, secret)) {
+      return fail(c, 'Unauthorized', 401)
+    }
+
+    // What a tick does lives in `server/tick.ts`, because since ADR 0031 the process runs
+    // the same two ticks on its own clock and two copies of this would drift.
+    if (c.req.query('publish') === '1') {
+      return json({ alive: true, published: await publishTick() })
+    }
+    return json({ alive: true, ...await fullTick({ purge: c.req.query('purge') === '1' }) })
+  })
+
+  // ----- the health probe -----------------------------------------------------
+  // Public and unauthenticated: a reverse proxy or orchestrator calls it, and one that
+  // had to hold a session would be a worse probe.
+
+  app.get('/api/health', async (c) => {
+    const database = checkDatabase()
+    const storage = await checkStorage()
+    const healthy = database && storage
+    // 503 when degraded, so a load balancer takes this instance out of rotation. A 200
+    // with `status: degraded` in the body would be read by nothing.
+    // `version` and `package` (ADR 0065) so an install test can tell WHICH release it reached and
+    // through which package. Nothing new leaves: the version is already in every page's
+    // `generator` and in the update check.
+    return c.json(
+      { status: healthy ? 'ok' : 'degraded', version: APP_VERSION, package: readEnv().package, checks: { database, storage } },
+      healthy ? 200 : 503,
+      { 'cache-control': 'no-store' },
+    )
+  })
+
+  return app
+}
+
+function checkDatabase(): boolean {
+  try {
+    one<{ id: number }>(`select id from settings limit 1`)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const checkStorage = (): Promise<boolean> => storageWritable()

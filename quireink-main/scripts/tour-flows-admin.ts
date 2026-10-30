@@ -1,0 +1,383 @@
+// The owner's half of the tour. Split from `tour-flows.ts` when that file passed the 400-line
+// ceiling, on the same seam the file itself was split from `tour.ts`: by READER. This one needs
+// the session cookie and knows the admin's markup; the public half knows neither.
+//
+// Every assertion runs in the page and returns `ok`, `ok <detail>`, `skip: <why>`, or the reason
+// it is not ok. A flow that WRITES cleans up after itself.
+
+import type { Tour } from './tour'
+import { registerEditorFlows } from './tour-flows-editor'
+import { registerTrashFromEditorFlows, registerBulkBarFlows } from './tour-flows-bin'
+import { registerDrawerFlows } from './tour-flows-terms'
+import { registerEdgeFlows } from './tour-flows-edges'
+import { registerLookFlows } from './tour-flows-looks'
+import { registerSettingsFlows } from './tour-flows-settings'
+import { registerHomeFlows } from './tour-flows-home'
+import { registerAutosaveFlows, registerKeyFlows, registerPaneFlows } from './tour-flows-pane'
+import { registerPaletteFlows } from './tour-flows-palette'
+import { registerFocusFlows, registerWriteLayoutFlows } from './tour-flows-layout'
+
+export function registerAdminFlows({ flow, expect, atWidth }: Tour): void {
+  registerSettingsFlows({ flow, expect, atWidth })
+
+  const ADMIN_PAGES: [string, string][] = [
+    ['/admin', 'dashboard'],
+    ['/admin/content', 'content list'],
+    ['/admin/media', 'library'],
+    ['/admin/comments', 'comments'],
+    ['/admin/newsletter', 'newsletter'],
+    ['/admin/analytics', 'analytics'],
+    ['/admin/log', 'activity log'],
+    ['/admin/trash', 'trash'],
+    ['/admin/settings', 'settings'],
+    ['/admin/help', 'help'],
+  ]
+
+  for (const [path, label] of ADMIN_PAGES) {
+    flow(`admin: ${label} renders`, () => expect(path, `
+      (() => {
+        // The MARKER, not the word: the Help page's troubleshooting table has a row about a URL
+        // that 404s, and matching the text called a working page broken.
+        if (document.querySelector('[data-admin-404]')) return 'the admin router found nothing'
+        if (/Sign in|Đăng nhập/.test(document.body.innerText)) return 'bounced to the sign-in page'
+        // The shell alone is not the page: every admin screen puts something past the nav.
+        const main = document.querySelector('main') ?? document.body
+        return main.innerText.trim().length > 30 ? 'ok' : 'rendered the shell and nothing else'
+      })()`, 900))
+  }
+
+  // The Overview could not survive a phone and nothing said so: at 375px its `scrollWidth` was
+  // 422, so 47px of the page was reachable only by dragging it sideways. The cause is a grid
+  // item's automatic minimum size — a `truncate` row's min-content is its full untruncated
+  // headline, so the widget track refused to go below 406px inside a 343px grid.
+  //
+  // ⚠️ `atWidth`, and the first version of this flow is why. It squeezed the GRID's own width
+  // instead of the viewport, ran green against a build with the bug still in it, and would have
+  // shipped as a guard over nothing: the one-column layout is a `lg:` media query, so a narrow
+  // BOX still lays out as two columns and no track ever has to hold a whole card.
+  //
+  // The rule that catches this: a new guard is not finished until it has been watched to FAIL
+  // on the broken build.
+  flow('admin: the dashboard fits a phone', () => atWidth(375, '/admin', `
+    (() => {
+      // The whole PAGE, not one card: the symptom is the Overview scrolling sideways, and the
+      // element responsible has already moved once. scrollWidth on the DOCUMENT sees this;
+      // scrollWidth on a grid whose overflow is visible does not, which cost one green run.
+      // (No backticks in here — this string is itself a template literal.)
+      const doc = document.documentElement
+      const spill = doc.scrollWidth - doc.clientWidth
+      if (spill > 1) {
+        const grid = document.querySelector('.grid.lg\\\\:grid-cols-2')
+        const track = grid ? getComputedStyle(grid).gridTemplateColumns : '?'
+        return 'the dashboard scrolls sideways by ' + spill + 'px at ' + doc.clientWidth + 'px (widget track ' + track + ')'
+      }
+      return 'ok no sideways scroll at ' + doc.clientWidth + 'px'
+    })()`, 1200))
+
+  // The other nine screens, same assertion: the two spills found before this batch (the
+  // Overview above, the analytics table before it) shared one cause — a grid or flex item
+  // whose min-content floor is a truncate row — so the cheap guard is the whole-document
+  // measurement on every screen, not a per-screen investigation. On failure the message
+  // names the widest element, because "scrolls sideways by 47px" alone starts a hunt.
+  for (const [path, label] of ADMIN_PAGES.filter(([p]) => p !== '/admin')) {
+    flow(`admin: ${label} fits a phone`, () => atWidth(375, path, `
+      (() => {
+        const doc = document.documentElement
+        const spill = doc.scrollWidth - doc.clientWidth
+        if (spill <= 1) return 'ok no sideways scroll at ' + doc.clientWidth + 'px'
+        let widest = null
+        for (const el of document.querySelectorAll('*')) {
+          const r = el.getBoundingClientRect()
+          if (r.right > doc.clientWidth + 1 && (!widest || r.right > widest.r)) {
+            widest = { r: r.right, what: el.tagName + '.' + String(el.className).split(' ').slice(0, 3).join('.') }
+          }
+        }
+        return 'scrolls sideways by ' + spill + 'px at ' + doc.clientWidth + 'px' +
+          (widest ? ' (widest: ' + widest.what + ' reaching ' + Math.round(widest.r) + 'px)' : '')
+      })()`, 1200))
+  }
+
+  flow('admin: the settings tabs all have content', () => expect('/admin/settings', `
+    (async () => {
+      const empty = []
+      for (const label of ['Blog','Home & menu','Posts','Appearance','Comments & mail','Server & connections','Account']) {
+        const b = [...document.querySelectorAll('button')].find((x) => x.textContent.trim() === label)
+        if (!b) { empty.push(label + ' (no tab)'); continue }
+        b.click()
+        await new Promise((r) => setTimeout(r, 250))
+        const cards = document.querySelectorAll('h2, h3').length
+        if (cards === 0) empty.push(label + ' (no cards)')
+      }
+      return empty.length ? empty.join(', ') : 'ok'
+    })()`, 1000))
+
+  // The log is the one screen whose entire job is to be READ, and it printed the database's
+  // own vocabulary: forty machine codes in grey chips beside raw detail strings.
+  flow('admin: the log speaks, filters, and keeps the code in reach', () => expect('/admin/log', `
+    (async () => {
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+      // VISIBLE only: the filters hide rather than remove (docs/admin-design.md, one DOM per state).
+      const rows = () => [...document.querySelectorAll('main ul li')].filter((r) => r.offsetParent !== null)
+      const first = rows()[0]
+      if (!first) return 'the log is empty; the fixture should have written to it'
+      // The machine code is in reach through the FILTER, never in anything the owner reads
+      // (2026-09-30: the tooltip held auth.login — via totp). It is the last word of the row's
+      // folded haystack, and the face and the tooltip must both be free of it.
+      const code = (first.dataset.find || '').split(' ').pop() || ''
+      if (!code.includes('.')) return 'the row dropped the machine code from the filter entirely'
+      const text = first.textContent || ''
+      if (text.includes(code)) return 'a row still prints its machine code: ' + text.slice(0, 60)
+      const title = first.getAttribute('title') || ''
+      if (title.includes(code)) return 'the tooltip still shows the machine code: ' + title
+      const search = document.querySelector('[data-log-search]')
+      if (search) {
+        const put = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+        put.call(search, code)
+        search.dispatchEvent(new Event('input', { bubbles: true }))
+        await sleep(300)
+        const hits = rows().length
+        put.call(search, '')
+        search.dispatchEvent(new Event('input', { bubbles: true }))
+        await sleep(300)
+        if (!hits) return 'typing the code ' + code + ' into the filter found nothing'
+      }
+      const before = rows().length
+      const kind = document.querySelector('main select')
+      if (!kind) return 'no kind filter on the log'
+      const opt = [...kind.options].find((o) => o.value === 'security')
+      if (!opt) return 'the kind filter offers no security option'
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set
+      setter.call(kind, 'security')
+      kind.dispatchEvent(new Event('change', { bubbles: true }))
+      await sleep(400)
+      const after = rows().length
+      if (after >= before) return 'filtering by kind narrowed nothing (' + before + ' -> ' + after + ')'
+      setter.call(kind, 'all')
+      kind.dispatchEvent(new Event('change', { bubbles: true }))
+      await sleep(300)
+      return 'ok (' + before + ' rows, ' + after + ' under one kind)'
+    })()`, 1200))
+
+  flow('admin: the Storage card offers both limits', () => expect('/admin/settings', `
+    (async () => {
+      const b = [...document.querySelectorAll('button')].find((x) => x.textContent.trim() === 'Server & connections')
+      if (!b) return 'no Server & connections tab'
+      b.click()
+      await new Promise((r) => setTimeout(r, 300))
+      const n = document.querySelectorAll('input[type=number][max="4096"]').length
+      return n === 2 ? 'ok' : 'found ' + n + ' storage fields, expected 2'
+    })()`, 1000))
+
+  flow('admin: settings save and come back', () => expect('/admin/settings', `
+    (async () => {
+      // No GET /api/settings exists — PUT is the only verb, and the admin reads settings through
+      // its view endpoint. Both are used here: the view to read, the response to confirm.
+      const read = async () => (await (await fetch('/api/admin/view/settings')).json())?.data?.settings?.excerptLength
+      const before = await read()
+      const target = before === 42 ? 43 : 42
+      const put = await fetch('/api/settings', {
+        method: 'PUT', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ excerptLength: target }),
+      })
+      if (!put.ok) return 'PUT /api/settings -> ' + put.status
+      const after = await read()
+      await fetch('/api/settings', {
+        method: 'PUT', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ excerptLength: before }),
+      })
+      return after === target ? 'ok' : 'wrote ' + target + ', read back ' + after
+    })()`, 900))
+
+  // The editor half, next door — see its header for the seam.
+  registerEditorFlows({ flow, expect, atWidth })
+  registerTrashFromEditorFlows({ flow, expect, atWidth })
+  registerBulkBarFlows({ flow, expect, atWidth })
+  registerDrawerFlows({ flow, expect, atWidth })
+  registerEdgeFlows({ flow, expect, atWidth })
+  registerLookFlows({ flow, expect, atWidth })
+
+  // The home screen and the rail (ADR 0024 step 6), likewise.
+  registerHomeFlows({ flow, expect, atWidth })
+
+  // The writing surfaces: the pane and its selection, the keyboard pressed rather than
+  // listed, the autosave that reaches the server and ⌘K (`tour-flows-pane.ts`), then what
+  // the shell draws around all of it — the pane surviving a click inside itself, and focus
+  // mode taking the chrome without taking the Write screen (`tour-flows-layout.ts`).
+  for (const register of [registerPaneFlows, registerKeyFlows, registerAutosaveFlows,
+                          registerPaletteFlows, registerWriteLayoutFlows, registerFocusFlows]) {
+    register({ flow, expect, atWidth })
+  }
+
+  flow('admin: the trash takes a post and gives it back', () => expect('/admin/trash', `
+    (async () => {
+      const slug = 'tour-trash-' + Date.now()
+      await fetch('/api/posts', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title: 'Tour trash', slug, content: 'x', status: 'draft', categories: [], tags: [] }),
+      })
+      await fetch('/api/posts/' + slug, { method: 'DELETE' })
+      const gone = await fetch('/' + slug)
+      const trashed = await (await fetch('/api/admin/view/trash')).json()
+      const inTrash = (trashed?.data?.posts ?? []).some((p) => p.slug === slug)
+      const back = await fetch('/api/trash', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ kind: 'posts', action: 'restore', ids: [slug] }),
+      })
+      await fetch('/api/posts/' + slug, { method: 'DELETE' })
+      if (gone.status !== 404) return 'a trashed post still answers ' + gone.status
+      if (!inTrash) return 'the post was not listed in the trash'
+      return back.ok ? 'ok' : 'restore -> ' + back.status
+    })()`, 900))
+
+  flow('admin: an oversized upload is refused with a reason', () => expect('/admin/media', `
+    (async () => {
+      const before = await (await fetch('/api/settings')).json()
+      const keep = before?.data?.maxUploadMb ?? 0
+      await fetch('/api/settings', {
+        method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ maxUploadMb: 1 }),
+      })
+      const form = new FormData()
+      form.append('file', new File([new Uint8Array(2 * 1024 * 1024)], 'huge.png', { type: 'image/png' }), 'huge.png')
+      const r = await fetch('/api/media/upload', { method: 'POST', body: form })
+      const body = await r.json().catch(() => ({}))
+      await fetch('/api/settings', {
+        method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ maxUploadMb: keep }),
+      })
+      if (r.status !== 413) return 'expected 413, got ' + r.status
+      return body.error === 'file_too_large' ? 'ok' : 'refused with ' + JSON.stringify(body)
+    })()`, 900))
+
+  flow('admin: a real image uploads and lists', () => expect('/admin/media', `
+    (async () => {
+      const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0))
+      const form = new FormData()
+      form.append('file', new File([png], 'tour.png', { type: 'image/png' }), 'tour.png')
+      const r = await fetch('/api/media/upload', { method: 'POST', body: form })
+      if (!r.ok) return '/api/media/upload -> ' + r.status
+      const items = (await r.json())?.data ?? []
+      const url = items[0]?.url
+      if (!url) return 'upload returned no url'
+      const served = await fetch(url)
+      await fetch('/api/media/delete', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ urls: [url] }),
+      })
+      return served.ok ? 'ok' : 'the stored image answered ' + served.status
+    })()`, 900))
+
+  flow('admin: the cache can be cleared', () => expect('/admin', `
+    (async () => {
+      const r = await fetch('/api/cache/clear', { method: 'POST' })
+      return r.ok ? 'ok' : '/api/cache/clear -> ' + r.status
+    })()`, 900))
+
+  flow('admin: the backup archive builds', () => expect('/admin/settings', `
+    (async () => {
+      const r = await fetch('/api/backup/export')
+      if (!r.ok) return '/api/backup/export -> ' + r.status
+      const buf = await r.arrayBuffer()
+      // A gzip member starts 1f 8b. An empty or HTML answer would not.
+      const head = new Uint8Array(buf.slice(0, 2))
+      return head[0] === 0x1f && head[1] === 0x8b
+        ? 'ok (' + Math.round(buf.byteLength / 1024) + ' KB)'
+        : 'the archive was not gzip: ' + buf.byteLength + ' bytes'
+    })()`, 900))
+
+  // The search exists because seven defined tabs still left the owner hunting. Two flows:
+  // one that it WORKS, one that it is COMPLETE — and the second is the one that matters over
+  // time, because a hand-written index rots silently and a search that cannot find a setting
+  // teaches you the setting is not there.
+  flow('admin: the settings search finds a setting and opens its tab', () => expect('/admin/settings', `
+    (async () => {
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+      const box = document.querySelector('input[type=search]')
+      if (!box) return 'no search box on the settings screen'
+      const setValue = (v) => {
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+        setter.call(box, v)
+        box.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+      // A word from the System tab, typed while the Site tab is open: the point is crossing.
+      setValue('backup')
+      await sleep(300)
+      const row = document.querySelector('main ul li button')
+      if (!row) return 'no result for "backup"'
+      const label = row.textContent.trim()
+      row.click()
+      await sleep(900)
+      const marked = document.querySelector('.setting-found')
+      if (!marked) return 'clicked "' + label + '" and nothing was marked'
+      const box2 = marked.getBoundingClientRect()
+      if (box2.top < -40 || box2.top > innerHeight) return 'marked "' + marked.textContent.trim() + '" off screen'
+      return 'ok (' + marked.textContent.trim().slice(0, 30) + ')'
+    })()`, 1200))
+
+  // ADR 0024, step 2: posts and pages in ONE list. Asserted on the row LINKS rather than on
+  // anything visible, because a row's label is translated and its editor is not: a page row
+  // points at /admin/page-editor and a post row at /admin/editor, in every language.
+  flow('admin: one list holds pages and posts together', () => expect('/admin/content', `
+    (async () => {
+      const view = await (await fetch('/api/admin/view/content')).json()
+      const pages = (view?.data?.pages ?? []).map((p) => p.slug)
+      if (!pages.length) return 'skip: this instance has no pages to merge in'
+      // The one list is a pane of row-links now (data-write-row), not a table.
+      const hrefs = [...new Set([...document.querySelectorAll('[data-write-row]')].map((a) => a.getAttribute('href') || ''))]
+      const merged = pages.filter((s) => hrefs.includes('/admin/page-editor/' + s))
+      const posts = hrefs.filter((h) => h.startsWith('/admin/editor/')).length
+      if (!merged.length) return 'no page reached the list; it is still posts-only'
+      if (!posts) return 'no post reached the list'
+      return 'ok (' + merged.length + ' page(s) beside ' + posts + ' post(s))'
+    })()`, 900))
+
+  // ADR 0024, step 1, in one assertion: a phrase the owner remembers writing, inside a post
+  // whose TITLE carries no word of it. The filter this replaces matched title, tags and
+  // categories over an array in the browser, so this row could not have appeared before —
+  // and the flow refuses to pass on a title match, because that is what used to work.
+  flow('admin: the content search reaches into the body of a post', () => expect('/admin/content', `
+    (async () => {
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+      const box = document.querySelector('input[type=search]')
+      if (!box) return 'no search box on the content screen'
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+      setter.call(box, 'widen the leading')
+      box.dispatchEvent(new Event('input', { bubbles: true }))
+      await sleep(900)
+      // ⚠️ VISIBLE ROWS. Since the column became server-rendered HTML the filters HIDE rather
+      // than remove (docs/admin-one-dom.md, trap 3), so every piece in the blog is still in the
+      // DOM and rows[0] would be whichever one the server drew first — not the match.
+      const rows = [...document.querySelectorAll('[data-write-row]')].filter((r) => r.offsetParent !== null)
+      if (!rows.length) return 'searching a body phrase listed no post at all'
+      const titles = rows.map((r) => (r.querySelector('span span span') || {}).textContent || '')
+      if (titles.some((t) => /widen|leading/i.test(t))) return 'a TITLE carries the words, so this proves nothing'
+      if (!/leading/i.test(rows[0].textContent || '')) return 'the row showed no matching line, only its title'
+      return 'ok (' + titles[0] + ')'
+    })()`, 1200))
+
+
+  flow('the owner gate refuses a write with no session', () => expect('/', `
+    (async () => {
+      // Same-origin, but the cookie is stripped: an owner route must still answer 401.
+      const r = await fetch('/api/settings', {
+        method: 'PUT', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title: 'nope' }), credentials: 'omit',
+      })
+      return r.status === 401 ? 'ok' : 'a cookieless write got ' + r.status
+    })()`))
+
+  // ONE COLUMN PER CARD, which no unit test can see: a control starts on its card's left edge,
+  // or, if it is a boolean, ends on its right one. NOTE: a template literal. No backticks.
+  flow('admin: every control in a settings card stands in one column', () => expect('/admin/settings?tab=blog', `
+    (() => {
+      // data-explanations rides the STACK now, not one panel: all seven ship drawn and the
+      // switch quiets every one of them at once (ADR 0054).
+      const p = document.querySelector('[data-settings-panels]')
+      if (!p || p.dataset.explanations !== 'off') return 'no panel with its explanations hidden'
+      const bad = Array.from(p.querySelectorAll('.card-body')).flatMap((body) => {
+        const box = body.getBoundingClientRect(), cs = getComputedStyle(body), l = Math.round(box.left + parseFloat(cs.paddingLeft)), r = Math.round(box.right - parseFloat(cs.paddingRight))
+        return Array.from(body.querySelectorAll('input,select,textarea,[role=switch]'))
+          .filter((c) => c.offsetParent && c.type !== 'file' && c.type !== 'hidden')
+          .filter((c) => { const b = c.getBoundingClientRect(); return c.getAttribute('role') === 'switch' ? Math.round(b.right) !== r : Math.round(b.left) !== l })
+          .map((c) => (c.getAttribute('aria-label') || c.type || c.tagName) + ' in ' + l + '-' + r)
+      })
+      return bad.length ? bad.length + ' out of the column: ' + bad.slice(0, 3).join(' | ') : 'ok every control on the card edge it belongs to'
+    })()`, 900))
+}

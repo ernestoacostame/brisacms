@@ -1,0 +1,180 @@
+# Docs & releases: keep current
+
+On any behavior change, update the matching doc in the SAME change:
+- **CLAUDE.md** = a router, and nothing else. **`docs/`** = how it works now, one rule in one
+  file. **`docs/decisions/`** = why, append-only. **CHANGELOG.md** = one entry per user-facing
+  change. **README.md** = setup + features. Direction, dated snapshots and the worklog are
+  **not in this repository** ([ADR 0017](../decisions/0017-move-state-and-instance-config-private.md)).
+- **README is the canonical install/usage doc, and it has to stay current.** Its **Install** section
+  (every place a blog can live, as the install table lists them, the one-command path and the hand-to-an-agent path) + the **MCP "let an agent write & publish"** section
+  + the **env-var table** must be updated in the SAME change whenever setup/deploy/env/auth/MCP/backup
+  behavior changes (new/renamed env var, a new owner setup step, a changed redirect URI, etc.).
+  Never let the README drift from how the app is actually installed and run.
+  **The three shipped skills (`.claude/skills/`) are on that list too.** An agent acts on a
+  skill without reading further, so a stale one is worse than no skill: a change to
+  installing, claiming, upgrading, the MCP surface or the importers means opening the
+  matching `SKILL.md` in the same session.
+- **Keep personal and instance values out of this repository entirely**, and not just
+  credentials, but a host, a unix user, an internal port, a service name or a live domain.
+  This repository is the product; a fact about one installation belongs in the private
+  `quireink-private` ([ADR 0017](../decisions/0017-move-state-and-instance-config-private.md)).
+  Credentials go nowhere but the gitignored `.env`. Where a script must name such a value,
+  it takes it from an environment variable and documents the variable, the way
+  [`scripts/ops/quire-backup.sh`](../../scripts/ops/quire-backup.sh) does.
+- **Audits** are dated snapshots, so they are write-only and they live with the author's
+  notes rather than here. Read the latest first so a pass starts from the last clean line.
+- **Versioning (do NOT auto-bump):** the version is **`2.2.20`**, cut 2026-10-27: themes installed from a zip, with a kit for making one, and the admin made consistent (2.2.19 was 2026-10-09). From 2.0
+  the number is semver and means something (the 1.5.x `x` was a running counter): MAJOR for a
+  break in how the thing is installed or run, MINOR for a feature, PATCH for a fix. The owner
+  picks the number, and has taken the patch slot for minor-sized work nine releases running;
+  that is the rule at work, not an exception to it. **Never bump any of the three on your own**
+  Ship the work, write the CHANGELOG entry under an "Unreleased" heading, and ask. History,
+  per release, is [CHANGELOG.md](../../CHANGELOG.md). The one lesson kept here: 2.2.4 went out
+  as `2.3.4` for twenty minutes, and a wrong number is four public places (the tag, the
+  release, two registries) plus every issue comment already written.
+- **Every tag is installed before it is published** ([ADR 0065](../decisions/0065-every-install-runs-a-release.md)).
+  Pushing `v<version>` starts `release-matrix.yml`: the source checkout and the image, each
+  installed fresh and upgraded from the release before on data that release's own seeder wrote,
+  each smoke-tested (`scripts/smoke.ts`: twelve tour flows, `/api/health` naming the version and
+  the package, `restore-check`, MCP over the wire; the image cells also restore every snapshot in
+  the volume, the old release's included, with the image's OWN `scripts/restore.ts`), plus `server.sh` run on a blank runner, plus the Cloudflare
+  build under `wrangler dev` with a Bun blog moved into it through `/setup/restore` (`cloudflare-dev`: every
+  page compared with Bun's, the full tour, and a `restore-check` against the Bun blog's files: Bun → Cloudflare → Bun). `publish.yml` waits for every cell as it waits for CI. A
+  change to anything an install touches — `install.sh`, `scripts/upgrade.ts`, the `Dockerfile`,
+  the entrypoint, `server.sh`, a migration — is worth one local `scripts/ops/matrix.sh <cell>` before the tag,
+  because the matrix is the only thing that installs it the way an owner does.
+- **And installed on Cloudflare for real, from the release manager's machine** (L10, ADR 0066):
+  `bun run build && bun run build:worker && bun scripts/pack-worker.ts`, then
+  `QUIREINK_CF_KEYFILE=<file> bun scripts/ops/cloudflare-l10.ts`. It installs the bundle on a real
+  Workers Paid account under a `quireink-l10-*` name, smoke-tests it, upgrades it in place keeping its
+  secrets, smoke-tests again and deletes everything; a pass writes `.tmp/l10/<sha>.json`. No tag
+  without that file for the commit being tagged. The token stays on that machine, never in CI.
+- **Cutting a release** (only when asked): `bun run check:all` and `bun run build` both exit 0
+  (there is no binary: [ADR 0022](../decisions/0022-ship-from-source-not-a-compiled-binary.md)); the CHANGELOG entry is written and dated; push `main`; then
+  `gh release create v<version> --title "<version> - <tagline>" --notes-file <file>`,
+  written to the **shape a release note has to have**, below.
+  The version lives in exactly **eight** tracked places: `package.json`, the version chip
+  right under the wordmark at the top of **both** READMEs (a line that is just `` `<version>` ``
+  and is the text title left when the wordmark image arrived, 2026-08-27), this line, and
+  `server.json`, the manifest the MCP registry publishes from (added 2026-08-30, found two
+  releases behind at `2.2.1` because nothing had ever named it), and the image pin in
+  `deploy/kubernetes/statefulset.yaml` (the one manifest that pins an exact tag) and the tag
+  table in `docs/dockerhub-overview.md`, and `org.opencontainers.image.version` in the
+  `Dockerfile` (added 2026-09-20: until then the image carried the BASE image's nine OCI
+  labels unchanged, so a published container said its title was `bun` and its version
+  `1.4.2-slim`, which is the field every upgrade notifier reads), plus
+  the CHANGELOG entry heading and each README's release-note paragraph, which is rewritten
+  per release anyway.
+  This line has lagged the product three times; `grep -rn '<old>' package.json server.json README.md README.vi.md Dockerfile docs/conventions/releases.md`
+  before tagging, and `check:docs` now fails on a stale pin.
+  **The release-note paragraph says what the version CANNOT do, not only what it can.**
+  Owner's instruction, 2026-09-01: a reader deciding whether to install this needs the limits
+  stated where they will read them, per version, in the README rather than discovered on
+  their own server. A NAS and a Kubernetes cluster get no Caddy, and that is deliberate: not a
+  bug, and it surprises somebody. A paragraph that lists only what was added is an advertisement; the limits are what make it a
+  release note.
+  **When the packages differ, the limits are said per package** (source, image, Cloudflare —
+  [install.md](../install.md)): a limit true of one install and not another, stated without saying
+  which, is wrong for somebody.
+
+- **A feature that arrives SWITCHED OFF has to be named in the release note.** Some defaults
+  change after this software already has installs, and an existing blog is deliberately left
+  with the old answer (`NEW_SINCE_INSTALLS_EXISTED` in `content/settings.ts` is the list). That
+  asymmetry is right — an upgrade must not silently redraw somebody's writing — and it has one
+  cost: **the default they were given is the only answer they will ever have unless something
+  tells them there was a question.** So a release carrying one of these says, in the feature's
+  own `###`, that it is off on an existing blog and where the switch is. Checkable: every key in
+  that constant was introduced by some release, and that release's note should name it.
+
+- **The shape of a release note.** Owner's instruction, 2026-09-10, after all 37 past releases
+  were rewritten to it. Both halves are checkable, so check them.
+
+  **The title is one sentence and nothing else:** `<version> - <sentence>`. Plain number, no
+  `v`, a plain hyphen, then a capital letter. It says what changed in the world, not in the
+  code: *2.2.0 - Setting up a blog no longer needs a terminal*, never *setup token + claim
+  route*. Under about 72 characters, because a longer one is cut in the releases list and in
+  every notification that carries it.
+
+  **The body is ordered by what a reader needs first**, in three sections. There is exactly ONE
+  `## New feature:` heading per release, and each feature is an `###` under it carrying a short
+  note in brackets:
+
+  ```markdown
+  ## New feature:
+
+  ### <The feature> (<a short note, three to nine words>)
+
+  <an optional paragraph: what was wrong without it, or why it is built this way>
+
+  * <what it does>
+  * <what it does>
+
+  ### <The second feature> (<a short note>)
+
+  * <what it does>
+
+  ## A few improvements
+
+  * <the small things, one line each, no heading of their own>
+
+  ## Fixed
+
+  * <what was broken, and what it cost>
+  ```
+
+  The features come first, most important at the top. **Never repeat `New feature:` per
+  feature**, and never give a small piece of work a heading of its own: it goes under **A few
+  improvements** (or *A few optimisations*) as a bare bullet. Fixes go last of the three, under
+  `## Fixed`; a release with several kinds of fix may group them as `###` under it. The bracketed
+  note must not restate the opening of the paragraph below it, which is the easiest thing to get
+  wrong when both are written in one pass.
+
+  A release with no feature in it has no `## New feature:` section and says so in its opening
+  line, which is honest rather than a gap: 2.2.6 is the example.
+
+  Two things stay wherever they belong rather than being forced into that order: a **breaking
+  change or an upgrade step** goes above everything, because somebody has to read it before
+  they pull; and **what the version cannot do** keeps its own block, per the rule above.
+
+  **Voice: it reads as a person wrote it.** No em dashes and no en dashes anywhere, in the
+  title or the body: they are the tell that a machine wrote the text, so use a comma, a full
+  stop or a colon instead. The rule holds for anything this project publishes under its own
+  name. No machine summary voice, no `feat:`/`fix:` prefixes, no bare commit
+  subjects. Say the measurement where there is one, since a number is what makes a claim
+  believable. Never quote the owner: state the reason or the measurement the quote was evidence
+  for (`CLAUDE.md` carries that rule for the whole tree).
+
+  Editing a past release is `gh release edit v<version> --title … --notes-file …`; it changes
+  neither the tag nor the date.
+
+  **Docker docs deliberately do NOT carry a version at all**: every `docker pull` and compose
+  example names `:latest`, the install tag since 2026-08-21, because the newest
+  release is the one carrying the fixes, and 2.1.3 was the argument, since anyone who had
+  pinned `:2.1.2` that morning would still be running the white screen. So a release cannot
+  leave a stale command behind in four files. The one place a number still appears is the tag
+  table in [`docs/dockerhub-overview.md`](../dockerhub-overview.md), which exists to explain
+  what an exact pin means, and it names the current release.
+
+- **A GitHub release IS a Docker release. There is no second decision** (since
+  2026-08-21). Pushing a `v*` tag fires [`publish.yml`](../../.github/workflows/publish.yml),
+  which builds `linux/amd64` and `linux/arm64` on native runners, stitches them into one
+  manifest, tags it `<major>.<minor>.<patch>` / `<major>.<minor>` / `latest`, publishes to
+  GHCR, and copies the finished manifest to Docker Hub as `quireink/quireink`. Creating a
+  release through the GitHub UI creates the tag, so it fires too. Nothing to remember and
+  nothing to run by hand, but three things are yours to check:
+  1. **Read the public record, not the workflow's green tick.** The API returns 200 for
+     things it did not do; that has now misled this project twice in one day (a `categories`
+     key silently ignored, and a manifest that would have been named `sha256:sha256:…`).
+     Ask an unauthenticated client what the world can actually see:
+     `curl -s https://hub.docker.com/v2/repositories/quireink/quireink/ | jq '{description, categories}'`
+     and pull the tag on a clean machine.
+  2. **Both registries must answer the same digest.** One run builds once and copies, so they
+     cannot drift, so if they ever differ, something published out of band.
+  3. **The listing is its own workflow.** [`dockerhub-listing.yml`](../../.github/workflows/dockerhub-listing.yml)
+     pushes the short description, [`docs/dockerhub-overview.md`](../dockerhub-overview.md)
+     and the category, and it runs when that file changes rather than on a release, because a typo
+     in prose should not need a version number. Docker Hub resolves no relative link, which
+     is why that overview exists instead of pointing at the README.
+  Docker Hub needs `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` as repository secrets. Without
+  them both workflows skip the Hub and still publish to GHCR: a missing credential must never
+  fail a release.

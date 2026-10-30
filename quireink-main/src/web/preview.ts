@@ -1,0 +1,104 @@
+// GET /preview/:slug?key= — a draft, rendered for whoever holds the token.
+//
+// Kept off `/{slug}` on purpose: the public route then only ever has to know about
+// published content, and there is no branch in it that could be reached without a token.
+// The key is an HMAC of the slug (`content/preview.ts`), so a preview link cannot be
+// guessed from the slug and cannot be edited into a link to a different draft.
+//
+// Never indexed, never cached.
+
+import type { Context } from 'hono'
+import { getPost } from '@/content/posts'
+import { getPage } from '@/content/pages'
+import { getAutosave } from '@/content/autosave'
+import { getSettings } from '@/content/settings'
+import { verifyPreview } from '@/content/preview'
+import { formatDate, t } from '@/i18n/i18n'
+import { renderPostContent } from '@/render/post-content'
+import { standaloneUrls } from '@/render/link-cards'
+import { cardFacts, noteLinks } from '@/content/link-cards'
+import { renderDocument, pageStyles } from '@/web/layout'
+import { PUBLIC_SHEET } from '@/web/assets'
+
+// The canonical pair rather than a private three-replacement copy, for the reason written out
+// in `web/search-page.ts`: the copy did not escape a quote and line 34 puts a value in an
+// attribute. Nothing reaches that one but an ISO date, so it was not exploitable here. It was
+// the same wrong shape, which is what the next person copies.
+import { escapeAttr, escapeHtml } from '@/utils'
+import { postName } from '@/content/untitled'
+import { pieceWords } from '@/render/callout-words'
+
+/**
+ * The words the editor has NOT saved, when there are any newer than the row.
+ *
+ * A published piece is never saved to be previewed: that would put the half-typed sentence on
+ * the live page, which is the thing autosave exists not to do. The editor sends its snapshot to
+ * the side column instead, and this is the one place outside the editor that reads it — behind
+ * the token, `no-store`, never indexed. Only the title and the body: a preview answers "how does
+ * this read", and the rest of the attributes still come from the row.
+ */
+function unsavedWords(kind: 'post' | 'page', slug: string): { title?: string; content?: string } {
+  // No age comparison, and none is needed: every real save clears the snapshot
+  // (`clearAutosave` in `savePost`/`savePage`), so one that exists is newer than the row.
+  const kept = getAutosave(kind, slug)
+  if (kept === null) return {}
+  try {
+    const snap = JSON.parse(kept.json) as { title?: unknown; content?: unknown }
+    return {
+      ...(typeof snap.title === 'string' ? { title: snap.title } : {}),
+      ...(typeof snap.content === 'string' ? { content: snap.content } : {}),
+    }
+  } catch {
+    return {}
+  }
+}
+
+export async function handlePreview(c: Context): Promise<Response> {
+  // Typed as optional because a bare `Context` does not know the route's shape.
+  const slug = c.req.param('slug')
+  if (!slug || !verifyPreview(slug, c.req.query('key'))) return c.text('Not found', 404)
+
+  const [post, page, settings] = await Promise.all([getPost(slug), getPage(slug), getSettings()])
+  const saved = post ?? page
+  if (!saved) return c.text('Not found', 404)
+  const entry = { ...saved, ...unsavedWords(post ? 'post' : 'page', saved.slug) }
+
+  // A DRAFT's links are noted too, so the cards are already fetched by the time it publishes
+  // — the same reason the preview renders through the same pipeline as the published page.
+  // ⚠️ ITS OWN SLOT, never the published piece's. A preview renders a draft — different
+  // markdown, same slug — so sharing the row would let every refresh here evict what the
+  // readers are being served and make them pay the render back. One row per piece previewed,
+  // which is what keeps the owner's refresh as fast as it is today (ADR 0062).
+  const body = pieceWords(await renderPostContent({
+    markdown: entry.content, cards: await cardFacts(settings), slot: `preview:${entry.slug}`,
+  }), t(settings.language), settings.features.curlyQuotes ? settings.language : null)
+  noteLinks(standaloneUrls(body), settings.siteUrl)
+  const meta = post
+    ? `<p class="meta"><time datetime="${escapeAttr(post.date)}">${
+        escapeHtml(formatDate(post.date, settings.language, settings.timezone))}</time></p>`
+    : ''
+
+  const html = renderDocument(
+    settings,
+    { title: `${post ? postName({ ...post, title: entry.title }) : entry.title} · ${settings.title}`, stylesheet: PUBLIC_SHEET },
+    pageStyles(settings),
+    `<div class="wrap">
+<article>
+<p class="preview-note">${escapeHtml(t(settings.language).previewNotice)}</p>
+${entry.title ? `<h1>${escapeHtml(entry.title)}</h1>\n` : ''}${meta}
+<div class="prose">${body}</div>
+</article>
+</div>`,
+  )
+
+  return new Response(html, {
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      // Two separate jobs. `noindex` keeps the draft out of search results; `no-store`
+      // keeps it out of any shared cache between here and the reader, which matters
+      // because the whole point of this route is content that is not published yet.
+      'x-robots-tag': 'noindex, nofollow',
+      'cache-control': 'no-store',
+    },
+  })
+}

@@ -1,0 +1,214 @@
+// The admin is set in ONE face, and the one place that is not is the editor.
+//
+// This file was `two-faces.test.ts` and it guarded the opposite rule. Both rules came from the
+// owner eight days apart — two faces on 2026-08-14, one face on 2026-08-15, with the editor
+// keeping the face the frontend publishes in — and the file is rewritten rather than deleted
+// because the FAILURE
+// MODES it was built around are unchanged. Whichever rule is in force, the way it breaks is
+// that a primitive and a screen disagree about which face a thing wears, and nothing goes red.
+//
+// The old file's finding, kept because it is the reason these assertions are in code rather
+// than in a stylesheet: `Setting` renders its hint as a `<p>` and `ui/Input` renders the
+// IDENTICAL hint as a `<span>`, so a `.admin p` rule put two hints of one kind, on one card,
+// four lines apart, in two different faces — with both call sites correct. A tag is not a role.
+// Under one face that particular bug cannot happen, and the mirror of it can: a screen that
+// still carries `READING` keeps a second face alive on a surface that should have lost it.
+
+import { describe, expect, it } from 'bun:test'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { CARD, CONTROL, THEAD, TROW } from '@/admin-shared/kit'
+import { NOTE, NOTE_TEXT, PAGE_TITLE_FACE, READING, SETTING_LABEL } from '@/admin-shared/scale'
+import { expandComponents } from '@/admin-shared/component'
+
+const ADMIN_CSS = readFileSync('src/admin/admin.css', 'utf8')
+
+/**
+ * The sheet with its comments removed, for anything asserting what the CSS DOES.
+ *
+ * This file is mostly comments, and they quote the rules they are about — including the ones
+ * that were deleted and why. Matching raw text therefore reports a declaration that is not
+ * there: the `font-size-adjust` assertion below failed against the paragraph explaining that
+ * `font-size-adjust` had been taken out.
+ */
+const DECLARATIONS = ADMIN_CSS.replace(/\/\*[\s\S]*?\*\//g, '')
+
+/**
+ * Every admin source file, minus the built bundle (which contains everything by construction)
+ * and minus THIS FILE, which quotes every string it forbids. Scanning itself is the same
+ * false alarm `check:admin-kit` hit on a locale key called `fontFamilyLabel`, and a guard that
+ * cries wolf is a guard somebody switches off.
+ */
+const SELF = 'one-face.test.ts'
+
+/**
+ * A file's CODE, with its comments taken out.
+ *
+ * Needed for the same reason `DECLARATIONS` is: `SettingsView` carries the line
+ * `{/* READING — what a reader gets on a post … *\/}`, which is about the settings TAB called
+ * Reading and has nothing to do with a typeface. A word-boundary match on the raw text called
+ * it a holder of the reading face. This is the third time on this file that a guard has fired
+ * on prose about the thing rather than the thing.
+ */
+const code = (file: string): string =>
+  readFileSync(file, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .filter((l) => !l.trimStart().startsWith('//'))
+    .join('\n')
+
+/**
+ * WHERE THE ADMIN'S FACES CAN BE NAMED, which stopped being one directory on 2026-09-14.
+ *
+ * `scale.ts` declares both carve-outs and it moved to `src/admin-shared` under ADR 0054, so
+ * the server can read it — a server module may not import from `src/admin`. `src/web/admin`
+ * is here for the same reason: it writes admin markup now, and a `font-family` smuggled in
+ * there would be exactly the drift this file exists to catch, one call site at a time.
+ */
+const TREES = ['src/admin', 'src/web/admin', 'src/admin-shared']
+const everywhere = (): string[] => TREES.flatMap(sources)
+
+function sources(dir: string): string[] {
+  const out: string[] = []
+  for (const name of readdirSync(dir, { withFileTypes: true })) {
+    if (name.name === 'dist' || name.name === SELF) continue
+    const path = join(dir, name.name)
+    if (name.isDirectory()) out.push(...sources(path))
+    else if (path.endsWith('.tsx') || path.endsWith('.ts')) out.push(path)
+  }
+  return out
+}
+
+describe('the admin wears one face', () => {
+  it('does not put a second face on the roles that carry the chrome', () => {
+    // The hint was the last holder. It is what a person READS on a settings screen, which is
+    // exactly why it was the most tempting to set in the reading face, and exactly why it was
+    // the most visible when the answer changed. Its distinction is now size and leading only.
+    // Through the component names, which since 2026-10-03 are what the roles are spelled as:
+    // a face hidden inside a name's list is still a face on the role.
+    for (const role of [NOTE_TEXT, NOTE, SETTING_LABEL, CONTROL, THEAD, TROW, CARD].map(expandComponents)) {
+      expect(role.split(' ')).not.toContain(READING)
+      expect(role.split(' ')).not.toContain(PAGE_TITLE_FACE)
+    }
+  })
+
+  it('keeps the hint primitive shared, so no screen re-types it', () => {
+    // The field builders must PLACE `NOTE`, never a copy of its classes. Pinned to the
+    // CURRENT size string: the old assertion named `text-xs leading-5`, which the primitive
+    // stopped setting in the 2026-08-15 type rework, so it would have passed for the wrong
+    // reason forever. `ui/Input.tsx` held this until the admin stopped being React; the
+    // server's own `fields.ts` is what draws every field now.
+    const fields = readFileSync('src/web/admin/fields.ts', 'utf8')
+    expect(fields).toContain('NOTE')
+    expect(fields).not.toContain('text-[0.8125rem]')
+  })
+
+  it('gives the reading face to the editor and nothing else', () => {
+    // THE list, and it is short on purpose. `screens/sheet.ts` draws the title field — the
+    // published headline being typed, so it has to be the published face; it is what
+    // `SheetTitle.tsx` became when ADR 0054's last step moved the writing sheet to the server.
+    // `settings-appearance-type.ts` is the type scale's specimens, which are not a preview if
+    // they are not painted in the family they offer — it is what `TypographyFields.tsx` became
+    // when the same ADR moved that screen. `scale.ts` is the declaration. A fourth file means
+    // the 2026-08-15 decision is being re-opened by accident.
+    const holders = everywhere()
+      .filter((f) => /\bREADING\b/.test(code(f)))
+      .map((f) => f.replaceAll('\\', '/'))
+      .sort()
+    expect(holders).toEqual([
+      'src/web/admin/screens/sheet.ts',
+      'src/admin-shared/scale.ts',
+      'src/web/admin/screens/settings-appearance-type.ts',
+    ].sort())
+  })
+
+  it('gives the page-title face to PageHeader and nothing else', () => {
+    // THE SECOND CARVE-OUT, 2026-09-07 — and it is one LINE per screen, not one surface.
+    // ONE file: `scale.ts`, which declares it. `admin/components/kit.tsx` held `PageHeader`
+    // and re-exported the token until the admin stopped being React (ADR 0054, step 6), and
+    // the server's page headers take it from the declaration. A second file means some other
+    // heading has started wearing a serif, which is the exact drift the one-face rule exists
+    // to catch: two faces arrive one call site at a time.
+    const holders = everywhere()
+      .filter((f) => /\bPAGE_TITLE_FACE\b/.test(code(f)))
+      .map((f) => f.replaceAll('\\', '/'))
+      .sort()
+    expect(holders).toEqual(['src/admin-shared/scale.ts'])
+  })
+
+  it('points the page-title class at a FIXED serif, never at the site\'s reading face', () => {
+    // If this resolved to `var(--font-reading)` the admin's own titles would change face with
+    // the blog's reading preset — the tool re-lettered by a decision about what READERS see.
+    expect(PAGE_TITLE_FACE).toBe('page-title-face')
+    expect(DECLARATIONS).toContain(`.admin .${PAGE_TITLE_FACE}`)
+    const rule = DECLARATIONS.slice(DECLARATIONS.indexOf(`.admin .${PAGE_TITLE_FACE}`))
+      .slice(0, DECLARATIONS.slice(DECLARATIONS.indexOf(`.admin .${PAGE_TITLE_FACE}`)).indexOf('}'))
+    expect(rule).toContain("'Literata'")
+    expect(rule).not.toContain('--font-reading')
+  })
+
+  it('still points that class at the reading font, or the editor writes in the wrong one', () => {
+    expect(READING).toBe('reading-font')
+    expect(DECLARATIONS).toContain(`.admin .${READING}`)
+    expect(DECLARATIONS).toContain('font-family: var(--font-reading)')
+  })
+
+  it('has retired the page-level prose escape hatch', () => {
+    // `[data-prose]` claimed every `p`/`li`/`td` inside a page for the second face. With one
+    // face there is nothing for it to switch to, and a rule that switches nothing is the thing
+    // this file keeps being rewritten because of.
+    expect(DECLARATIONS).not.toContain('data-prose')
+    for (const file of everywhere()) {
+      expect(code(file)).not.toContain('data-prose')
+    }
+  })
+})
+
+describe('the admin does not wear the site\'s chrome font either', () => {
+  // A mono chrome font is a branding choice about what a READER sees. Spending it on the tool
+  // put a monospace on every label, tab, button and table cell, and that was rejected on
+  // 2026-08-14 as visually cluttered. That decision survives the one-face change — the face
+  // the admin settled on is Inter, not the site's chrome font.
+  it('emits neither the chrome font nor its tracking correction', () => {
+    const spa = readFileSync('src/web/admin/spa.ts', 'utf8')
+    expect(spa).not.toContain('chromeFontCss(')
+    expect(spa).not.toContain('MONO_TRACKING,')
+    expect(spa).not.toContain('data-chrome-font="')
+  })
+
+  it('still emits the reading font, because the editor is WYSIWYG', () => {
+    // The line the editor depends on. Drop it and the owner writes in Inter and publishes in
+    // the site's face — which is the whole reason the editor was carved out of the one-face
+    // rule rather than swept into it. The face as the site DRAWS it: the stored preset, or an
+    // installed theme's reading font while that theme is chosen (`content/theme-choices.ts`).
+    const spa = readFileSync('src/web/admin/spa.ts', 'utf8')
+    expect(spa).toContain('fontPresetCss(fonts.readingPreset)')
+    // ...and of a theme's fonts, the reading one only: its chrome font is the site's chrome.
+    expect(spa).toContain('themeFontVarsCss({ ...fonts, chrome: null })')
+  })
+
+  it('does not reach for font-size-adjust to even two faces up', () => {
+    // Measured when there WERE two: `line-height` resolves against the COMPUTED font-size,
+    // never the adjusted one, so the adjustment silently takes 8% of the leading off every
+    // element it touches. Kept as an assertion because the editor still runs two faces on one
+    // screen and the temptation returns with it.
+    expect(DECLARATIONS).not.toContain('font-size-adjust')
+  })
+
+  it('marks a surface that names a typeface, which is what check:admin-kit allows one on', () => {
+    // The two surfaces are the font pickers and the type scale's specimens, and both moved to
+    // the server under ADR 0054 — `FontFields.tsx` and `TypographyFields.tsx` are gone. The
+    // assertion follows the SURFACE, not the file it used to live in.
+    for (const file of ['settings-appearance', 'settings-appearance-type']) {
+      expect(readFileSync(`src/web/admin/screens/${file}.ts`, 'utf8')).toContain('data-specimen')
+    }
+  })
+})
+
+describe('no rule decides a face by HTML tag', () => {
+  it('has no bare element selector under .admin', () => {
+    // The regression the whole two-faces effort undid: `.admin p { font-family: … }`. The list
+    // must be EMPTY, not "empty or excused".
+    expect(DECLARATIONS.match(/^\.admin [a-z][^{,]*,?$/gm) ?? []).toEqual([])
+  })
+})

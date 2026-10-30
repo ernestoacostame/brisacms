@@ -1,0 +1,155 @@
+// User-managed URL redirects (301/302). A slug rename auto-adds a permanent redirect
+// from the old path (see content/posts.ts and content/pages.ts). SERVER-ONLY.
+//
+// In the frozen tree these were resolved in Next's `middleware.ts` because a page-level
+// redirect() under a route with a loading.tsx was downgraded to a 200 meta-refresh. Hono
+// has no such rule: the lookup becomes ordinary middleware in M3, and the rows here do
+// not change.
+
+import { normalizePath, isValidDestination, isReservedPath } from '@/server/redirect-path'
+import { all, one, run } from '@/store/query'
+import { nowMs } from '@/store/db'
+import { liveSlugTaken } from '@/content/slugs'
+import { isOwnUrl } from '@/media/blob'
+
+export type Redirect = {
+  id: number
+  source: string // normalized request path, e.g. '/old-slug'
+  destination: string // path ('/new-slug') or absolute URL
+  permanent: boolean // true = 301, false = 302
+}
+
+// SQLite has no boolean: `permanent` is a 0/1 integer, constrained in the schema.
+type Row = { id: number; source: string; destination: string; permanent: number }
+
+const toRedirect = (r: Row): Redirect => ({ ...r, permanent: !!r.permanent })
+
+// All redirects, newest first (admin list). Degrades to [] if the DB is unreachable.
+export async function getRedirects(): Promise<Redirect[]> {
+  try {
+    return all<Row>(
+      `select id, source, destination, permanent from redirects order by created_at desc`,
+    ).map(toRedirect)
+  } catch (error) {
+    console.error(`[ERROR] redirects.getRedirects: ${(error as Error).message}`)
+    return []
+  }
+}
+
+/**
+ * The redirect for a request path, or null. Called on every public request, so it is the
+ * one function here that is synchronous: `source` is unique, which makes this an indexed
+ * read of a local file on the same thread.
+ *
+ * **Fail-open.** A redirect table that cannot be read must not be able to take the site
+ * down with it, so an error is logged and the request carries on to the router.
+ *
+ * The frozen tree cached this for 60 seconds (`v1/src/middleware.ts`). That cache was
+ * paid for by its lookup being an HTTP fetch to PostgREST; here it would buy nothing but
+ * a minute in which a redirect the owner just saved does not work.
+ */
+export function findRedirect(path: string): Redirect | null {
+  const source = normalizePath(path)
+  if (!source) return null
+  try {
+    const row = one<Row>(
+      `select id, source, destination, permanent from redirects where source = ?`,
+      source,
+    )
+    return row === null ? null : toRedirect(row)
+  } catch (error) {
+    console.error(`[ERROR] redirects.findRedirect: ${(error as Error).message}`)
+    return null
+  }
+}
+
+export class RedirectInputError extends Error {}
+
+/** How far a save looks down the chain before deciding a ring is not its doing. */
+const MAX_CHAIN_HOPS = 10
+
+// Create/replace a redirect (upsert by source). Normalizes + validates; a self-
+// redirect (source === destination) is rejected as a no-op loop.
+export async function saveRedirect(input: {
+  source: string
+  destination: string
+  permanent?: boolean
+  /**
+   * False: refuse a source that already goes somewhere else (`exists:<where>`), so the owner is
+   * asked first. It was replaced in silence, and "Redirect saved" twice meant the first rule was
+   * gone (2026-09-30). True (the default) for the saves that ARE replacements: a rename.
+   */
+  replace?: boolean
+}): Promise<void> {
+  const source = normalizePath(input.source)
+  // A full URL on this site's own address IS a path here, and is stored as one: pasted as
+  // `https://blog/lh`, the loop check below (which follows paths) walked straight past it, and
+  // `/lg -> https://blog/lh` with `/lh -> /lg` bounced a browser until it gave up (2026-09-30).
+  const typed = input.destination.trim()
+  const local = !typed.startsWith('/') && isOwnUrl(typed) ? new URL(typed).pathname : typed
+  const destination = local.startsWith('/') ? normalizePath(local) : local
+  // CODES, not sentences: the admin says each in the owner's language, and `code:path` carries
+  // the one detail the sentence needs. "loop: /a would lead back to itself" was shown as typed.
+  if (!source) throw new RedirectInputError('source_required')
+  if (!isValidDestination(destination)) throw new RedirectInputError('bad_destination')
+  if (source === destination) throw new RedirectInputError('same_path')
+  if (isReservedPath(source)) throw new RedirectInputError(`reserved:${source}`)
+  // Live content beats a redirect at the same path, and the middleware answers BEFORE the
+  // router, so a redirect saved over a live slug does not lose the argument: it wins, and
+  // the post simply stops being reachable with nothing anywhere saying why. Refusing is
+  // the only honest answer. Only a single segment can collide, so an imported
+  // `/2020/05/title` is never affected.
+  const sourceSlug = source.slice(1)
+  if (sourceSlug && !sourceSlug.includes('/') && liveSlugTaken(sourceSlug)) {
+    throw new RedirectInputError(`live_content:${source}`)
+  }
+  // ⚠️ AND A LOOP IS THE SAME REFUSAL ONE STEP FURTHER. `source === destination` above catches
+  // the rule that points at itself; two rules pointing at each other were accepted in silence,
+  // and a visitor then walked `/a` to `/b` to `/a` until the browser gave up. The cost outlives
+  // the mistake, because these are 301s: a browser caches a permanent redirect hard, so the
+  // loop keeps running for readers who met it once, after the owner has already fixed the rule.
+  //
+  // Walked rather than reasoned about, so a three-rule ring is caught as surely as a pair. The
+  // hop cap stops this being a walk over the whole table; a chain longer than that which does
+  // not return here is somebody else's rule and not this one's business.
+  if (destination.startsWith('/')) {
+    let at = destination
+    for (let hop = 0; hop < MAX_CHAIN_HOPS && at !== ''; hop++) {
+      if (at === source) {
+        throw new RedirectInputError(`loop:${source}`)
+      }
+      const next = findRedirect(at)
+      at = next !== null && next.destination.startsWith('/') ? next.destination : ''
+    }
+  }
+  if (input.replace === false) {
+    const had = one<{ destination: string }>(`select destination from redirects where source = ?`, source)
+    if (had && had.destination !== destination) throw new RedirectInputError(`exists:${had.destination}`)
+  }
+  run(
+    `insert into redirects (source, destination, permanent, created_at)
+     values ($source, $destination, $permanent, $now)
+     on conflict(source) do update set
+       destination = excluded.destination,
+       permanent   = excluded.permanent`,
+    {
+      source: source,
+      destination: destination,
+      permanent: (input.permanent ?? true) ? 1 : 0,
+      now: nowMs(),
+    },
+  )
+}
+
+export async function deleteRedirect(id: number): Promise<void> {
+  run(`delete from redirects where id = ?`, id)
+}
+
+// Remove any redirect whose source is this path — called when a post/page becomes
+// live at that slug, so live content always wins over a stale redirect (and a
+// rename back to an old slug can't leave a self-loop).
+export async function clearRedirectForPath(path: string): Promise<void> {
+  const source = normalizePath(path)
+  if (!source) return
+  run(`delete from redirects where source = ?`, source)
+}

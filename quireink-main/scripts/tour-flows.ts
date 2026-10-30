@@ -1,0 +1,358 @@
+// What the tour actually checks: the public site here, the owner's half in the files below.
+//
+// Split from `tour.ts` on 2026-08-11 when that file passed its 400-line ceiling, and the seam is
+// by reader: adding a flow means writing one sentence in here and needs to know nothing about the
+// DevTools protocol, while fixing the browser plumbing means opening `tour.ts` and not caring
+// what is being toured.
+//
+// EVERY ASSERTION RUNS IN THE PAGE and returns a string: `ok`, `ok <detail>`, `skip: <why>`, or
+// the reason it is not ok. A flow reads as the sentence it is checking.
+//
+// A flow that WRITES cleans up after itself — drafts, uploads, a settings round-trip — because a
+// tour that leaves rows behind changes what the next run is testing.
+
+import type { PasskeyTour } from './tour'
+import { registerAdminFlows } from './tour-flows-admin'
+import { registerAiFlows } from './tour-flows-ai'
+import { registerMediaFlows } from './tour-flows-media'
+import { registerSettings2Flows } from './tour-flows-settings2'
+import { registerAdvancedFlows } from './tour-flows-advanced'
+import { registerEvenFlows } from './tour-flows-even'
+import { registerWiredFlows } from './tour-flows-wired'
+import { registerBackupFlows } from './tour-flows-backup'
+import { registerCloudFlows } from './tour-flows-cloud'
+import { registerThemeFlows } from './tour-flows-themes'
+import { registerNewsFlows } from './tour-flows-news'
+import { registerStatsFlows } from './tour-flows-stats'
+import { registerShellFlows } from './tour-flows-shell'
+import { registerReachFlows } from './tour-flows-reach'
+import { registerCssFlows, registerSecurityFlows } from './tour-flows-css'
+import { registerAccountFlows } from './tour-flows-security'
+import { registerGuardFlows } from './tour-flows-guard'
+import { registerPageFlows } from './tour-flows-pages'
+import { registerSweepFlows } from './tour-flows-sweep'
+import { registerWriterFlows } from './tour-flows-writer'
+import { registerReaderFlows } from './tour-flows-reader'
+
+export function registerFlows({ flow, expect, atWidth, passkeyHost }: PasskeyTour): void {
+  // ---------------------------------------------------------------------------------------------
+  // PUBLIC — what a reader meets.
+
+  flow('home lists posts', () => expect('/', `
+    (() => {
+      const n = document.querySelectorAll('article').length
+      return n > 0 ? 'ok' : 'no <article> on the home page'
+    })()`))
+
+  // The URL comes from the FEED, not from a link in the markup and not from the sitemap.
+  // Both earlier aims were wrong, and each cost a red line nobody believed: reading
+  // `article a[href^="/"]` picked up a category link and called a perfectly good article
+  // bodyless, and guessing a post by URL SHAPE off the sitemap — one segment, not `/search`
+  // or `/list` — picked `/archive` the day the sitemap learned to list it. A feed item is a
+  // post by definition, so there is no shape left to guess at.
+  // The comment gate (ADR 0032), end to end, in the browser it has to work in. `check:all`
+  // proves the arithmetic; only this proves that a reader can leave a comment — the island
+  // solving a real challenge with the browser's own crypto, and the same POST refused when
+  // nobody solved anything. It was watched RED against a build with the island removed.
+  flow('a reader can comment, and a script cannot', () => expect('/', `
+    (async () => {
+      const xml = await (await fetch('/feed.xml')).text()
+      const post = [...xml.matchAll(/<link>([^<]+)<\\/link>/g)]
+        .map((m) => new URL(m[1]).pathname).find((p) => p !== '/')
+      if (!post) return 'the feed listed no post'
+      const slug = post.slice(1)
+
+      // What a bot does: the JSON, with nothing solved.
+      const bare = await fetch('/api/comments', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ postSlug: slug, name: 'Bot', email: 'bot@example.com', content: 'buy things' }),
+      })
+      if (bare.ok) return 'a comment with no stamp was ACCEPTED'
+
+      // What a reader does: the page's own challenge, solved here the way the island does.
+      const html = await (await fetch(post)).text()
+      const raw = html.match(/data-stamp="([^"]*)"/)
+      if (!raw) return post + ' carried no challenge'
+      const stamp = JSON.parse(raw[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&'))
+      const enc = new TextEncoder()
+      let answer = -1
+      for (let n = 0; n < stamp.range; n++) {
+        const d = await crypto.subtle.digest('SHA-256', enc.encode(stamp.salt + n))
+        const hex = [...new Uint8Array(d, 0, 8)].map((b) => b.toString(16).padStart(2, '0')).join('')
+        if (hex === stamp.target.slice(0, 16)) { answer = n; break }
+      }
+      if (answer < 0) return 'the challenge had no answer inside its own range'
+      // The gate also has a FLOOR: a stamp younger than three seconds is refused, because
+      // nobody reads a post and types a comment in less. This code does, so it waits the
+      // floor out rather than pretending to be a person who types at machine speed. It used
+      // to pass by accident, on a page the warm had already rendered minutes earlier; the
+      // warm now yields between posts, so an early flow can be the first to render one.
+      const age = Date.now() - stamp.issued
+      if (age < 3200) await new Promise((r) => setTimeout(r, 3200 - age))
+      const real = await fetch('/api/comments', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          postSlug: slug, name: 'Tour', email: 'tour@example.com',
+          content: 'Left by the tour, through the gate.', stamp: { ...stamp, answer },
+        }),
+      })
+      if (!real.ok) return 'a solved comment was refused: ' + real.status + ' ' + (await real.text()).slice(0, 90)
+      return 'ok (bot ' + bare.status + ', reader 200, answer ' + answer + ')'
+    })()`, 4000))
+
+  flow('an article renders its body', () => expect('/', `
+    (async () => {
+      const xml = await (await fetch('/feed.xml')).text()
+      const post = [...xml.matchAll(/<link>([^<]+)<\\/link>/g)]
+        .map((m) => new URL(m[1]).pathname).find((p) => p !== '/')
+      if (!post) return 'the feed listed no post'
+      const html = await (await fetch(post)).text()
+      return html.includes('class="prose"') ? 'ok (' + post + ')' : post + ' rendered no .prose body'
+    })()`))
+
+  flow('the feed, sitemap, robots and llms all answer', () => expect('/', `
+    (async () => {
+      const bad = []
+      for (const p of ['/feed.xml', '/sitemap.xml', '/robots.txt', '/llms.txt']) {
+        const r = await fetch(p)
+        if (!r.ok) bad.push(p + ' -> ' + r.status)
+      }
+      return bad.length ? bad.join(', ') : 'ok'
+    })()`))
+
+  // The rail is where a reader FINDS the archive, and the anchor is the only thing joining
+  // the two. A year row pointing at an id no heading carries would scroll nowhere and look
+  // like nothing happened, which no assertion about either page on its own would catch.
+  flow('the archive groups by year, and the rail lands on one', () => expect('/archive', `
+    (() => {
+      const years = [...document.querySelectorAll('.arc-yr h2[id]')]
+      if (!years.length) return 'no year heading on /archive'
+      const rows = document.querySelectorAll('.arc-yr li a[href^="/"]').length
+      if (!rows) return 'a year with no posts under it'
+      const rail = [...document.querySelectorAll('.rail a[href^="/archive#"]')]
+      if (!rail.length) return 'the rail offers no way in'
+      const missing = rail
+        .map((a) => a.getAttribute('href').split('#')[1])
+        .filter((id) => !document.getElementById(id))
+      return missing.length ? 'rail points at absent anchor(s): ' + missing.join(', ')
+        : 'ok ' + years.length + ' year(s), ' + rows + ' row(s)'
+    })()`))
+
+  // A term feed whose self link names a different document re-subscribes the reader to the
+  // whole blog. Nothing on the page they clicked from would ever show it.
+  flow('every archive has a feed that names itself', () => expect('/', `
+    (async () => {
+      const term = document.querySelector('.rail a[href^="/category/"], .rail a[href^="/tag/"]')
+      if (!term) return 'skip: this blog files nothing'
+      const path = new URL(term.href).pathname + '/feed.xml'
+      const r = await fetch(path)
+      if (!r.ok) return path + ' -> ' + r.status
+      const xml = new DOMParser().parseFromString(await r.text(), 'application/xml')
+      if (xml.querySelector('parsererror')) return path + ' is not well-formed XML'
+      // Walked, not queried. The element is \`atom:link\` in a namespace, and a CSS type
+      // selector against a prefixed name in an XML document does not reliably match it.
+      const self = [...xml.getElementsByTagName('*')]
+        .find((el) => el.getAttribute('rel') === 'self')?.getAttribute('href') ?? ''
+      if (!self.endsWith(path)) return 'self points at ' + self + ', not at ' + path
+      return 'ok ' + xml.querySelectorAll('item').length + ' item(s)'
+    })()`))
+
+  // The offline switch (ADR 0039), end to end, with the caches read back.
+  //
+  // Every part of this is invisible from the server: whether a worker installs, what it
+  // keeps, what it refuses to keep, and — the one that matters most — whether switching the
+  // feature off actually takes it back off the device. A worker outlives the page that
+  // registered it, so "off" that only stops registering NEW ones is a one-way door, and no
+  // unit test can tell the difference. The flow leaves the setting as it found it.
+  flow('offline keeps a read page, never the admin, and can be taken back', () => expect('/', `
+    (async () => {
+      if (!('serviceWorker' in navigator)) return 'skip: no service worker in this browser'
+      const view = async () => (await (await fetch('/api/admin/view/settings')).json())?.data?.settings
+      const before = (await view())?.features
+      if (!before) return 'could not read settings (no owner session?)'
+      const setOffline = async (on) => {
+        const r = await fetch('/api/settings', {
+          method: 'PUT', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ features: { ...before, offline: on } }),
+        })
+        if (!r.ok) return 'PUT /api/settings -> ' + r.status
+        return ''
+      }
+      const pages = async () => (await caches.keys()).filter((n) => n.startsWith('quire-pages-'))
+      const cached = async (path) => {
+        for (const name of await pages()) {
+          if (await (await caches.open(name)).match(path)) return true
+        }
+        return false
+      }
+
+      try {
+        const bad = await setOffline(true)
+        if (bad) return bad
+
+        if ((await view())?.features?.offline !== true) return 'the setting did not stick'
+
+        // \`no-store\`, because this page was just navigated to and the same URL sits in the
+        // browser's own memory cache: without it the read comes back from before the PUT.
+        // The page NAMES the worker; nothing here invents the URL.
+        const html = await (await fetch('/', { cache: 'no-store' })).text()
+        const src = /data-sw="([^"]+)"/.exec(html)?.[1]
+        if (!src) return 'the page carries no data-sw with the feature on'
+
+        await navigator.serviceWorker.register(src.replace(/&amp;/g, '&'))
+        await navigator.serviceWorker.ready
+        // \`clients.claim()\` takes over THIS page, which was loaded before the worker
+        // existed. Without it nothing below would be intercepted at all.
+        for (let i = 0; i < 40 && !navigator.serviceWorker.controller; i++) {
+          await new Promise((r) => setTimeout(r, 100))
+        }
+        if (!navigator.serviceWorker.controller) return 'the worker never took control'
+
+        const feed = await (await fetch('/feed.xml')).text()
+        // Skipping '/': the FIRST <link> in an RSS document is the channel's, which is the
+        // site root. Without the filter this proved the home page was kept and said "post".
+        const post = [...feed.matchAll(/<link>([^<]+)<\\/link>/g)]
+          .map((m) => new URL(m[1]).pathname).find((p) => p !== '/')
+        if (!post) return 'the feed listed no post'
+        // An IFRAME, not \`fetch\`, and that is the whole point of doing this in a browser: a
+        // page is cached because it was NAVIGATED to. A same-origin \`fetch\` carries
+        // \`accept: */*\` and mode \`cors\`, so the worker rightly leaves it alone — and a
+        // flow written with \`fetch\` would have proved a path no reader takes.
+        const read = async (path) => new Promise((done) => {
+          const frame = document.createElement('iframe')
+          frame.style.display = 'none'
+          frame.src = path
+          frame.onload = () => { frame.remove(); done() }
+          setTimeout(() => { frame.remove(); done() }, 5000)
+          document.body.appendChild(frame)
+        })
+        await read(post)
+        await read('/admin')
+        // The loads have finished, but \`cache.put\` runs after the response reached the page.
+        for (let i = 0; i < 40 && !(await cached(post)); i++) {
+          await new Promise((r) => setTimeout(r, 100))
+        }
+        if (!(await cached(post))) return post + ' was read and not kept'
+        if (await cached('/admin')) return 'the admin was cached, which it may never be'
+
+        const off = await setOffline(false)
+        if (off) return off
+        // What the island does on the next page load, run here: this asserts the ROUTE
+        // back out exists and empties, which is the half a reader depends on.
+        for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister()
+        for (const n of await caches.keys()) if (n.startsWith('quire-')) await caches.delete(n)
+        if ((await pages()).length) return 'a quire cache survived the uninstall'
+        return 'ok (kept ' + post + ', refused /admin)'
+      } finally {
+        await fetch('/api/settings', {
+          method: 'PUT', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ features: before }),
+        })
+      }
+    })()`, 2000))
+
+  flow('a missing page is a 404, not a 200', () => expect('/', `
+    (async () => {
+      const r = await fetch('/definitely-not-a-post-' + Date.now())
+      return r.status === 404 ? 'ok' : 'got ' + r.status
+    })()`))
+
+  flow('the theme control switches to dark', () => expect('/', `
+    (() => {
+      const b = document.querySelector('[data-theme-toggle]')
+      if (!b) return 'no theme control in the header'
+      b.click()
+      const row = document.querySelector('.theme-menu [data-id="dark"]')
+      if (!row) return 'the theme menu has no dark row'
+      row.click()
+      return document.documentElement.dataset.scheme === 'dark'
+        ? 'ok' : 'data-scheme is ' + document.documentElement.dataset.scheme
+    })()`))
+
+  flow('the palette control repaints the page', () => expect('/', `
+    (() => {
+      const b = document.querySelector('[data-palettes]')
+      if (!b) return 'skip: one palette enabled, so no control renders'
+      const before = getComputedStyle(document.documentElement).getPropertyValue('--c-bg').trim()
+      const rows = [...b.closest('.theme-wrap').querySelectorAll('.theme-menu button')]
+      const other = rows.find((r) => r.dataset.id !== document.documentElement.dataset.palette)
+      other.click()
+      const after = getComputedStyle(document.documentElement).getPropertyValue('--c-bg').trim()
+      return before !== after ? 'ok' : '--c-bg did not move from ' + before
+    })()`))
+
+  flow('only one header menu opens at a time', () => expect('/', `
+    (() => {
+      const p = document.querySelector('[data-palettes]')
+      const t = document.querySelector('[data-theme-toggle]')
+      if (!p) return 'skip: no palette control'
+      t.click(); p.click()
+      const open = [...document.querySelectorAll('.theme-menu')].filter((m) => !m.hidden)
+      return open.length === 1 ? 'ok' : open.length + ' menus open at once'
+    })()`))
+
+  flow('search answers as you type', () => expect('/', `
+    (async () => {
+      const r = await fetch('/api/search?q=' + encodeURIComponent('the'))
+      if (!r.ok) return '/api/search -> ' + r.status
+      const body = await r.json()
+      const items = body?.data ?? body
+      return Array.isArray(items) ? 'ok' : 'search did not return a list'
+    })()`))
+
+  flow('the search page renders results server-side', () => expect('/search?q=the', `
+    (() => document.body.innerText.trim().length > 40 ? 'ok' : 'the search page came back empty')()`))
+
+  flow('an OG image is drawn', () => expect('/', `
+    (async () => {
+      const r = await fetch('/og?title=' + encodeURIComponent('Tour'))
+      const type = r.headers.get('content-type') ?? ''
+      return r.ok && /image/.test(type) ? 'ok' : r.status + ' ' + type
+    })()`))
+
+  flow('the manifest is installable', () => expect('/', `
+    (async () => {
+      const r = await fetch('/manifest.webmanifest')
+      if (!r.ok) return 'manifest -> ' + r.status
+      const m = await r.json()
+      return m.name && Array.isArray(m.icons) && m.icons.length ? 'ok' : 'manifest has no name or icons'
+    })()`))
+
+  flow('the analytics beacon is accepted', () => expect('/', `
+    (async () => {
+      const r = await fetch('/api/track', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ path: '/tour', ref: '' }),
+      })
+      return r.status === 204 || r.ok ? 'ok' : '/api/track -> ' + r.status
+    })()`))
+
+  registerAdminFlows({ flow, expect, atWidth })
+  registerAiFlows({ flow, expect })
+  registerMediaFlows({ flow, expect })
+  registerSettings2Flows({ flow, expect })
+  // The developer's cards folded under Advanced: search, ?setting= and Save still reach them.
+  registerAdvancedFlows({ flow, expect })
+  // What a keyboard and a screen reader can reach (2026-09-21).
+  registerReachFlows({ flow, atWidth })
+  registerWiredFlows({ flow, expect })
+  registerEvenFlows({ flow, atWidth })
+  registerBackupFlows({ flow, expect, atWidth })
+  registerCloudFlows({ flow, expect })
+  // After the backup flows, so the snapshot they build and restore is the fixture's own.
+  registerThemeFlows({ flow, expect, atWidth })
+  registerNewsFlows({ flow, expect, atWidth })
+  registerStatsFlows({ flow, expect, atWidth })
+  registerShellFlows({ flow, expect, atWidth })
+  registerGuardFlows({ flow, expect })
+  registerPageFlows({ flow, expect })
+  registerCssFlows({ flow, expect, atWidth })
+  registerAccountFlows({ flow, expect, passkeyHost })
+  registerSecurityFlows({ flow, expect, atWidth })
+  // What the eight-agent sweep of 2026-09-30 found.
+  registerSweepFlows({ flow, expect, atWidth })
+  // The writing surface, phase 4 of the same sweep's fix list.
+  registerWriterFlows({ flow, expect, atWidth })
+  // The reader's side, phase 5.
+  registerReaderFlows({ flow, expect, atWidth })
+}

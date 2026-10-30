@@ -1,0 +1,30 @@
+# Scripts — `scripts/`
+
+`bun scripts/<name>.ts` — idempotent. The ones run by hand day to day are `package.json`
+scripts too, and that is the name to use: `bun run build:assets`, `bun run check:all`,
+`bun run user`, `bun run shot`, `bun run drive`; the rest are run by path. Node is not in the toolchain
+([ADR 0005](../decisions/0005-rewrite-in-bun-hono-sqlite.md)).
+
+- **`install.sh` sits at the repository root, and is shell rather than `bun scripts/…`,**
+  because it runs before there is a checkout to run anything from. It is the one-command
+  form of the README's install path and does exactly what that path does — clone, install,
+  build both artefacts, start the server — so a change to either means changing both. It
+  never uses `sudo`, refuses to run as root, and is idempotent on the directory it is given.
+- **The schema is not a script.** `src/store/schema.sql` and `src/store/schema-analytics.sql`
+  are embedded and applied at boot; the migrations are two files, one per database
+  (`src/store/migrations.sql`, `src/store/migrations-analytics.sql`), not a directory.
+  Nothing has to be run by hand on a fresh install.
+- **WordPress import is an in-app feature** (Admin → Settings → Server & connections →
+  `src/import/wordpress.ts`), NOT a script. It needs no import library: `src/import/xml.ts`
+  reads the WXR, `src/import/html-parse.ts` and `src/import/html-to-md.ts` turn the HTML into
+  this blog's own syntax tree ([ADR 0053](../decisions/0053-a-dependency-is-a-decision.md)).
+- **`scripts/checks/`** holds the static guards `check:all` runs — `file-size`, `css-literal`,
+  `no-nul`, `sql-rules`, `routes-guarded`, `type-roles`, `admin-kit`, `admin-bundle`, `appearance-contract`,
+  `docs`, `deps`, `admin-css`, `admin-wired`, in that order. A new load-bearing rule that a
+  test cannot hold belongs here, not in a comment.
+- **A check that needs a RUNNING instance does not go in `scripts/checks/`.** Those are static
+  and `check:all` runs them with nothing serving. `restore-check.ts` needs an instance, a
+  session and its files on disk, so it hangs off `bun run tour`, which already has all three;
+  so does `setup-restore-check.ts`, which boots a second, empty instance of its own and removes it.
+  It may write, and it takes back everything it wrote — a check that leaves rows behind
+  changes what the next run is testing.

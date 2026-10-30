@@ -1,0 +1,206 @@
+// The steward tools over the real wire, against the real data layer. Same harness shape
+// as `tools-insight.test.ts`, its own directory for the reason `mcp-wire.test.ts` names.
+
+import { describe, it, expect, beforeEach, afterAll } from 'bun:test'
+import { freshDatabase, dropDatabase } from '@/test/db'
+import { createApp } from '@/web/app'
+import { db } from '@/test/sqlite'
+import { createUser } from '@/auth/users'
+import { COOKIE_NAME, createSession } from '@/auth/sessions'
+import { resetSecretCache } from '@/auth/secret'
+import { resetLimits } from '@/server/rate-limit'
+import { getSettings, saveSettings } from '@/content/settings'
+import { savePost } from '@/content/posts'
+import { addComment, getCommentTree } from '@/comments/comments'
+import { payload } from '@/test/api'
+import { installTheme, removeTheme } from '@/content/installed-themes'
+import { themeZip } from '@/theme/test-zip'
+import { RICH } from '@/test/installed-theme'
+
+const DIR = './.tmp/test-mcp-steward'
+// ⚠️ ITS OWN UPLOADS TREE, because `create_snapshot` below builds a REAL archive and
+// `backup.ts` reads `STORAGE_LOCAL_DIR || './uploads'`. Unset, this test tars whatever the
+// developer's own upload folder happens to hold: it passed all morning and then timed out at
+// 5,056ms of a 5,000ms budget against 895 files, none of which belong to it. Every other test
+// that touches uploads already sets this (`web/uploads.test.ts`, `web/admin-ops.test.ts`,
+// `web/admin-import.test.ts`); the one that archives them was the one that did not.
+process.env.STORAGE_LOCAL_DIR = `${DIR}-uploads`
+freshDatabase(DIR)
+const app = createApp()
+let token = ''
+
+beforeEach(async () => {
+  for (const t of ['sessions', 'users', 'mcp_tokens', 'activity_log', 'settings',
+                   'server_secrets', 'posts', 'comments', 'themes']) {
+    db().run(`delete from ${t}`)
+  }
+  resetSecretCache()
+  resetLimits()
+  const user = await createUser({ username: 'hung', email: 'owner@example.com', password: 'wandering violet cassette' })
+  const cookie = `${COOKIE_NAME}=${createSession(user.id).token}`
+  await saveSettings({ mcp: { enabled: true } })
+  const res = await app.request('/api/mcp/tokens', {
+    method: 'POST',
+    headers: { cookie, 'sec-fetch-site': 'same-origin', 'content-type': 'application/json' },
+    body: JSON.stringify({ name: 'steward test' }),
+  })
+  token = (await payload<{ token: string }>(res)).token
+})
+
+afterAll(() => {
+  delete process.env.STORAGE_LOCAL_DIR
+  dropDatabase(DIR)
+})
+
+const call = async (name: string, args: Record<string, unknown> = {}) => {
+  const res = await app.request('/api/mcp', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, 'sec-fetch-site': 'none' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }),
+  })
+  const body = await res.json() as { result?: { content?: { text: string }[]; isError?: boolean }; error?: { message?: string } }
+  return { text: body.result?.content?.[0]?.text ?? '', isError: body.result?.isError ?? false, rpcError: body.error?.message ?? '' }
+}
+
+describe('the steward tools', () => {
+  it('update_appearance switches the palette and keeps the switcher offering it', async () => {
+    const { text } = await call('update_appearance', { palette: 'sepia', readingFont: 'literata' })
+    expect(JSON.parse(text)).toMatchObject({ palette: 'sepia', readingFont: 'literata' })
+    const s = await getSettings()
+    expect(s.themePreset).toBe('sepia')
+    expect(s.enabledPalettes).toContain('sepia')
+  })
+
+  it('update_appearance sets the theme, and still takes look, its old name', async () => {
+    const { text } = await call('update_appearance', { theme: 'paper' })
+    expect(JSON.parse(text)).toMatchObject({ theme: 'paper' })
+    expect((await getSettings()).theme).toBe('paper')
+    await call('update_appearance', { look: 'notes' })
+    expect((await getSettings()).theme).toBe('notes')
+    await call('update_appearance', { theme: 'code', look: 'plain' })
+    expect((await getSettings()).theme).toBe('code')
+    const out = await call('update_appearance', { theme: 'broadsheet' })
+    expect(out.isError || out.rpcError !== '').toBe(true)
+    expect((await getSettings()).theme).toBe('code')
+  })
+
+  it('update_appearance chooses a theme installed from a zip, and refuses it once it is removed', async () => {
+    expect((await installTheme(themeZip())).ok).toBe(true)
+    const { text } = await call('update_appearance', { theme: 'broadsheet' })
+    expect(JSON.parse(text)).toMatchObject({ theme: 'broadsheet' })
+    expect((await getSettings()).theme).toBe('broadsheet')
+    await call('update_appearance', { theme: 'code' })
+    await removeTheme('broadsheet')
+    const out = await call('update_appearance', { theme: 'broadsheet' })
+    expect(out.isError).toBe(true)
+    expect(out.text).toContain('broadsheet')
+    expect((await getSettings()).theme).toBe('code')
+  })
+
+  it('update_appearance writes the same theme.choose line the settings screen does, naming the theme', async () => {
+    expect((await installTheme(themeZip())).ok).toBe(true)
+    await saveSettings({ theme: 'code' })
+    db().run('delete from activity_log')
+    await call('update_appearance', { theme: 'broadsheet' })
+    await call('update_appearance', { theme: 'broadsheet' })
+    await call('update_appearance', { theme: 'paper' })
+    const lines = db().query(`select detail from activity_log where action = 'theme.choose' order by id`).all() as { detail: string }[]
+    expect(lines.map((l) => l.detail)).toEqual(['Broadsheet (broadsheet)', 'paper'])
+  })
+
+  it("update_appearance leaves the chrome font alone when only the theme changes, and says so", async () => {
+    await saveSettings({ chromeFont: 'plex-mono' })
+    await call('update_appearance', { theme: 'code' })
+    expect((await getSettings()).chromeFont).toBe('plex-mono')
+    await call('update_appearance', { theme: 'notes', chromeFont: 'inter' })
+    expect((await getSettings()).chromeFont).toBe('inter')
+    const res = await app.request('/api/mcp', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, 'sec-fetch-site': 'none' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }),
+    })
+    const tools = (await res.json() as { result: { tools: { name: string; description: string }[] } }).result.tools
+    const description = tools.find((t) => t.name === 'update_appearance')!.description
+    expect(description).toContain('Changing the theme leaves the chrome font as it is')
+    expect(description).toContain('code: jetbrains-mono')
+  })
+
+  it('refuses a color that is not on the menu', async () => {
+    const out = await call('update_appearance', { palette: '#ff0000' })
+    expect(out.isError || out.rpcError !== '').toBe(true)
+    expect((await getSettings()).themePreset).not.toBe('#ff0000')
+  })
+
+  it("update_appearance takes the chosen installed theme's palette and fonts, as the settings route does", async () => {
+    expect((await installTheme(themeZip({ 'theme.json': RICH }))).ok).toBe(true)
+    // Chosen in the same call: the theme the call leaves chosen is the one whose menu counts.
+    const { text, isError } = await call('update_appearance', { theme: 'broadsheet', palette: 'newsprint', readingFont: 'body-serif', chromeFont: 'ui-face' })
+    expect(isError).toBe(false)
+    expect(JSON.parse(text)).toMatchObject({ theme: 'broadsheet', palette: 'newsprint', readingFont: 'body-serif', chromeFont: 'ui-face' })
+    expect(await getSettings()).toMatchObject({ theme: 'broadsheet', themePreset: 'newsprint', fontPreset: 'body-serif', chromeFont: 'ui-face' })
+    // A theme palette joins the reader's list as a built-in one does, by the same rule.
+    expect((await getSettings()).enabledPalettes).toContain('newsprint')
+    // Built-in ones still go through while the theme is worn.
+    expect((await call('update_appearance', { palette: 'sepia', readingFont: 'literata' })).isError).toBe(false)
+  })
+
+  it("update_appearance refuses a theme's palette or font while another theme is chosen, and changes nothing", async () => {
+    expect((await installTheme(themeZip({ 'theme.json': RICH }))).ok).toBe(true)
+    await saveSettings({ theme: 'code', themePreset: 'sepia', fontPreset: 'literata', chromeFont: 'inter' })
+    for (const args of [{ palette: 'newsprint' }, { readingFont: 'body-serif' }, { chromeFont: 'ui-face' },
+      { theme: 'paper', palette: 'newsprint' }, { readingFont: 'headline' }, { palette: 'ui-face' }]) {
+      const out = await call('update_appearance', args)
+      expect(out.isError).toBe(true)
+      expect(out.text).toContain('Not on the menu')
+    }
+    expect(await getSettings()).toMatchObject({ theme: 'code', themePreset: 'sepia', fontPreset: 'literata', chromeFont: 'inter' })
+  })
+
+  it('compose_homepage pins a lead, replaces strips, and flags an empty category', async () => {
+    await savePost({ title: 'Pinned', content: 'Body.', status: 'published', slug: 'pinned', date: '2020-01-01T00:00:00.000Z', categories: ['Letters'] })
+    const { text } = await call('compose_homepage', {
+      mode: 'front',
+      lead: { source: 'pinned', slug: 'pinned' },
+      strips: [{ category: 'Letters' }, { category: 'Ghost Town' }],
+    })
+    const data = JSON.parse(text) as { home: { mode: string; front: { lead: { slug: string }; strips: { category: string }[] } }; warning?: string }
+    expect(data.home.mode).toBe('front')
+    expect(data.home.front.lead.slug).toBe('pinned')
+    expect(data.home.front.strips.map((s) => s.category)).toEqual(['Letters', 'Ghost Town'])
+    expect(data.warning).toContain('Ghost Town')
+  })
+
+  it('get_post_traffic answers the per-page shape for a quiet post', async () => {
+    const { text } = await call('get_post_traffic', { slug: 'quiet-post' })
+    const data = JSON.parse(text) as { path: string; totalViews: number }
+    expect(data.path).toBe('/quiet-post')
+    expect(data.totalViews).toBe(0)
+  })
+
+  it('reply_comment nests under the parent, on the parent\'s post', async () => {
+    await savePost({ title: 'Discussed', content: 'Body.', status: 'published', slug: 'discussed', date: '2020-01-01T00:00:00.000Z' })
+    const parent = await addComment({ postSlug: 'discussed', parentId: null, provider: 'manual', name: 'A reader', email: 'reader@example.com', content: 'A question?' })
+    const { text } = await call('reply_comment', { id: parent.id, content: 'An answer.' })
+    expect(JSON.parse(text)).toMatchObject({ parentId: parent.id })
+    const tree = await getCommentTree('discussed')
+    expect(tree[0]?.replies[0]?.contentHtml).toContain('An answer.')
+  })
+
+  it('send_test_newsletter fails HONESTLY without SMTP, and never takes a recipient', async () => {
+    await savePost({ title: 'Issue one', content: 'Body.', status: 'published', slug: 'issue-one', date: '2020-01-01T00:00:00.000Z' })
+    const out = await call('send_test_newsletter', {})
+    expect(out.isError).toBe(true)
+    expect(out.text).toContain('smtp_not_configured')
+    // A `to` argument is not part of the schema; passing one must not smuggle a recipient.
+    const forced = await call('send_test_newsletter', { to: 'attacker@example.com' })
+    expect(forced.text).not.toContain('attacker@example.com')
+  })
+
+  it('create_snapshot writes a real archive into the retained set', async () => {
+    const { text, isError } = await call('create_snapshot', {})
+    expect(isError).toBe(false)
+    const data = JSON.parse(text) as { name: string; size: number }
+    expect(data.name).toMatch(/^quire-.*\.tar\.gz$/)
+    expect(data.size).toBeGreaterThan(0)
+  })
+})

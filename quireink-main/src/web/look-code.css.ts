@@ -1,0 +1,390 @@
+// The source-code dialect: the built-in theme 'code' (settings.theme). One of three dialects
+// the owner can dress the site in; the other two are `look-paper.css.ts` and `look-notes.css.ts`.
+//
+// IT IS ITS OWN SHEET, linked only when this look is on (`web/assets.ts`), the way the pen's
+// ink is. It used to ride inside `PUBLIC_CSS`, which charged every blog on earth for a look
+// that is off by default; a dialect is the clearest case there is for a sheet that boards
+// only the pages that wear it.
+//
+// NO BACKTICKS anywhere below: this is one template literal and a backtick ends it.
+// `check:css-literal` enforces that, and this file is IN its list.
+
+export const LOOK_CODE_CSS = `
+/* --- THE SOURCE-CODE DIALECT (settings.theme = code) ------------------------
+   One deliberate contrast: the reading column stays analogue - a book serif, ranged
+   left, no ornament - and everything AROUND it reads as source code. The two halves
+   are supposed to disagree; that disagreement is the design.
+
+   Every rule below is additive and lives behind one attribute, so turning the switch
+   off in Admin leaves not a trace of it: this whole sheet stops being linked. Nothing here touches .prose, the post title,
+   the card excerpts or the comment bodies: those are the reader's own words and they
+   are the half that must NOT look technical.
+
+   Colour comes from theme tokens only, as everywhere else. The two roles a code
+   editor actually distinguishes are the comment and the literal, so that is what is
+   borrowed: labels are comments (--c-meta), counts and dates are literals
+   (--c-text). No third colour, and no hex.
+
+   The literal was --c-accent for one deploy. This blog's Mono accent is red, so every
+   date and count read as a link that was not one. --c-text is the ink the article is
+   already set in: a clear step darker than the label, and silent. */
+
+/* Labels are comments. The marker is CSS, not markup, so the heading a screen reader
+   and a feed see stays the plain word.
+
+   ONE list, covering every chrome label the site has. It used to be the rail alone, and
+   the treatment stopped halfway down the article: the rail said "// Muc luc" and then the
+   related posts, the sign-up card, the comment thread and the series head - all of them
+   furniture, none of them the reader's words - said nothing at all. The tagline is in
+   here because that is exactly what it is: the line under the name that says what this
+   file is for. */
+html[data-look=code] .rail h2::before,
+html[data-look=code] header.site .tagline::before,
+html[data-look=code] aside.series .series-name::before,
+html[data-look=code] .related h2::before,
+html[data-look=code] .subscribe-card h2::before,html[data-look=code] .overlay h2::before,
+html[data-look=code] .front-label::before,
+html[data-look=code] #comments h2::before,
+html[data-look=code] .empty::before,
+/* The two things that DO something rather than state something, so they take the label's
+   marker rather than a literal's brackets: the panel's book-mode button, and the front
+   page's way on to the whole archive, which sits on a heading row beside a label that is
+   already marked and read as the one unmarked thing in the row without it. */
+html[data-look=code] .front-more::before,
+html[data-look=code] .info-action::before{content:"// ";color:var(--c-meta);
+  /* The trailing space in the content string is one monospace character and the label
+     beside it is a control that draws a mark round itself on hover. Four pixels is not
+     a gap between a comment marker and a circled word, it is a collision. */
+  margin-right:.45rem}
+/* AND NO GLYPH BESIDE IT. This chrome trades pictures for words everywhere else — the
+   header's four icons become [/tìm] [tối] tokens two rules below — so a book drawn next to
+   a line that already says "Book mode", inside a panel written as source, is the one place
+   the mode contradicts itself. The words are the icon here. The target the icon was added
+   for is the padding, not the drawing, so nothing gets harder to press. */
+html[data-look=code] .book-mode-toggle svg{display:none}
+/* ...except in the comment thread. "Be the first to comment" is an invitation to the
+   reader, not a label on a section, so a marker there would file a sentence as a heading. */
+html[data-look=code] #comments .empty::before{content:none}
+/* The commenter's name takes the marker too. Not because it is a label — it is a person —
+   but because it opens an entry, the way every other marker on the page opens a block, and
+   the meta line was the one row in the thread with nothing saying where an entry begins.
+   The name keeps its own weight and colour; only the marker is meta.
+   NO BACKTICKS IN THIS FILE: the whole sheet is one template literal and a backtick in a
+   comment ends it, which turns the rest of the CSS into TypeScript. It has now done that. */
+html[data-look=code] .comment-name::before{content:"// ";color:var(--c-meta);font-weight:400}
+
+/* Counts are literals, bracketed like an index — every count, in the same brackets. The
+   rail's own counts were bracketed and the taxonomy's were in ROUND ones, because those
+   came from the markup rather than from here; the pager's "1 / 5" had nothing. The
+   parentheses now come from CSS too, so this can swap them for square without touching a
+   renderer, and switching the chrome off puts them back. */
+/* Dates and figures are literals too, and they take the SAME brackets. That is the whole
+   of the syntax highlighting, and it is why the counts in a meta line are wrapped in
+   markup: "1,240 tu - 6 phut doc" has to be able to set the digits apart from the units.
+
+   The brackets are a shade LIGHTER than what they hold. They are punctuation, not the
+   value, and at the same weight as the digits a meta line reads as a row of boxes rather
+   than as a date followed by two figures. */
+/* ONE bracket for every literal, and the term counts are in it too. They were a filled
+   ring for one deploy, on the reasoning that a term cloud has no sequence to punctuate;
+   the owner looked at it and said it was ugly, which settles it. Brackets everywhere is
+   also the simpler rule to hold. */
+html[data-look=code] .rail-count,
+html[data-look=code] .term-count,
+html[data-look=code] .pager-count,
+html[data-look=code] .t-small time,
+html[data-look=code] .comment-meta time,
+html[data-look=code] .related p,
+html[data-look=code] .num{color:var(--c-text)}
+html[data-look=code] .term-count{opacity:1}
+html[data-look=code] .rail-count::before,
+html[data-look=code] .term-count::before,
+html[data-look=code] .pager-count::before,
+html[data-look=code] .t-small time::before,
+html[data-look=code] .comment-meta time::before,
+html[data-look=code] .related p::before,
+html[data-look=code] .num::before{content:"[";color:var(--c-meta)}
+html[data-look=code] .rail-count::after,
+html[data-look=code] .term-count::after,
+html[data-look=code] .pager-count::after,
+html[data-look=code] .t-small time::after,
+html[data-look=code] .comment-meta time::after,
+html[data-look=code] .related p::after,
+html[data-look=code] .num::after{content:"]";color:var(--c-meta)}
+/* Darker inside the info panel than anywhere else, at the owner's ask: the same ink the
+   contents list gives the row you are on. That panel is the only place a desktop reader
+   sees the date and the length, so it has to carry the hierarchy by itself — everywhere
+   else the literal sits in a line that already has a heading over it. */
+html[data-look=code] .post-info time,
+html[data-look=code] .post-info .num{color:var(--c-heading)}
+
+/* A post's tags and categories are a comma-separated run already. In brackets they read
+   as the array literal they are: tags: [css, typography]. The label and its colon are
+   the markup's; only the brackets are ours. Unscoped, because the same run appears in the
+   article footer on a narrow screen and in the right-hand info panel on a wide one. */
+html[data-look=code] .term-list::before{content:"[";color:var(--c-meta)}
+html[data-look=code] .term-list::after{content:"]";color:var(--c-meta)}
+
+/* Two more lists that were bare: the related posts and the parts of a series. Both are
+   indexed rather than counted, so they take the same brackets ranged in their own column
+   — a references panel, not a bulleted list. The series had decimal markers, which is the
+   one place the switch REPLACES something rather than adding to it. */
+html[data-look=code] .related ul{counter-reset:rel}
+html[data-look=code] .related li{counter-increment:rel;position:relative;padding-left:4ch}
+html[data-look=code] .related li::before{content:"[" counter(rel) "]";position:absolute;
+  left:0;top:0;color:var(--c-meta);font-variant-numeric:tabular-nums}
+html[data-look=code] aside.series ol{list-style:none;padding-left:0;counter-reset:part}
+html[data-look=code] aside.series li{counter-increment:part;position:relative;padding-left:4ch}
+html[data-look=code] aside.series li::before{content:"[" counter(part) "]";position:absolute;
+  left:0;top:0;color:var(--c-meta);font-variant-numeric:tabular-nums}
+/* The accent bar hugs the card's inner edge in both modes; this list has no ol padding, so
+   the offset that reaches that edge is the card's own 1.5rem, not the base list's 2.75. */
+html[data-look=code] aside.series li[aria-current]::after{left:-1.5rem}
+
+/* The feed's right gutter is a year over its months, which is a PATH and not a count — so
+   it takes a separator rather than brackets. The year is sticky, so exactly one is ever on
+   screen, and the month markers below it read as the next segment: 2026/ ... Thang 6.
+   The tag is a flex row with a .5rem gap, and a pseudo-element is a flex ITEM, so the gap
+   would push the slash a space clear of the digits. The negative margin cancels it. */
+html[data-look=code] .tl-year-tag::after{content:"/";margin-left:-.5rem;color:var(--c-meta)}
+
+/* THE HEADER CONTROLS. Four round line-art glyphs are the language of a phone app, and
+   they were the last thing on the page still speaking it. Under the switch each button
+   drops its icon and shows a bracketed token instead: [/tim] [toi] [luoi] [@email].
+
+   Both are in the markup and exactly one has a box, which is the same arrangement the
+   article's info panel uses — because the switch has to leave NO trace when it is off. A
+   reader who does not want the terminal look gets the icons the site has always had.
+
+   Only from 640px up. Five tokens are far wider than five 40px buttons, and on a phone
+   they would wrap the header onto two lines; below that width the icons stay. */
+@media (min-width:640px){
+  html[data-look=code] .icon-btn svg{display:none}
+  html[data-look=code] .btn-token{display:inline}
+  html[data-look=code] .btn-token::before{content:"[";color:var(--c-meta)}
+  html[data-look=code] .btn-token::after{content:"]";color:var(--c-meta)}
+  /* The 40px square was sized around a 20px glyph, and the button states no size of its
+     own — so a WORD in it inherited the 18px BODY size and the row came out as five large
+     words spread wide. The token is caption-sized (islands.css.ts) and the box shrinks to
+     it: this row is the quietest chrome on the page, not a menu bar. */
+  /* min-height, though: the box shrinking to caption-sized text left the four header
+     controls 24px tall, and this rule starts at 640px, which a phone in landscape and a
+     small tablet both clear while still being tapped with a thumb. The row stays visually
+     the same height, because the text is centred in a box that is only taller than it
+     needs to be. */
+  html[data-look=code] .icon-btn{width:auto;height:auto;padding:.15rem .2rem;
+    min-height:2.25rem}
+  html[data-look=code] .site-actions{gap:.4rem;margin-right:-.2rem}
+}
+
+/* THE GUTTER. A counter on the list, ranged right in its own column, exactly as an
+   editor numbers lines. It is decoration, so it is aria-hidden by being generated
+   content on the <li> rather than inside the link - the row's accessible name is
+   still the label and its count.
+
+   It is --c-meta and not the hairline token, which measured 1.16:1 against the page:
+   invisible, and a generated counter is still announced by some screen readers. A real
+   editor's gutter is perfectly legible; what makes it a gutter is where it sits and
+   that its figures are tabular, not that you cannot read it.
+
+   The column is in ch of the mono chrome, so two digits always fit and the labels
+   stay aligned however long the list runs. Tabular figures are what stop the numbers
+   shifting the labels as the count crosses 9. */
+/* The rail keeps the alignment it has with the switch off: ranged right, hugging the
+   article. An earlier pass ranged it LEFT to put the gutter where an editor puts it, which
+   moved the whole rail on toggle; so the GUTTER moves to the far right instead and
+   nothing else about the rail changes. The active marker stays where the gutter layout
+   put it, at the row's right edge, which is now 3.5ch clear of the numbers. */
+/* EVERYTHING BELOW IS GUTTER-ONLY, and the gutter starts at 640px.
+   Under it the rail is not a gutter at all, it is a slide-out drawer: no divider hairline
+   for a ring to sit on, and no .rail-inner scroller for an overhang to rescue, because
+   rail-css.ts injects that scroller inside the same breakpoint. Ungated, these rules made
+   the DRAWER pan sideways by 32px on every phone - the overhang widened .rail-inner to
+   calc(100% + 32px) inside a 259px box, and .rail sets overflow-y:auto, which computes
+   overflow-x to auto whether or not anyone asked for it. The header already drops the
+   tokens below this width for its own reasons; the rail drops its gutter here. */
+@media (min-width:640px){
+html[data-look=code] .rail ul{counter-reset:ln}
+/* The number sits in a small ring ON the rail's divider, the same language the feed's
+   year and month markers already speak: a node on a hairline. It costs the rail NO
+   width - the ring lives out on the line, past the text - which is why the row keeps its
+   normal padding and nothing here reserves a column.
+
+   CENTRED ON THAT LINE, and the arithmetic is the whole rule: the divider is 1px sitting
+   13px past the rail's edge, so its middle is at 12.5, and an 18px ring (border-box) centred
+   there has its right edge at 21.5. It was -23 until 2026-09-12, which put the ring 1.5px to
+   the right of the hairline threading it. The ring carries a --c-bg fill so the line breaks
+   around it rather than running through it. */
+html[data-look=code] .rail li{counter-increment:ln;position:relative}
+html[data-look=code] .rail li::before{content:counter(ln);position:absolute;
+  top:.05em;right:-21.5px;width:18px;height:18px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--c-bg);border:1px solid var(--c-rule);color:var(--c-meta);
+  /* Air around the ring, the way the feed's markers get it: their --c-bg mask is a
+     text line tall, so the spine stops well clear of the dot instead of touching it.
+     A ring-sized mask left the hairline running into the border. The shadow paints
+     the same break and costs no layout. */
+  box-shadow:0 0 0 5px var(--c-bg);
+  font-size:.62em;font-variant-numeric:tabular-nums;pointer-events:none}
+/* .rail-inner scrolls a long index, and overflow-y:auto clips horizontally too - so the
+   ring would be cut in half by its own container. The box grows right by the overhang and
+   pads it back, which puts the ring inside the padding box where nothing clips it.
+
+   ⚠️ THE OVERHANG HAS TO CLEAR THE WIDEST NUMBER, and 24px cleared neither. Measured on a
+   post with fourteen sub-headings in one section (2026-09-14): the pill for "2.10" wants
+   51.8px and reaches 38.4px past the rail's edge, so the rail cut the last digit off every
+   number from 2.10 down — and the plain ring's own 5px halo was 2.5px over even before that.
+   It costs no width: the box grows and the padding gives it straight back.
+
+   ONE RULE, and there used to be a second: .toc .rail-inner asked for 32px and matched
+   nothing, because the ToC is INSIDE the scroller (div.rail-inner > nav.toc) rather than
+   around it. A selector written backwards fails in the one way that is hard to see — it does
+   not error, it simply never applies, and the number it carried looked like the live one.
+
+   ⚠️ AND IT CANNOT BE WIDER THAN THE GAP. It was 56px, past a 40px --rail-gap, so the
+   scroller ran 16px into the reading column: on a long index its scrollbar was drawn over
+   the first letters of every line, and a wheel or a drag-select there went to the index
+   instead of the article (measured 2026-10-07 at 1440: the box at 126-432 against a column
+   starting at 416). The gap is the whole of the room there is. "2.10" (38.4px) fits inside
+   it; "10.12" (43.4px) loses 3px of its edge at the column's edge, where before it was
+   drawn over the text.
+
+   AND ITS SCROLLBAR GOES ON THE FAR SIDE. A scrollbar is drawn at the box's right edge,
+   which is now the column's left edge: the bar stood flush against the first letter of
+   every line and still read as lying on the article. direction:rtl moves it to the rail's
+   outer edge, where it belongs to the index; the children are set back to ltr so nothing
+   they hold reads backwards, and the rows were ranged right already. The 12px is the
+   scrollbar's own lane, so an overlay bar does not sit on the first letters of the longest
+   rows instead. */
+html[data-look=code] .rail-inner{width:calc(100% + var(--rail-gap));padding-right:var(--rail-gap);
+  direction:rtl;padding-left:12px}
+html[data-look=code] .rail-inner > *{direction:ltr}
+/* The active marker sits at the row's right edge, which used to be the rail's edge and
+   nothing else - now the ring is out past it, so at 0 the hairline read as belonging to
+   the ring rather than to the row it marks. Pulled in, but only 3px: 6px put it close
+   enough to the words to crowd them, which is the opposite complaint. The row's own
+   padding is 14px, so this leaves 11px of air on the text side and 10px to the circle. */
+html[data-look=code] .rail-row[aria-current]::after{right:3px}
+/* The article index numbers its HEADINGS and nothing else. Its first row is the post
+   title (a click is "back to the top") and its last is the jump to tags / categories /
+   comments - neither is a line of the piece, and numbering them made the index look one
+   heading longer than the post.
+
+   Keyed on POSITION and on .toc-end, deliberately not on .is-active: the ToC island moves
+   that class to whichever heading you are level with, so a rule hanging off it would drop
+   the number from a different row as you scrolled. */
+html[data-look=code] .toc li:first-child,
+html[data-look=code] .toc li:has(.toc-end){counter-increment:none}
+html[data-look=code] .toc li:first-child::before,
+html[data-look=code] .toc li:has(.toc-end)::before{content:none}
+
+/* The tag cloud is a run of words, not a list, so it has no lines to number. */
+html[data-look=code] .rail-tags{counter-reset:none}
+
+/* NESTING. The article index used to say "this is a sub-heading" with a smaller size and a
+   bullet on the PARENT, and at a glance neither reads: the two sizes are close and the
+   bullet sits at the far end of a right-ranged row. And the numbers counted every row 1..12
+   straight through, so a sub-heading of section 2 was numbered 7 and looked like a section.
+
+   A child is a path segment now. Same size, same weight as its parent, with a leading "/" —
+   the same mark the feed's gutter year already uses, and the only one on the site that
+   means "inside". The parent keeps its plain number; the child is numbered WITHIN it, so
+   "2.1" says where it lives instead of where it falls in a flat list.
+
+   Only under the switch. With the chrome off the index keeps the bullet and the smaller
+   size it has always had. */
+html[data-look=code] .rail-lead::before{content:none}
+html[data-look=code] .rail-sub{font-size:var(--fs-small);line-height:var(--lh-small);
+  letter-spacing:var(--ls-small)}
+/* gap:0 on the row: .rail-row spreads its flex children by .875rem, which is right for a
+   label and its count and puts the slash a thumb width away from the word it belongs to. */
+html[data-look=code] .toc .rail-sub{gap:0}
+html[data-look=code] .rail-sub::before{content:"/";color:var(--c-meta);margin-inline-end:.35em}
+html[data-look=code] .toc ul{counter-reset:ln h2 h3}
+/* counter-SET, not counter-reset. A reset on the parent row creates a new instance
+   scoped to that row and its following siblings, and the children read the outer one
+   regardless: measured, the numbers ran 1.1 1.2 2.3 2.4 2.5 3.6 straight through. */
+html[data-look=code] .toc li:has(.rail-lead){counter-increment:h2;counter-set:h3 0}
+html[data-look=code] .toc li:has(.rail-lead)::before{content:counter(h2)}
+html[data-look=code] .toc li:has(.rail-sub){counter-increment:h3}
+/* A pill rather than a circle: "2.1" is three characters and will not fit an 18px ring.
+   IT SIZES ITSELF, because a fixed width is a bet on how many sub-headings a section has.
+   The bet was 30px and it lost twice over: "2.10" needs 51.8px at this size, so the tenth
+   sub-heading of a section onwards lost its last digit, and even "2.1" was 1.8px over the
+   28px content box. Reported from a published post, 2026-09-14.
+
+   CENTRED BY ARITHMETIC THAT DOES NOT DEPEND ON THE WIDTH. The divider's middle is 12.5px
+   past the rail's edge; left:calc(100% + 12.5px) puts the pill's LEFT edge there and the
+   half-width shift moves its centre onto it, whatever the number inside turns out to be.
+   The old spelling pinned the right edge instead, so every width needed its own offset —
+   and the one it had was 1.5px off the hairline it was meant to thread. */
+html[data-look=code] .toc li:has(.rail-sub)::before{content:counter(h2) "." counter(h3);
+  width:auto;min-width:18px;padding-inline:5px;border-radius:999px;
+  right:auto;left:calc(100% + 12.5px);transform:translateX(-50%)}
+}
+
+/* --- THE WINDOW'S TWO EDGES, AND THE FACE THE CHROME SPEAKS IN --------------
+   THE CHROME SPEAKS IN THE OWNER'S CHROME FONT, and this sheet does not name it. It set
+   body in --font-mono through 2.2.19, which left the chrome-font control drawing nothing on
+   a blog wearing this theme; a theme may not override an owner's setting (ADR 0072), so
+   the monospace is now what the theme SUGGESTS (content/themes-builtin.ts) and a blog that
+   wore this theme before then reads its chrome font as JetBrains Mono, the face it was
+   drawn in (content/settings.ts). The headlines and the code keep --font-mono below: those
+   are this dialect's marks, not its chrome.
+
+   NO FILLED SURFACES. A tinted sidebar was drawn and rejected, then tinted bars top and
+   foot, rejected too: this dialect dresses the chrome, and a filled panel turns a piece of
+   furniture into a second surface arguing with the words. Two rules running the full width
+   of the glass are what a window has that a page does not.
+
+   NO RULE UNDER THE HEADER AND NONE OVER THE FOOTER since 2026-09-14. They were two
+   hairlines the width of the window, and with them went the three rules that existed only to
+   carry them: the full-bleed margin-inline / padding-inline on both bars, which stretched
+   a border no reader can see any more, and the overflow-x:clip on the root that stopped
+   those full-bleed bars growing a horizontal scrollbar. Neither bar has a background, so
+   removing the stretch moves nothing. The header keeps its 28px of air and the footer takes
+   the 3rem the rest of the product gives it (public.css.ts) — it was .6rem here, which put
+   the copyright line nine pixels off the bottom edge of the page with nothing under it. */
+
+/* --- THE HEADLINES ARE SET IN THE MONOSPACE, BOLD ---------------------------
+   Since 2026-09-23 the contrast moved one step inward: every headline - the piece's title,
+   each title in a feed or on the front, the section heads inside a piece - now speaks the
+   monospace, and only the running text stays in the book serif. With the headlines in
+   the serif the dialect read as the plain page with a monospace frame; a heading is a
+   label for what follows, which is exactly the kind of word this dialect already sets in
+   code. What stays analogue is still everything a reader reads for more than a line: the
+   paragraphs, the standfirst, the excerpts and the comments.
+   Tracked in: a monospace gives every glyph the width of an m, and at headline sizes that
+   opens the words into letters. The mono carries a Vietnamese subset, so an accented title
+   stays in one face. */
+html[data-look=code] :is(h1,h2,h3,h4).reading-font,
+html[data-look=code] main h1,
+html[data-look=code] .prose :is(h2,h3,h4){font-family:var(--font-mono);font-weight:700;
+  letter-spacing:-.035em}
+html[data-look=code] .prose :is(h2,h3,h4){letter-spacing:-.025em}
+
+/* --- A CODE BLOCK HAS LINE NUMBERS ------------------------------------------
+   In the gutter an editor gives them, quiet, and outside what a reader selects or the copy
+   button takes: a generated counter is not text, and user-select keeps a drag-select clean
+   in the engines that would otherwise pick the pseudo-element up. Highlighted blocks only -
+   they are the ones that arrive in lines (one span.line per source line); a plain block is
+   a single run of text with nothing to count. The hairline is the rule colour, the same
+   one the rail's own gutter uses. */
+html[data-look=code] pre.shiki code{counter-reset:ln}
+html[data-look=code] pre.shiki .line{counter-increment:ln}
+html[data-look=code] pre.shiki .line::before{content:counter(ln);display:inline-block;
+  min-width:2ch;margin-right:1.25ch;padding-right:1ch;text-align:right;
+  border-right:1px solid var(--c-rule);color:var(--c-meta);-webkit-user-select:none;
+  user-select:none;font-variant-numeric:tabular-nums}
+/* The highlighter closes a block that ends in a newline with one empty line, and a number
+   beside nothing reads as a line the reader cannot see. An empty line INSIDE the block keeps
+   its number: that one is part of the code. */
+html[data-look=code] pre.shiki .line:last-child:empty::before{content:none}
+/* THE ARTICLE'S HEADLINE, ONE STEP SMALLER ON A PHONE: a monospace glyph is ~.6em wide, so a
+   long title set in three lines here that the serif sets in two. DERIVED from the owner's h1,
+   never typed; the reason is in scripts/checks/type-roles.ts and docs/conventions/type.md. */
+@media (max-width:639px){
+html[data-look=code] article > header h1{font-size:calc(var(--fs-h1) * .8)}
+}
+html[data-look=code] .chips .chip{border-radius:0}
+`.trim()

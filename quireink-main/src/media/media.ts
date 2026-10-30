@@ -1,0 +1,360 @@
+// Media: metadata in the SQLite `media` table, binaries on the local filesystem. Every
+// raster original (jpg/png/webp/avif) is capped to 2048px on upload (capOriginal) — no
+// full-size bytes stored/served. Raster (jpg/png) also keeps responsive variants
+// (-1024/-1600 AVIF+WebP) + a -thumb.webp. Vector/anim (svg/gif) stored as-is; variant
+// names by convention.
+
+import type { MediaItem } from '@/types'
+import { describeUpload } from '@/media/alt-text'
+import {
+  uploadFile, deleteByPathname, expandBlob, bytesOf, type UploadBody,
+} from '@/media/blob'
+import { slugify } from '@/utils'
+import {
+  safeSize, makeThumb, capOriginal, RASTER, PASSTHROUGH, SIZES,
+} from '@/media/image'
+import { all, one, run, tx } from '@/store/query'
+import { liveOnly, nowMs, toIso } from '@/store/db'
+
+// A row as stored (store-relative paths). `variants` is a 0/1 column: SQLite has no
+// boolean, and the schema constrains it.
+export type MediaRow = {
+  path: string
+  filename: string
+  size: number
+  uploaded_at: number
+  width: number | null
+  height: number | null
+  thumb: string | null
+  variants: number
+  alt?: string | null
+  deleted_at?: number | null
+}
+
+// Row -> client item (absolute URLs).
+export function rowToItem(row: MediaRow): MediaItem {
+  return {
+    url: expandBlob(row.path),
+    filename: row.filename,
+    size: Number(row.size),
+    uploadedAt: toIso(row.uploaded_at),
+    width: row.width ?? undefined,
+    height: row.height ?? undefined,
+    thumb: row.thumb ? expandBlob(row.thumb) : undefined,
+    variants: !!row.variants,
+    alt: row.alt || undefined,
+    deletedAt: row.deleted_at == null ? undefined : toIso(row.deleted_at),
+  }
+}
+
+// A key list as ONE bound parameter, rather than a generated `in (?, ?, ?)` run: this
+// codebase does not assemble SQL.
+const keyList = (keys: string[]) => JSON.stringify(keys)
+
+export function insertRows(rows: MediaRow[]): void {
+  tx(() => {
+    for (const r of rows) {
+      run(
+        `insert into media (path, filename, size, uploaded_at, width, height, thumb, variants)
+         values ($path, $filename, $size, $uploadedAt, $width, $height, $thumb, $variants)`,
+        {
+          path: r.path, filename: r.filename, size: r.size, uploadedAt: r.uploaded_at,
+          width: r.width, height: r.height, thumb: r.thumb, variants: r.variants,
+        },
+      )
+    }
+  })
+}
+
+/**
+ * Library list, newest first. Fresh every request (mutating helpers return it as the
+ * authoritative current state).
+ *
+ * ⚠️ `page` IS OPTIONAL AND THE DEFAULT IS STILL EVERYTHING, because two callers need every
+ * row: `media-usage.ts`, which answers "is this picture used anywhere", and the `list_media`
+ * tool, whose whole job is the inventory. Only the SCREEN pages, because the screen is the one
+ * that turns a row into a tile with a picture in it — ten thousand of those is a page nobody
+ * can use and a browser that thinks about it for several seconds.
+ */
+export async function getMedia(page?: { limit: number; offset: number }): Promise<MediaItem[]> {
+  const live = `select * from media where ${liveOnly('media')} order by uploaded_at desc`
+  try {
+    // Bound, never interpolated: the hard rule has no exception for a value that is a number.
+    const rows = page ? all<MediaRow>(`${live} limit ? offset ?`, page.limit, page.offset) : all<MediaRow>(live)
+    return rows.map(rowToItem)
+  } catch (error) {
+    console.error(`[ERROR] media.getMedia: ${(error as Error).message}`)
+    return []
+  }
+}
+
+/**
+ * The whole library in two numbers, for a screen holding one page of it. Both from one query:
+ * the count decides how many pages exist, and the byte total is the line above the grid, which
+ * has to mean the LIBRARY — a figure that changed as you turned pages answers nothing.
+ */
+export function countMedia(): { count: number; bytes: number } {
+  try {
+    const row = all<{ n: number; bytes: number }>(
+      `select count(*) as n, coalesce(sum(size), 0) as bytes from media where ${liveOnly('media')}`,
+    )[0]
+    return { count: row?.n ?? 0, bytes: row?.bytes ?? 0 }
+  } catch (error) {
+    console.error(`[ERROR] media.countMedia: ${(error as Error).message}`)
+    return { count: 0, bytes: 0 }
+  }
+}
+
+/**
+ * The names an original implies: its thumbnail and every display width.
+ *
+ * These have no row of their own, which is why the taken set used to be filled by walking the
+ * whole blob store. It never needed to be: a derived name is a function of the original's, so
+ * the `media` rows already say all of them.
+ */
+function reserveDerived(path: string, taken: Set<string>): void {
+  if (!/\.(jpe?g|png)$/i.test(path)) return
+  const stem = path.replace(/\.[^.]+$/, '')
+  taken.add(`${stem}-thumb.webp`)
+  for (const w of SIZES) { taken.add(`${stem}-${w}.webp`); taken.add(`${stem}-${w}.avif`) }
+}
+
+/**
+ * Every media pathname this blog has claimed, for collision-free naming.
+ *
+ * Derived from the ROWS. It used to union them with a walk of the actual store, on every
+ * upload request, to catch the derived names above; that walk measured 734ms on a store of
+ * 5,120 files, and it ran alongside the quota check's walk of the same directory.
+ *
+ * What a walk covered and rows do not is a file in the store that no row mentions, and the
+ * original is not exposed by dropping it: the original is written with O_EXCL and retries the
+ * next name on EEXIST (`writeUniqueOriginal`), so the filesystem is the real guard and this
+ * set is what stops it having to guess fifty times. Trashed rows are included on purpose —
+ * their bytes are still on disk until the trash is emptied.
+ */
+async function takenPathnames(): Promise<Set<string>> {
+  const set = new Set<string>()
+  for (const r of all<{ path: string; thumb: string | null }>(`select path, thumb from media`)) {
+    if (/^media\//.test(r.path)) {
+      set.add(r.path)
+      reserveDerived(r.path, set)
+    }
+    if (r.thumb && /^media\//.test(r.thumb)) set.add(r.thumb)
+  }
+  return set
+}
+
+// First free "media/{base}.{ext}", appending -2, -3... on collision. Reserves the
+// returned name + its derived thumb/variant names so a later batch file can't reuse the stem.
+function freePathname(base: string, ext: string, taken: Set<string>): string {
+  const make = (n: number) => `media/${n === 1 ? base : `${base}-${n}`}${ext ? `.${ext}` : ''}`
+  let n = 1
+  while (taken.has(make(n))) n++
+  const path = make(n)
+  taken.add(path)
+  reserveDerived(path, taken)
+  return path
+}
+
+// Write the ORIGINAL under the first free name with an exclusive (O_EXCL) write, so
+// two concurrent uploads racing for the same name never overwrite each other: the
+// loser gets EEXIST and retries the next name (instead of a PK 500 + silent overwrite).
+async function writeUniqueOriginal(
+  base: string, ext: string, body: Buffer, contentType: string, taken: Set<string>,
+): Promise<string> {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const path = freePathname(base, ext, taken) // reserves the name in `taken`
+    try {
+      await uploadFile(path, body, contentType, { exclusive: true })
+      return path
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') continue // claimed; next name
+      throw error
+    }
+  }
+  throw new Error(`writeUniqueOriginal: no free name for ${base}.${ext}`)
+}
+
+const PASS_EXT: Record<string, string> = { 'image/svg+xml': 'svg', 'image/gif': 'gif', 'image/avif': 'avif' }
+
+// Process one file: upload its blob(s) and return the row to insert (DB write is the
+// caller's batch). Dimensions + thumb are BEST-EFFORT — a valid original must never
+// fail the upload because thumb/metadata hiccuped (it still renders; cron re-thumbs).
+async function processFile(
+  filename: string, from: UploadBody, contentType: string, taken: Set<string>, keep?: Map<string, Buffer>,
+): Promise<MediaRow> {
+  const dot = filename.lastIndexOf('.')
+  const base = slugify(dot >= 0 ? filename.slice(0, dot) : filename) || 'file'
+  const uploaded_at = nowMs()
+  // Read HERE, one file at a time (`bytesOf` says why): the batch never holds two copies at once.
+  const body = await bytesOf(from)
+
+  if (RASTER.test(contentType)) {
+    const original = await capOriginal(body, contentType) // never store a >2048px original
+    const path = await writeUniqueOriginal(base, contentType === 'image/png' ? 'png' : 'jpg', original, contentType, taken)
+    const stem = path.replace(/\.[^.]+$/, '')
+    const { width, height } = await safeSize(original) // never throws
+    let thumb = path // fall back to the original as its own thumb if webp encoding fails
+    try {
+      await uploadFile(`${stem}-thumb.webp`, await makeThumb(original), 'image/webp')
+      thumb = `${stem}-thumb.webp`
+    } catch (error) {
+      console.error(`[ERROR] media.processFile thumb(${path}): ${(error as Error).message}`)
+    }
+    // The exact bytes just written, for its variants (`finalizeVariants`) — but only a CAPPED
+    // original, which is a new, smaller picture. One under the cap is the upload's own bytes, and
+    // keeping those for every file would hold a batch whole again; it is read back when its turn comes.
+    if (original.buffer !== body) keep?.set(path, original)
+    return { path, filename: path.replace(/^media\//, ''), size: original.byteLength, uploaded_at, width: width ?? null, height: height ?? null, thumb, variants: 0 }
+  }
+
+  if (PASSTHROUGH.test(contentType)) {
+    const buf = await capOriginal(body, contentType) // webp/avif capped to 2048; svg/gif untouched
+    const path = await writeUniqueOriginal(base, PASS_EXT[contentType] ?? 'webp', buf, contentType, taken)
+    const { width, height } = await safeSize(buf)
+    return { path, filename: path.replace(/^media\//, ''), size: buf.byteLength, uploaded_at, width: width ?? null, height: height ?? null, thumb: path, variants: 0 }
+  }
+
+  throw new Error(`Unsupported file type: ${contentType}`)
+}
+
+// Upload one or more files: write the binaries to the store, then insert all rows in a
+// single transaction. Unsupported types throw before any DB write (route -> 415).
+// `keep`, when given, receives each raster original by path (`media-register.ts` says why).
+export async function addMediaBatch(
+  files: { filename: string; body: UploadBody; contentType: string }[],
+  keep?: Map<string, Buffer>,
+): Promise<MediaItem[]> {
+  const taken = await takenPathnames()
+  const rows: MediaRow[] = []
+  try {
+    for (const f of files) {
+      rows.push(await processFile(f.filename, f.body, f.contentType, taken, keep))
+    }
+  } catch (error) {
+    // All or nothing: a later file refused used to leave the earlier ones' blobs on disk with no
+    // row, counted against the quota and listed nowhere (2026-09-30).
+    for (const row of rows) {
+      for (const p of new Set([row.path, row.thumb ?? row.path])) await deleteByPathname(p).catch(() => { /* already gone */ })
+    }
+    throw error
+  }
+  insertRows(rows)
+  // Background, per file, with what the caller handed in — the request's own `File` reads its
+  // bytes only once the describer has decided to run — and no waiting: the upload response is
+  // long gone by the time a provider answers, and the describer declines silently unless the
+  // owner pasted a key (media/alt-text.ts).
+  for (let i = 0; i < rows.length; i++) {
+    void describeUpload(rows[i]!.path, files[i]!.body, files[i]!.contentType)
+  }
+  return rows.map(rowToItem)
+}
+
+// Upload a single file (kept for convenience; delegates to the batch path).
+export async function addMedia(
+  filename: string,
+  body: ArrayBuffer,
+  contentType: string,
+): Promise<MediaItem> {
+  const [item] = await addMediaBatch([{ filename, body, contentType }])
+  return item!
+}
+
+// Extract the store-relative `media/...` pathname from any URL form (host-independent,
+// so a host mismatch can never make a delete silently no-op).
+export function mediaKey(s: string): string | null {
+  return s.match(/media\/[^?#"')\s]+/)?.[0] ?? null
+}
+
+const mediaKeys = (urls: string[]): string[] =>
+  [...new Set(urls.map(mediaKey).filter((k): k is string => k !== null))]
+
+// Soft-delete media (set deleted_at) — KEEPS every blob, so a published post
+// linking these images keeps rendering until an explicit Trash purge.
+export async function deleteMediaBatch(urls: string[]): Promise<MediaItem[]> {
+  const keys = mediaKeys(urls)
+  if (keys.length === 0) return getMedia()
+  run(
+    `update media set deleted_at = ? where path in (select value from json_each(?))`,
+    nowMs(), keyList(keys),
+  )
+  return getMedia()
+}
+
+// Soft-delete a single media item (delegates to the batch path).
+export async function deleteMedia(url: string): Promise<MediaItem[]> {
+  return deleteMediaBatch([url])
+}
+
+// Restore trashed media back to the live library (clear deleted_at). Returns the
+// authoritative live list.
+export async function restoreMediaBatch(urls: string[]): Promise<MediaItem[]> {
+  const keys = mediaKeys(urls)
+  if (keys.length === 0) return getMedia()
+  run(`update media set deleted_at = null where path in (select value from json_each(?))`, keyList(keys))
+  return getMedia()
+}
+
+// Hard delete (irreversible, Trash UI only): remove DB rows first (source of
+// truth), then best-effort delete blobs.
+export async function purgeMediaBatch(urls: string[]): Promise<void> {
+  const keys = mediaKeys(urls)
+  if (keys.length === 0) return
+
+  // Need thumb + variants for blob cleanup.
+  // Only trashed rows: a live picture's bytes went with a purge from a stale Trash (see `purgePost`).
+  const removed = all<MediaRow>(
+    `select * from media where path in (select value from json_each(?)) and deleted_at is not null`, keyList(keys),
+  )
+  if (removed.length === 0) return
+
+  run(`delete from media where path in (select value from json_each(?)) and deleted_at is not null`, keyList(keys))
+
+  // Clean up EVERY blob (original + thumb + all variants). Variant paths attempted
+  // for any raster regardless of the flag — deletes are idempotent, so nothing orphans.
+  const paths = new Set<string>()
+  for (const row of removed) {
+    paths.add(row.path)
+    if (row.thumb && row.thumb !== row.path) paths.add(row.thumb)
+    if (/\.(jpe?g|png)$/i.test(row.path)) {
+      const stem = row.path.replace(/\.[^.]+$/, '')
+      paths.add(`${stem}-thumb.webp`)
+      for (const w of SIZES) { paths.add(`${stem}-${w}.webp`); paths.add(`${stem}-${w}.avif`) }
+    }
+  }
+  await Promise.all([...paths].map((p) => deleteByPathname(p).catch(() => {})))
+}
+
+// Trashed media (most-recently-deleted first) for the Trash view.
+export async function getTrashedMedia(): Promise<MediaItem[]> {
+  try {
+    return all<MediaRow>(
+      `select * from media where deleted_at is not null order by deleted_at desc`,
+    ).map(rowToItem)
+  } catch (error) {
+    console.error(`[ERROR] media.getTrashedMedia: ${(error as Error).message}`)
+    return []
+  }
+}
+
+// Permanently remove EVERY trashed media item (empty the media Trash). Returns the count.
+export async function emptyMediaTrash(): Promise<number> {
+  const trashed = await getTrashedMedia()
+  if (trashed.length === 0) return 0
+  await purgeMediaBatch(trashed.map((m) => m.url))
+  return trashed.length
+}
+
+// Owner-only diagnostic: report what a delete of `url` would match in the DB.
+type DeleteProbe = { manifestCount: number; targetKey: string | null; matched: number; sampleStored: string[] }
+export async function debugDelete(url: string): Promise<DeleteProbe> {
+  const targetKey = mediaKey(url)
+  return {
+    manifestCount: one<{ n: number }>(`select count(*) n from media`)?.n ?? 0,
+    targetKey,
+    matched: targetKey
+      ? (one<{ n: number }>(`select count(*) n from media where path = ?`, targetKey)?.n ?? 0)
+      : 0,
+    sampleStored: all<{ path: string }>(`select path from media limit 8`).map((m) => m.path),
+  }
+}

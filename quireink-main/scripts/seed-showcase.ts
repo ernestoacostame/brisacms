@@ -1,0 +1,302 @@
+// A believable blog in a throwaway database: the fixture every screenshot is taken against,
+// and everything demo.quireink.com serves.
+//
+// Replaces three narrower seeds that each built half a site. The README shots, the front page
+// and the comment thread now come from ONE state, so a screenshot can be reproduced rather than
+// recreated from memory by whoever took it last. English content on purpose: these end up in a
+// README.
+//
+//   bun scripts/seed-showcase.ts [dir] [text|image] [list|front]
+//   SEED_NOW=2026-07-30T09:00:00Z bun scripts/seed-showcase.ts ...   # pinned, for a plate
+//
+// THIS FILE IS THE MACHINERY. The words are in `seed-content*.ts`, the threads in
+// `seed-comments.ts`, the owner-facing half in `seed-admin.ts`, the history in
+// `seed-activity.ts`, the library plates in `seed-media.ts`. The split is by AUDIENCE rather
+// than by size: what a reader sees, what the owner sees, and the code that assembles both.
+//
+// `seed-demo.ts` stays: it exercises every island on one post, which is a different job from
+// looking like a blog.
+
+import { rmSync } from 'node:fs'
+import { openDatabases } from '@/store/db'
+import { savePost } from '@/content/posts'
+import { savePage } from '@/content/pages'
+import { saveNote } from '@/content/notes'
+import { saveSettings, getSettings } from '@/content/settings'
+import { APP_VERSION } from '@/version'
+import { DEFAULT_HOME } from '@/content/settings-sanitize'
+import { bufferEvent, bufferScroll, flushAnalytics } from '@/analytics/buffer'
+import { createUser, setTotpSecret } from '@/auth/users'
+import { generateSecret } from '@/auth/totp'
+import { createSession } from '@/auth/sessions'
+import { POSTS } from './seed-content'
+import { NOTES } from './seed-content-notes'
+import { seedComments } from './seed-comments'
+import { seedAdmin } from './seed-admin'
+import { seedActivity } from './seed-activity'
+import { seedMedia, seedFiles } from './seed-media'
+import { seedArt } from './seed-art'
+
+const DIR = process.argv[2] ?? './.tmp/drive-data'
+const KIND = (process.argv[3] ?? 'text') as 'image' | 'text'
+const MODE = process.argv[4] === 'front' ? 'front' : 'list'
+
+rmSync(DIR, { recursive: true, force: true })
+openDatabases(DIR)
+
+const DAY = 24 * 60 * 60 * 1000
+const NOW = Date.now()
+
+/**
+ * The moment the newest post went up. Every other date in the fixture is `START - ago days`.
+ *
+ * IT FOLLOWS THE CLOCK, and it used to be `Date.UTC(2026, 6, 30, 9, 0, 0)`. A fixed origin is
+ * reproducible, which is what a screenshot wants, and it silently rots the thing anyone
+ * actually looks at: the demo reseeds monthly against the same constant, so its newest post
+ * ages a month between refreshes and a visitor in December opens a blog whose latest piece is
+ * dated four months ago. Nothing goes red, it just reads as abandoned.
+ *
+ * `SEED_NOW` pins it for anything that needs two runs to match — `scripts/ops/shoot-readme.sh`
+ * sets it, so the README plates stay reproducible. Eight hours back, not the current
+ * millisecond, so the newest post reads as today rather than as this second, and so no post
+ * can land in the future through clock skew.
+ */
+const pinned = process.env.SEED_NOW
+const START = (pinned ? new Date(pinned).getTime() : NOW) - 8 * 60 * 60 * 1000
+if (Number.isNaN(START)) {
+  console.error(`SEED_NOW is not a date: ${JSON.stringify(pinned)}`)
+  process.exit(1)
+}
+
+/** Resolve a slug to the millisecond it was published, for anything hanging off a post. */
+const postDate = (slug: string): number => {
+  const post = POSTS.find((p) => p.slug === slug)
+  if (!post) throw new Error(`seed: no post with slug ${slug}`)
+  return START - post.ago * DAY
+}
+
+for (let i = 0; i < POSTS.length; i += 1) {
+  const p = POSTS[i]!
+  await savePost({
+    title: p.title,
+    slug: p.slug,
+    status: 'published',
+    date: new Date(START - p.ago * DAY).toISOString(),
+    content: p.body,
+    excerpt: p.excerpt,
+    categories: [p.category],
+    tags: p.tags,
+    ...(p.series ? { series: p.series, seriesOrder: p.order } : {}),
+    ...(p.lang ? { lang: p.lang } : {}),
+    // THE POST'S OWN FIRST PICTURE, when it has one. It was the app icon on two posts in
+    // three, which made every thumbnail and every card the same Q, blown up: a list of
+    // pictures that told you nothing. A post with no picture gets none — no placeholder,
+    // by the rule in docs/appearance.md — so the rows that carry art are the ones about it.
+    ...(picture(p.body) ? { featuredImage: picture(p.body) } : {}),
+  })
+}
+
+/** The first picture in a post's body, as the store path the renderer resolves. */
+function picture(body: string): string | undefined {
+  const m = /!\[[^\]]*\]\((\/uploads\/media\/[^)#\s]+)/.exec(body)
+  return m?.[1]
+}
+
+// The notebook (ADR 0044): five notes, three of them clips, dated like the posts.
+for (const n of NOTES) {
+  await saveNote({
+    title: n.title, slug: n.slug, status: 'published',
+    date: new Date(START - n.ago * DAY).toISOString(),
+    sourceUrl: n.sourceUrl, sourceTitle: n.sourceTitle, quote: n.quote, content: n.content,
+  })
+}
+
+await savePage({
+  title: 'Colophon', slug: 'colophon', status: 'published',
+  content: 'Notes on letterforms and the making of pages: calligraphy, type, layout and print.\n\n'
+    + 'Set in Literata for reading and JetBrains Mono for everything the machine says.',
+})
+
+const comments = await seedComments(postDate)
+const media = (await seedMedia()) + (await seedArt())
+const files = await seedFiles()
+
+const s = await getSettings()
+await saveSettings({
+  ...s,
+  title: 'Quire Ink',
+  description: 'Letterforms, and the making of pages',
+  showDescription: true,
+  fontPreset: 'literata',
+  chromeFont: 'jetbrains-mono',
+  look: 'code',
+  // A SEEDED BLOG IS ONE THAT HAS BEEN SET UP, so it is stamped with the release it is on.
+  // Left empty it reads as a row that predates the field, which is what the admin's
+  // what's-new panel is for — and the panel would then open modal over every screen of the
+  // tour and eat the first click on each. It did: one flow reported the confirm dialog
+  // refusing to close, and another that the fixture was wearing no dialect at all, because
+  // a click meant for the page underneath had landed on the panel's Plain paper button.
+  seenRelease: APP_VERSION,
+  menu: [
+    // Typography and Calligraphy carry the fixture's two voices (machine type, the hand);
+    // Printing still exists as a category and in the archive, but the owner cut it from
+    // the menu on 2026-08-23 — five entries read as clutter, and the menu is the pitch.
+    { label: 'Typography', href: '/category/typography' },
+    { label: 'Calligraphy', href: '/category/calligraphy' },
+    { label: 'Notes', href: '/notes' },
+    { label: 'Colophon', href: '/colophon' },
+    // The way back out. The demo is reached from quireink.com and was a dead end once you
+    // were in it: every menu entry above stays inside the fixture, so a visitor who wanted
+    // the product page back had the browser's history button and nothing else.
+    { label: 'quireink.com', href: 'https://quireink.com' },
+  ],
+  // The timeline in the listing's right gutter is part of infinite scroll, and it is what
+  // the spread-out dates above are for: a month marker per group, a sticky year.
+  features: { ...s.features, infiniteScroll: true },
+  // A picture beside the rows that have one. The list is the demo's second door and it read
+  // as a column of grey; with the art on the rows that carry it, it reads as a blog.
+  postImage: { ...s.postImage, thumb: 'side' },
+  // An author box under every post, so the part of the page a byline lives in is not blank.
+  // The portrait is one of the fixture's own public-domain plates.
+  author: {
+    name: 'The editor', url: 'https://quireink.com', avatarUrl: '/uploads/media/van-gogh-self-portrait.jpg',
+    bio: 'Notes on letterforms and the making of pages. Every post here is fixture content, written to show what the software does; every picture is out of copyright.',
+  },
+  featured: ['the-broad-edged-pen', 'a-type-scale-you-can-defend', 'imposition-why-page-one-sits-beside-page-eight'],
+  mostViewedCount: 3,
+  comments: { ...s.comments, enabled: true },
+  home: {
+    ...DEFAULT_HOME,
+    // `list` unless MODE says otherwise. The demo's front door is the blog list, the same
+    // shape a fresh install gets; the composed front page is a second instance seeded with
+    // MODE=front, because `/` serves exactly one of the two and there is no other route to
+    // the front page.
+    mode: MODE,
+    front: {
+      ...DEFAULT_HOME.front,
+      // TEXT, never image. The demo's whole argument is that a page of nothing but words
+      // can be worth looking at, and a row of thumbnails is the easiest way to make any
+      // front page look busy — which would prove the opposite thing.
+      kind: KIND,
+      // MOST VIEWED, ON. It was off while the seeder went to the trouble of generating a
+      // month of deterministic traffic three screens up — the row the analytics exist to
+      // fill was the one row the fixture never drew.
+      popular: { on: true, count: 4, days: 30 },
+      strips: [
+        { category: 'Typography', count: 3, columns: 3 },
+        { category: 'Calligraphy', count: 3, columns: 3 },
+        { category: 'Printing', count: 3, columns: 3 },
+      ],
+    },
+  },
+})
+
+// The owner-facing half. AFTER `saveSettings`, and the order is load-bearing twice over:
+// `seedAdmin` re-saves a published post to leave it a revision history, which needs the post
+// to exist, and `seedActivity` calls the same `logActivity` the routes do — which no-ops
+// unless `features.activityLog` is on in the settings just written.
+const admin = await seedAdmin(START, NOW)
+const activity = await seedActivity(START, NOW)
+
+/**
+ * A month of traffic, so the parts of the product that COUNT things have something to count.
+ *
+ * Without it the dashboard reads 0 views / no activity / "No views yet", the analytics page
+ * is five empty charts, and the front page's most-viewed row does not render at all — none
+ * of which is a screenshot of the software, it is a screenshot of an empty database. The
+ * numbers are deterministic (no RNG) so two runs produce the same plate.
+ */
+const VISITS_TOP = 260 // the best-performing post over the window
+const DEVICES = ['mobile', 'desktop', 'mobile', 'tablet']
+const BROWSERS = ['Chrome', 'Safari', 'Firefox', 'Safari']
+const SYSTEMS = ['Android', 'macOS', 'iOS', 'Windows']
+const COUNTRIES = ['VN', 'US', 'DE', 'GB', 'JP', 'SG']
+const SOURCES = [null, null, 'news.ycombinator.com', 'google.com', 'lobste.rs', 'bsky.app']
+const WINDOW_DAYS = 30
+
+for (const [rank, p] of POSTS.entries()) {
+  // A long tail rather than a flat line: the fourth post gets a quarter of the first, which
+  // is the shape real traffic has and the shape a "most viewed" list needs to be worth
+  // drawing at all.
+  const total = Math.round(VISITS_TOP / (rank * 0.55 + 1))
+  for (let i = 0; i < total; i += 1) {
+    const day = i % WINDOW_DAYS
+    bufferEvent({
+      path: `/${p.slug}`,
+      // One visitor id per (post, day, slot) so visitors track views without equalling them.
+      visitor: `v${(rank * 7 + i) % 90}`,
+      referrerHost: SOURCES[(rank + i) % SOURCES.length] ?? null,
+      country: COUNTRIES[(rank * 3 + i) % COUNTRIES.length] ?? null,
+      device: DEVICES[i % DEVICES.length] ?? null,
+      browser: BROWSERS[i % BROWSERS.length] ?? null,
+      os: SYSTEMS[i % SYSTEMS.length] ?? null,
+      // MINUS the hour spread, never plus: START is only eight hours back, so adding up to
+      // nineteen hours pushed day-0 events into the future — and 23 of them into the live
+      // strip's five-minute window, which reported a crowd that was not there.
+      createdAt: START - day * DAY - (i % 20) * 3600_000,
+    })
+    // Read depth on every third view: enough samples for the engagement panel, and it keeps
+    // the scroll table from being the same size as the event table.
+    if (i % 3 === 0) {
+      bufferScroll({
+        path: `/${p.slug}`,
+        depth: [28, 55, 74, 96][i % 4] ?? 50,
+        dwellMs: 40_000 + (i % 9) * 25_000,
+        // A spread, not one frozen number: this site measures a post at about 100 KB, and
+        // a page carrying pen marks or a picture costs more. A flat line would teach the
+        // owner nothing about which of their pages are the expensive ones.
+        bytes: 96_000 + ((rank * 9_973 + i * 1_361) % 62_000),
+        visitor: `v${(rank * 7 + i) % 90}`,
+        createdAt: START - day * DAY,
+      })
+    }
+  }
+  flushAnalytics()
+}
+
+// Three readers "on the site right now", so the analytics page's live strip has something
+// to be live ABOUT. Real minutes before the real clock, not SEED_NOW: the strip reads the
+// trailing five minutes of wall time, and a pinned origin hours in the past would leave it
+// empty — which is fine for the README (whose admin panels never open Analytics) and wrong
+// for the demo, where the strip is the first thing that makes the page feel alive.
+for (const [i, p] of [POSTS[0]!, POSTS[1]!, POSTS[1]!].entries()) {
+  bufferEvent({
+    path: `/${p.slug}`,
+    visitor: `live${i}`,
+    referrerHost: i === 0 ? 'news.ycombinator.com' : null,
+    country: ['VN', 'US', 'DE'][i] ?? null,
+    device: i === 2 ? 'mobile' : 'desktop',
+    browser: 'Safari',
+    os: i === 2 ? 'iOS' : 'macOS',
+    createdAt: NOW - (i + 1) * 60_000,
+  })
+}
+flushAnalytics()
+
+/**
+ * An owner, already signed in.
+ *
+ * The admin is the half of the product a screenshot could never reach: sign-in needs a
+ * password AND a TOTP code, and the session cookie is `__Host-` prefixed so it cannot be
+ * forged from the page's own JavaScript. Minting the session here — in the throwaway
+ * database this script just created — photographs the admin without putting any bypass in
+ * the SERVER, which is the part that would matter. Anyone who can run this already has the
+ * database file, and having the database file is the whole game.
+ */
+const owner = await createUser({
+  username: 'demo',
+  email: 'demo@example.com',
+  // Throwaway, for a database that is deleted at the top of the next run.
+  password: 'quartz-lantern-47-thicket',
+})
+setTotpSecret(owner.id, generateSecret())
+const { token } = createSession(owner.id, { userAgent: 'showcase' })
+
+console.log(`seeded ${DIR}: ${POSTS.length} posts, ${NOTES.length} notes, home=${MODE}, front kind=${KIND}`)
+console.log(
+  `  + ${admin.drafts} draft(s), ${admin.scheduled} scheduled, ${comments} comment(s), `
+  + `${media} media, ${files} file(s), ${admin.subscribers} subscriber(s), `
+  + `${admin.redirects} redirect(s), ${activity} log entr(ies)`,
+)
+console.log(`  newest post ${new Date(START).toISOString()}${pinned ? ' (SEED_NOW pinned)' : ''}`)
+console.log(`QUIRE_SESSION=${token}`)

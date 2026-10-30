@@ -1,0 +1,392 @@
+// Claiming an install, driven through the real router.
+//
+// This is the one write route in the product that creates an OWNER, and it is reachable
+// without a session by definition. So the tests here are mostly about refusal: the happy
+// path is four lines and every other case is a door that has to stay shut.
+
+import { describe, it, expect, beforeEach, afterAll } from 'bun:test'
+import { freshDatabase, dropDatabase } from '@/test/db'
+import { db } from '@/test/sqlite'
+import { createApp } from '@/web/app'
+import { createUser, noUsersYet } from '@/auth/users'
+import { saveSettings, getSettings } from '@/content/settings'
+import { adminT } from '@/i18n/admin-i18n'
+import { codeForStep, stepAt } from '@/auth/totp'
+import { resetPending } from '@/auth/login'
+import { resetEnrolment } from '@/web/enrol-routes'
+import { resetLimits } from '@/server/rate-limit'
+import { setupToken, forgetSetupToken, resetSetupToken, setupCodeConfigured } from '@/server/setup-token'
+import { setupBanner } from '@/web/setup-routes'
+import { afterEach } from 'bun:test'
+
+const DIR = './.tmp/test-setup'
+freshDatabase(DIR)
+afterAll(() => dropDatabase(DIR))
+
+const PASSWORD = 'wandering violet cassette'
+const app = createApp()
+
+const post = (path: string, data: Record<string, string>) =>
+  app.request(path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(data),
+  })
+
+const claim = (over: Record<string, string> = {}) =>
+  post('/api/setup/claim', {
+    token: setupToken(), username: 'owner', email: 'owner@example.com', password: PASSWORD, ...over,
+  })
+
+beforeEach(() => {
+  db().run(`delete from users`)
+  db().run(`delete from sessions`)
+  db().run(`delete from settings`)
+  resetPending()
+  resetEnrolment()
+  resetLimits()
+  forgetSetupToken()
+})
+
+describe('the unclaimed page', () => {
+  it('offers no form without the token, and does not print the token either', async () => {
+    const token = setupToken()
+    const body = await (await app.request('/setup')).text()
+    expect(body).not.toContain('/api/setup/claim')
+    // The whole point of a secret in a log is that the page which mentions the log does not
+    // also contain it. This assertion is the one that would catch a "helpful" template edit.
+    expect(body).not.toContain(token)
+  })
+
+  it('refuses a token that is not the one this process minted', async () => {
+    setupToken()
+    const res = await app.request('/setup?token=not-the-one')
+    expect(res.status).toBe(403)
+    expect(await res.text()).not.toContain('/api/setup/claim')
+  })
+
+  it('shows the form for the real token', async () => {
+    const res = await app.request(`/setup?token=${setupToken()}`)
+    expect(res.status).toBe(200)
+    expect(await res.text()).toContain('/api/setup/claim')
+  })
+
+  it('is a 404 with no form once the blog has an owner', async () => {
+    await createUser({ username: 'taken', email: 't@example.com', password: PASSWORD })
+    const res = await app.request(`/setup?token=${setupToken()}`)
+    expect(res.status).toBe(404)
+    const page = await res.text()
+    expect(page).not.toContain('/api/setup/claim')
+    // Says it was claimed and offers the way on (FIXLIST 9.1), instead of "no owner yet".
+    expect(page).toContain('href="/login"')
+    expect(page).not.toContain(adminT('en').setupUnclaimedTitle)
+  })
+})
+
+describe('claiming', () => {
+  it('creates the owner and goes straight to two-factor', async () => {
+    const res = await claim()
+    expect(res.status).toBe(200)
+    const body = await res.text()
+    // Landed on enrolment, not back on a sign-in form: the password just typed is not asked
+    // for a second time.
+    expect(body).toContain('/api/auth/enrol')
+    expect(noUsersYet()).toBe(false)
+  })
+
+  it('burns the token, so the link cannot be replayed', async () => {
+    const token = setupToken()
+    await claim({ token })
+    db().run(`delete from users`) // the only way back to unclaimed, and it must not help
+    const res = await app.request(`/setup?token=${token}`)
+    expect(res.status).toBe(403)
+  })
+
+  it('refuses a wrong token and creates nothing', async () => {
+    setupToken()
+    expect((await claim({ token: 'wrong' })).status).toBe(403)
+    expect(noUsersYet()).toBe(true)
+  })
+
+  it('refuses once an owner exists, whatever the token says', async () => {
+    await createUser({ username: 'taken', email: 't@example.com', password: PASSWORD })
+    expect((await claim()).status).toBe(409)
+  })
+
+  // The language question used to live on the site step, which is the THIRD screen: a
+  // Vietnamese owner met "Claim this blog" and then a whole authenticator screen in English.
+  it('takes the language from the claim form, so the authenticator screen is already in it', async () => {
+    const res = await claim({ language: 'vi' })
+    expect(res.status).toBe(200)
+    expect((await getSettings()).language).toBe('vi')
+    // And the screen it hands over to is rendered in it, not in the language it started as.
+    expect(await res.text()).toContain(adminT('vi').authSetUp)
+  })
+
+  it('writes no language for a claim that was refused', async () => {
+    // Everything above the token check runs for a request nobody has authenticated, so a
+    // settings write there would be a way to edit a blog by posting at it.
+    setupToken()
+    expect((await claim({ token: 'wrong', language: 'vi' })).status).toBe(403)
+    expect((await getSettings()).language).toBe('en')
+  })
+
+  it('ignores a language that is not one of ours', async () => {
+    await claim({ language: 'klingon' })
+    expect((await getSettings()).language).toBe('en')
+  })
+
+  it('says WHICH password rule was broken, and creates nothing', async () => {
+    const short = await claim({ password: 'short' })
+    expect(short.status).toBe(400)
+    // The form comes back holding what was typed, so the answer is a correction rather
+    // than a restart.
+    expect(await short.text()).toContain('owner@example.com')
+    expect(noUsersYet()).toBe(true)
+
+    expect((await claim({ password: 'correcthorsebatterystaple' })).status).toBe(400)
+    expect(noUsersYet()).toBe(true)
+  })
+})
+
+describe('deferring two-factor', () => {
+  const ticketFrom = async (): Promise<string> => {
+    const body = await (await claim()).text()
+    return body.match(/name="ticket" value="([^"]+)"/)?.[1] ?? ''
+  }
+
+  it('lets the owner in while the blog has no public address', async () => {
+    const ticket = await ticketFrom()
+    const res = await post('/api/auth/enrol/skip', { ticket })
+    expect(res.status).toBe(303)
+    expect(res.headers.get('set-cookie') ?? '').toContain('HttpOnly')
+  })
+
+  it('offers the way out on the screen only while it would be honoured', async () => {
+    expect(await (await claim()).text()).toContain('/api/auth/enrol/skip')
+    db().run(`delete from users`)
+    forgetSetupToken()
+    await saveSettings({ siteUrl: 'https://example.com' })
+    expect(await (await claim()).text()).not.toContain('/api/auth/enrol/skip')
+  })
+
+  it('REFUSES at the route once an address is set, not merely hides the button', async () => {
+    // A button that is not rendered is not a check: the route is reachable by anyone who
+    // read the HTML of a different install.
+    const ticket = await ticketFrom()
+    await saveSettings({ siteUrl: 'https://example.com' })
+    const res = await post('/api/auth/enrol/skip', { ticket })
+    expect(res.status).toBe(401)
+    expect(res.headers.get('set-cookie')).toBeNull()
+  })
+
+  it('REFUSES the ticket of an owner who has an authenticator, address or not', async () => {
+    // The hole: a `need-2fa` ticket from an ordinary sign-in was accepted here, so on any
+    // install with no site address the password alone bought a session.
+    const page = await (await claim()).text()
+    const ticket = page.match(/name="ticket" value="([^"]+)"/)?.[1] ?? ''
+    const secret = (page.match(/<code[^>]*>([A-Z2-7 ]{16,})<\/code>/)?.[1] ?? '').replace(/ /g, '')
+    await post('/api/auth/enrol', { ticket, code: codeForStep(secret, stepAt(Date.now()))! })
+    await post('/api/auth/enrol/done', { ticket, saved: '1' })
+
+    const login = await post('/api/auth/login', { username: 'owner', password: PASSWORD })
+    const twoFactorTicket = (await login.text()).match(/name="ticket" value="([^"]+)"/)?.[1] ?? ''
+    expect(twoFactorTicket).not.toBe('')
+    const res = await post('/api/auth/enrol/skip', { ticket: twoFactorTicket })
+    expect(res.status).toBe(401)
+    expect(res.headers.get('set-cookie')).toBeNull()
+  })
+
+  it('writes nothing, so the next sign-in asks for enrolment again', async () => {
+    const ticket = await ticketFrom()
+    await post('/api/auth/enrol/skip', { ticket })
+    const again = await post('/api/auth/login', { username: 'owner', password: PASSWORD })
+    expect(await again.text()).toContain('/api/auth/enrol')
+  })
+})
+
+describe('where enrolment lets you out', () => {
+  const claimAndSkip = async (): Promise<string> => {
+    const ticket = (await (await claim()).text()).match(/name="ticket" value="([^"]+)"/)?.[1] ?? ''
+    const res = await post('/api/auth/enrol/skip', { ticket })
+    return res.headers.get('location') ?? ''
+  }
+
+  it('goes to the site step while no address is set', async () => {
+    expect(await claimAndSkip()).toBe('/setup/site')
+  })
+  /** Claim (from unclaimed, so it can run twice in a test) and enrol the long way — the only
+   *  path once an address is set, because the skip is refused then. `before` runs between the
+   *  account and the last step. */
+  const claimAndEnrol = async (before?: () => Promise<void>): Promise<string> => {
+    db().run(`delete from users`)
+    forgetSetupToken()
+    const page = await (await claim()).text()
+    const ticket = page.match(/name="ticket" value="([^"]+)"/)?.[1] ?? ''
+    const secret = (page.match(/<code[^>]*>([A-Z2-7 ]{16,})<\/code>/)?.[1] ?? '').replace(/ /g, '')
+    await post('/api/auth/enrol', { ticket, code: codeForStep(secret, stepAt(Date.now()))! })
+    await before?.()
+    return (await post('/api/auth/enrol/done', { ticket, saved: '1' })).headers.get('location') ?? ''
+  }
+
+  it('asks the questions even when the ADDRESS came from the environment', async () => {
+    // The whole bug: every deployment path this project ships sets `SITE_URL`, and the
+    // landing asked whether an address was known.
+    process.env.SITE_URL = 'https://from-the-environment.example'
+    try {
+      expect(await claimAndEnrol()).toBe('/setup/site')
+    } finally {
+      delete process.env.SITE_URL
+    }
+    // And stops asking once they are answered, or once the row predates the question. The
+    // skip is refused with an address set, which is why this path enrols the long way.
+    expect(await claimAndEnrol(async () => { await saveSettings({ setupDone: true }) })).toBe('/admin')
+    expect((await post('/api/auth/enrol/skip', { ticket: 'gone' })).status).toBe(401)
+    db().run(`insert or replace into settings (id, data) values (1, ?)`, [JSON.stringify({ title: 'Older' })])
+    expect((await getSettings()).setupDone).toBe(true)
+  })
+})
+
+// The first run as a BROWSER walks it: every request built only from the form the previous
+// page drew, never from a value the test already knows. Every test above posts `ticket` by
+// hand, and that is how a codes form with no ticket field shipped: each first run from 2.0 to
+// 2.2.15 ended on "That sign-in expired" at step 3.
+describe('the first run, form by form', () => {
+  /** The fields a browser would submit for the form posting to `action`. */
+  const formFields = (page: string, action: string): Record<string, string> => {
+    const form = page.match(new RegExp(`<form[^>]*action="${action}"[^>]*>([\\s\\S]*?)</form>`))?.[1] ?? ''
+    const out: Record<string, string> = {}
+    for (const tag of form.match(/<input[^>]*>/g) ?? []) {
+      const name = tag.match(/name="([^"]+)"/)?.[1]
+      if (name === undefined) continue
+      out[name] = tag.match(/value="([^"]*)"/)?.[1] ?? ''
+    }
+    return out
+  }
+
+  it('reaches the site step from the claim, through the QR and the codes', async () => {
+    const enrolPage = await (await claim()).text()
+    const secret = (enrolPage.match(/<code[^>]*>([A-Z2-7 ]{16,})<\/code>/)?.[1] ?? '').replace(/ /g, '')
+    const enrol = formFields(enrolPage, '/api/auth/enrol')
+    const codesPage = await (await post('/api/auth/enrol', {
+      ...enrol, code: codeForStep(secret, stepAt(Date.now()))!,
+    })).text()
+    expect(codesPage).toContain('/api/auth/enrol/done')
+
+    // `saved` is the checkbox the owner ticks; everything else is what the page carried.
+    const done = await post('/api/auth/enrol/done', { ...formFields(codesPage, '/api/auth/enrol/done'), saved: '1' })
+    expect(done.status).toBe(303)
+    expect(done.headers.get('location')).toBe('/setup/site')
+    expect(done.headers.get('set-cookie')).toContain('quire_session=')
+  })
+})
+
+// The second way in: a code the operator chose, for the installs where nobody reads a log.
+describe('a chosen setup code', () => {
+  const CODE = 'Paste-Once-4821'
+  beforeEach(() => {
+    process.env.SETUP_CODE = CODE
+    resetSetupToken()
+  })
+  afterEach(() => {
+    delete process.env.SETUP_CODE
+    resetSetupToken()
+  })
+
+  it('asks for the code on the page, and does not print it', async () => {
+    expect(setupCodeConfigured()).toBe(true)
+    const body = await (await app.request('/setup')).text()
+    expect(body).toContain('name="token"')
+    expect(body).not.toContain(CODE)
+    expect(body).not.toContain(CODE.toLowerCase().replace(/-/g, ''))
+    expect(body).not.toContain('/api/setup/claim')
+  })
+
+  it('takes the code as a person types it: any case, spaces or dashes', async () => {
+    for (const typed of [CODE, 'paste once 4821', 'PASTEONCE4821', ' paste-ONCE-4821 ']) {
+      const res = await app.request(`/setup?token=${encodeURIComponent(typed)}`)
+      expect(`${typed}: ${res.status}`).toBe(`${typed}: 200`)
+      expect(await res.text()).toContain('/api/setup/claim')
+    }
+  })
+
+  it('refuses a wrong code with the code message and keeps the field', async () => {
+    const res = await app.request('/setup?token=paste-twice-4821')
+    expect(res.status).toBe(403)
+    const body = await res.text()
+    expect(body).toContain('name="token"')
+    expect(body).toContain('setup code')
+  })
+
+  it('claims with the typed code, then forgets it for good', async () => {
+    const res = await claim({ token: 'paste once 4821' })
+    expect(res.status).toBe(200)
+    expect(noUsersYet()).toBe(false)
+    // The account exists, so the code is spent: a fresh ask mints a random token, not the
+    // operator's code, and the page stops asking for a code.
+    expect(setupToken()).not.toBe(CODE.toLowerCase().replace(/-/g, ''))
+    expect(setupCodeConfigured()).toBe(false)
+  })
+
+  it('locks the door after ten misses from one address, for the code only', async () => {
+    for (let i = 0; i < 10; i++) {
+      expect((await app.request(`/setup?token=wrong-${i}`)).status).toBe(403)
+    }
+    expect((await app.request('/setup?token=wrong-10')).status).toBe(429)
+    // The right code is refused too while the door is shut: a limiter that lets the right
+    // answer through is a limiter that confirms the right answer.
+    expect((await app.request(`/setup?token=${CODE}`)).status).toBe(429)
+    expect((await claim()).status).toBe(429)
+    expect(noUsersYet()).toBe(true)
+  })
+
+  it('keeps the code out of the boot banner, and points at /setup', () => {
+    const banner = setupBanner('https://example.com')
+    expect(banner).toContain('https://example.com/setup')
+    expect(banner).not.toContain('token=')
+    expect(banner).not.toContain('4821')
+    expect(banner).toContain('SETUP_CODE')
+  })
+
+  it('ignores a code too short to be a secret, and says so in the banner', async () => {
+    process.env.SETUP_CODE = 'short'
+    resetSetupToken()
+    expect(setupCodeConfigured()).toBe(false)
+    expect(setupToken().length).toBeGreaterThan(20)
+    const body = await (await app.request('/setup')).text()
+    expect(body).not.toContain('name="token"')
+    expect(setupBanner('https://example.com')).toContain('SETUP_CODE is shorter than 12')
+  })
+})
+
+describe('a claim with a blank name', () => {
+  it('comes back as the form with what was typed, not as a dead link (FIXLIST 9.2)', async () => {
+    const res = await app.request('/api/setup/claim', {
+      method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'text/html' },
+      body: new URLSearchParams({ token: setupToken(), username: '   ', email: 'me@example.com', password: PASSWORD }),
+    })
+    expect(res.status).toBe(400)
+    const page = await res.text()
+    expect(page).toContain(adminT('en').setupNeedName)
+    expect(page).toContain('me@example.com')
+    expect(page).toContain('/api/setup/claim')
+  })
+})
+
+describe('the second-factor screen', () => {
+  it('switches to a recovery code by a form, never by an address holding the ticket (FIXLIST 9.7)', async () => {
+    const { twoFactorScreen } = await import('@/web/login-page')
+    const { DEFAULT_SETTINGS } = await import('@/content/settings')
+    const page = twoFactorScreen(DEFAULT_SETTINGS, { ticket: 'SECRET-TICKET' })
+    expect(page).not.toMatch(/href="[^"]*SECRET-TICKET/)
+    expect(page).toContain('action="/api/auth/2fa/mode"')
+    expect(page).toContain('value="SECRET-TICKET"')
+  })
+})
+
+describe('the claim banner on a loopback address', () => {
+  it('says how to reach it from another machine, and only then (FIXLIST 9.6)', () => {
+    expect(setupBanner('http://127.0.0.1:3000')).toContain('ssh -L 3000:127.0.0.1:3000')
+    expect(setupBanner('https://example.com')).not.toContain('ssh -L')
+  })
+})

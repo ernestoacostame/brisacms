@@ -1,0 +1,253 @@
+// One plug, three sockets: the provider-facing half of every AI job the blog runs.
+// Four names fit the three sockets — DeepSeek shares OpenAI's, see `OPENAI_COMPATIBLE`.
+//
+// Split out of `media/alt-text.ts` on 2026-08-23, the day the SECOND job arrived
+// (excerpts) — the request shapes and answer shapes are provider facts, not image facts,
+// and two copies of "how to talk to Gemini" is one copy too many. Jobs stay where their
+// subject lives (alt text with media, excerpts with content, the comment guard with
+// comments); this file only knows how to ask a question and read the answer.
+//
+// The key never rides in a URL, requests carry their own timeout, and every caller is
+// expected to have already checked BOTH switches: the stored key (the master) and the
+// job's own toggle in Settings → AI.
+
+import { getIntegrationKeys } from '@/store/integration-keys'
+import { AI_PROVIDERS, AI_PROVIDER_NAMES, DEFAULT_MODELS, OPENAI_COMPATIBLE, seesImages } from '@/server/ai-capabilities'
+
+// The tables live in a file that imports nothing (`ai-capabilities.ts`) so the key store
+// can read them without closing a cycle; they are re-exported here because this is where
+// every caller already looks for them.
+export { AI_PROVIDERS, AI_PROVIDER_NAMES, DEFAULT_MODELS, seesImages }
+
+/**
+ * The output ceiling for a one-sentence job, which is not one sentence' worth.
+ *
+ * It was 300, sized for a model that answers and stops. A REASONING model spends the
+ * budget thinking first — measured against `deepseek-v4-flash-vision-exp`, 300 came back
+ * `finish_reason: length` with `content: ""` every time, so alt text silently produced
+ * nothing while the request, the key and the model were all correct. Raising the ceiling
+ * costs nothing on a model that does not reason (it still stops after its sentence); the
+ * answer is trimmed to `cap` characters afterwards either way.
+ */
+const ANSWER_TOKENS = 1500
+
+export type AiRequest = { url: string; headers: Record<string, string>; body: string }
+
+type Part = { text?: string; imageMime?: string; imageB64?: string }
+
+/**
+ * Pure: the exact HTTP request each provider wants, for text and image parts alike.
+ *
+ * A picture put in front of a text-only model is refused HERE rather than sent to be
+ * rejected: every AI job already treats null as "quietly do nothing", so the blog behaves
+ * exactly as it does with no key — the upload keeps its empty alt and nothing is invented.
+ */
+export function buildParts(provider: string, model: string, key: string, parts: Part[]): AiRequest | null {
+  if (!seesImages(provider, model) && parts.some((p) => p.text === undefined)) return null
+  if (provider === 'anthropic') {
+    return {
+      url: 'https://api.anthropic.com/v1/messages',
+      headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model, max_tokens: ANSWER_TOKENS,
+        messages: [{ role: 'user', content: parts.map((p) => p.text !== undefined
+          ? { type: 'text', text: p.text }
+          : { type: 'image', source: { type: 'base64', media_type: p.imageMime, data: p.imageB64 } }) }],
+      }),
+    }
+  }
+  const base = OPENAI_COMPATIBLE[provider]
+  if (base) {
+    return {
+      url: `${base}/chat/completions`,
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model, max_tokens: ANSWER_TOKENS,
+        messages: [{ role: 'user', content: parts.map((p) => p.text !== undefined
+          ? { type: 'text', text: p.text }
+          : { type: 'image_url', image_url: { url: `data:${p.imageMime};base64,${p.imageB64}` } }) }],
+      }),
+    }
+  }
+  if (provider === 'gemini') {
+    return {
+      url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({
+        contents: [{ parts: parts.map((p) => p.text !== undefined
+          ? { text: p.text }
+          : { inline_data: { mime_type: p.imageMime, data: p.imageB64 } }) }],
+      }),
+    }
+  }
+  return null
+}
+
+/** Pure: one string out of each provider's answer shape, cleaned, or null. */
+export function parseText(provider: string, json: unknown, cap = 300): string | null {
+  const j = json as Record<string, any>
+  let text: unknown
+  // THE FIRST BLOCK IS NOT ALWAYS THE TEXT. Anthropic returns an array of blocks, and a model
+  // that thinks puts a `thinking` block in front of its answer — so reading index 0 returned
+  // undefined and the job did nothing, quietly, after the call had been paid for. `parseChat`
+  // eight lines below has always walked the array; this is the same walk.
+  if (provider === 'anthropic') text = (j?.content ?? []).find((b: any) => b?.type === 'text')?.text
+  else if (OPENAI_COMPATIBLE[provider]) text = j?.choices?.[0]?.message?.content
+  else if (provider === 'gemini') text = (j?.candidates?.[0]?.content?.parts ?? []).find((p: any) => typeof p?.text === 'string')?.text
+  if (typeof text !== 'string') return null
+  const clean = text.trim().replace(/^["'“‘]+|["'’”]+$/g, '').replace(/\s+/g, ' ').slice(0, cap).trim()
+  return clean || null
+}
+
+/**
+ * The high-level ask: reads the stored key, sends the parts, returns the cleaned answer
+ * or null. Null for EVERY kind of no — unconfigured, refused, timed out — because every
+ * caller treats all of them the same way: quietly do nothing.
+ */
+export async function ask(parts: Part[], cap = 300): Promise<string | null> {
+  try {
+    const keys = await getIntegrationKeys()
+    if (!keys.aiProvider || !keys.aiApiKey) return null
+    const model = keys.aiModel || DEFAULT_MODELS[keys.aiProvider]
+    if (!model) return null
+    const req = buildParts(keys.aiProvider, model, keys.aiApiKey, parts)
+    if (!req) return null
+    const res = await fetch(req.url, {
+      method: 'POST', headers: req.headers, body: req.body,
+      signal: AbortSignal.timeout(25_000),
+    })
+    if (!res.ok) {
+      console.error(`[ERROR] ai: ${keys.aiProvider} answered ${res.status}`)
+      return null
+    }
+    const answer = parseText(keys.aiProvider, await res.json(), cap)
+    // A 200 that carries no text is the quietest failure this file has: everything is
+    // configured, nothing is logged by the branch above, and the job just does not happen.
+    // It is how the reasoning-model token ceiling hid for a whole afternoon.
+    if (answer === null) console.error(`[ERROR] ai: ${keys.aiProvider} answered 200 with no text`)
+    return answer
+  } catch (error) {
+    console.error(`[ERROR] ai: ${(error as Error).message}`)
+    return null
+  }
+}
+
+// ---- the model menu ---------------------------------------------------------------------
+// "Paste the key, and the models list themselves" — the admin's AI card calls this via
+// /api/integrations/ai/models the moment a key lands, so the owner picks from what their
+// account can actually see instead of typing a model id from memory.
+
+export type ModelChoice = { id: string; label: string }
+
+/**
+ * WHY IT DID NOT WORK, which used to be `null`.
+ *
+ * Listing the models is also the only honest test of a key — it is the one call that costs
+ * nothing and still has to authenticate. So when it fails, the owner is owed the difference
+ * between the three failures they can actually act on: the key is wrong (fix the key), the
+ * provider is throttling (wait), the provider is unreachable (check the network). One `null`
+ * for all of them produced a card that said "check the key" while the real answer was an
+ * office firewall, and a card that said "check the key" while the key was in fact correct
+ * and the account merely out of credit.
+ *
+ * TWO HALVES, because only one of them can be translated. `code` is ours and the admin has a
+ * sentence for it in every language; `detail` is the provider's own message, in whatever
+ * language and wording they chose, shown underneath in a quieter voice. `status` is there so
+ * a bug report can name the number.
+ */
+export type ListFailure = {
+  code: 'bad_key' | 'rate_limited' | 'refused' | 'unreachable'
+  status: number
+  detail: string
+}
+
+export type AiListing = { ok: true; models: ModelChoice[] } | ({ ok: false } & ListFailure)
+
+// OpenAI's /v1/models returns every family they have ever shipped; most cannot look at
+// an image or are not chat models at all. Names, because capability is not in the API.
+const OPENAI_SKIP = /embed|whisper|tts|audio|dall-e|davinci|babbage|moderation|realtime|transcribe|image/
+
+export async function listModels(provider: string, key: string): Promise<AiListing> {
+  let url = ''
+  let headers: Record<string, string> = {}
+  if (provider === 'anthropic') {
+    url = 'https://api.anthropic.com/v1/models?limit=100'
+    headers = { 'x-api-key': key, 'anthropic-version': '2023-06-01' }
+  } else if (OPENAI_COMPATIBLE[provider]) {
+    url = `${OPENAI_COMPATIBLE[provider]}/models`
+    headers = { authorization: `Bearer ${key}` }
+  } else if (provider === 'gemini') {
+    url = 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=200'
+    headers = { 'x-goog-api-key': key }
+  } else {
+    // Unreachable through the admin: the route rejects a provider that is not in
+    // `AI_PROVIDERS` before it gets here. Answered rather than thrown so a future caller
+    // gets a verdict instead of a stack trace.
+    return { ok: false, code: 'refused', status: 0, detail: '' }
+  }
+
+  let res: Response
+  try {
+    res = await fetch(url, { headers, signal: AbortSignal.timeout(15_000) })
+  } catch (error) {
+    // DNS, TLS, a proxy, or the 15s timeout. The message is ours, not a provider's, and it
+    // is the one case where the owner should look at the network rather than the key.
+    return { ok: false, code: 'unreachable', status: 0, detail: (error as Error).message.slice(0, DETAIL_CAP) }
+  }
+  if (!res.ok) return { ok: false, ...readListFailure(res.status, await res.text().catch(() => ''), key) }
+  return { ok: true, models: parseModels(provider, await res.json()) }
+}
+
+/** Long enough for a provider's sentence, short enough that an HTML page cannot fill the card. */
+const DETAIL_CAP = 200
+
+/**
+ * Pure: a refusal into the code the admin translates plus the provider's own words.
+ *
+ * The KEY IS SCRUBBED out of the message. Providers quote back what they were sent —
+ * OpenAI's 401 names the key it rejected — and that message travels into a browser, a
+ * screenshot and a bug report. It is the owner's own key on the owner's own screen, so this
+ * is care rather than a breach, but a secret that need not be on screen should not be.
+ */
+export function readListFailure(status: number, body: string, key = ''): ListFailure {
+  let detail = ''
+  try {
+    const j = JSON.parse(body) as Record<string, any>
+    const said = j?.error?.message ?? j?.error?.type ?? j?.message ?? j?.detail
+    if (typeof said === 'string') detail = said
+  } catch {
+    // Not JSON: a gateway's HTML, a proxy's plain text. Nothing in it is worth quoting, and
+    // the status number below says everything that page would have.
+  }
+  // Guarded on length so a one-character key cannot blank out the sentence describing it.
+  if (key.length >= 8) detail = detail.split(key).join('…')
+  return {
+    code: status === 401 || status === 403 ? 'bad_key' : status === 429 ? 'rate_limited' : 'refused',
+    status,
+    detail: detail.replace(/\s+/g, ' ').trim().slice(0, DETAIL_CAP),
+  }
+}
+
+/** Pure: each provider's listing shape into one menu, newest first where the API says. */
+export function parseModels(provider: string, json: unknown): ModelChoice[] {
+  const j = json as Record<string, any>
+  if (provider === 'anthropic') {
+    return ((j?.data ?? []) as Record<string, any>[])
+      .map((m) => ({ id: String(m.id ?? ''), label: String(m.display_name || m.id || '') }))
+      .filter((m) => m.id)
+  }
+  if (OPENAI_COMPATIBLE[provider]) {
+    return ((j?.data ?? []) as Record<string, any>[])
+      .map((m) => String(m.id ?? ''))
+      .filter((id) => id && !OPENAI_SKIP.test(id))
+      .sort()
+      .map((id) => ({ id, label: id }))
+  }
+  if (provider === 'gemini') {
+    return ((j?.models ?? []) as Record<string, any>[])
+      .filter((m) => (m.supportedGenerationMethods ?? []).includes('generateContent'))
+      .map((m) => ({ id: String(m.name ?? '').replace(/^models\//, ''), label: String(m.displayName || m.name || '') }))
+      .filter((m) => m.id)
+  }
+  return []
+}

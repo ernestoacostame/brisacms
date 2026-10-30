@@ -1,0 +1,349 @@
+// Posts against the real schema. This replaces the frozen tree's `soft-delete.test.ts`,
+// which had to hand-write a filter engine inside a mock to prove Invariant 6; here the
+// trashed row is really in the table, so a read path that drops `liveOnly` really fails.
+import { describe, it, expect, beforeEach, afterAll } from 'bun:test'
+import { freshDatabase, dropDatabase } from '@/test/db'
+import { db } from '@/test/sqlite'
+import { one, all } from '@/store/query'
+import {
+  savePost, getPost, getIndex, getPublicPosts, searchPosts, deletePost, restorePost,
+  purgePost, getTrashedPosts, emptyPostsTrash, getRelatedPosts,
+} from '@/content/posts'
+import { getRevisions } from '@/content/revisions'
+import { getRedirects, saveRedirect, RedirectInputError } from '@/server/redirects'
+import { addComment, getCommentTree } from '@/comments/comments'
+import { logSend, statsByPost } from '@/news/newsletter-log'
+
+const DIR = './.tmp/test-posts'
+freshDatabase(DIR)
+afterAll(() => dropDatabase(DIR))
+
+const PAST = '2020-01-01T00:00:00.000Z'
+const FUTURE = '2099-01-01T00:00:00.000Z'
+
+beforeEach(() => {
+  for (const t of ['posts', 'pages', 'post_revisions', 'comments', 'redirects', 'settings', 'newsletter_sends']) {
+    db().run(`delete from ${t}`)
+  }
+})
+
+describe('savePost', () => {
+  it('round-trips a post, derives the slug, and computes reading time', async () => {
+    const saved = await savePost({ title: 'Hello World', content: 'a '.repeat(400), status: 'published', date: PAST })
+    expect(saved.slug).toBe('hello-world')
+    expect(saved.readingMinutes).toBeGreaterThan(0)
+    const post = await getPost('hello-world')
+    expect(post).toMatchObject({ title: 'Hello World', status: 'published', date: PAST })
+  })
+
+  it('stores the date as integer milliseconds but hands back ISO 8601', async () => {
+    await savePost({ title: 'Dated', date: PAST })
+    const stored = one<{ date: number }>(`select date from posts where slug = 'dated'`)!
+    expect(stored.date).toBe(Date.parse(PAST))
+    expect((await getPost('dated'))!.date).toBe(PAST)
+  })
+
+  it('stores image refs store-relative and expands them on read (Invariant 3)', async () => {
+    await savePost({
+      title: 'Shots', content: '![x](/uploads/media/a.webp)',
+      featuredImage: '/uploads/media/b.webp', coverImage: '/uploads/media/c.webp',
+    })
+    const stored = one<{ content: string; featured_image: string; cover_image: string }>(
+      `select content, featured_image, cover_image from posts where slug = 'shots'`)!
+    expect(stored.content).toBe('![x](media/a.webp)')
+    expect(stored.featured_image).toBe('media/b.webp')
+    expect(stored.cover_image).toBe('media/c.webp')
+    const post = await getPost('shots')
+    expect(post!.content).toBe('![x](/uploads/media/a.webp)')
+    expect(post!.featuredImage).toBe('/uploads/media/b.webp')
+  })
+
+  it('derives an excerpt from the body when the author leaves it blank, and caps a given one', async () => {
+    await savePost({ title: 'Auto', content: 'The quick brown fox jumps.' })
+    expect((await getPost('auto'))!.excerpt).toContain('quick brown fox')
+    await savePost({ title: 'Manual', content: 'body', excerpt: 'chosen' })
+    expect((await getPost('manual'))!.excerpt).toBe('chosen')
+  })
+
+  it('falls back to a timestamped slug when the title slugifies to nothing', async () => {
+    const saved = await savePost({ title: '🎉🎉🎉', content: 'x' })
+    expect(saved.slug).toMatch(/^post-\d+$/)
+    expect(await getPost(saved.slug)).not.toBeNull()
+  })
+
+  it('snapshots the previous version, and skips the snapshot when nothing changed', async () => {
+    // The date is pinned on purpose: `normalize` defaults an absent date to NOW, so an
+    // otherwise identical save would differ on that field alone and snapshot anyway.
+    await savePost({ title: 'Draft', content: 'v1', date: PAST })
+    await savePost({ title: 'Draft', content: 'v2', date: PAST }, 'draft')
+    expect((await getRevisions('draft')).map((r) => r.content)).toEqual(['v1'])
+    await savePost({ title: 'Draft', content: 'v2', date: PAST }, 'draft') // identical: no new snapshot
+    expect(await getRevisions('draft')).toHaveLength(1)
+  })
+
+  it('a rename moves revisions and comments, drops the old row, and leaves a 301', async () => {
+    await savePost({ title: 'Old', content: 'v1', date: PAST })
+    await savePost({ title: 'Old', content: 'v2', date: PAST }, 'old') // snapshots v1 under /old
+    await addComment({ postSlug: 'old', parentId: null, name: 'A', email: 'a@b.co', provider: 'manual', content: 'hi' })
+
+    // The title change is itself a change, so this save snapshots v2 as well.
+    await savePost({ title: 'New', content: 'v2', date: PAST }, 'old')
+
+    expect(await getPost('old')).toBeNull()
+    expect(await getRevisions('old')).toHaveLength(0)
+    expect((await getRevisions('new')).map((r) => r.content)).toEqual(['v2', 'v1'])
+    expect(await getCommentTree('new')).toHaveLength(1)
+    expect((await getRedirects())[0]).toMatchObject({ source: '/old', destination: '/new', permanent: true })
+  })
+
+  // The send log is keyed by slug and is the only record that a post already went out. A
+  // rename that left it behind re-armed the send button, and a newsletter cannot be unsent.
+  it('a rename carries the newsletter send log, including a digest that named other posts', async () => {
+    await savePost({ title: 'Old', status: 'published', date: PAST })
+    await savePost({ title: 'Kept', status: 'published', date: PAST })
+    await logSend({ email: 'a@b.co', kind: 'broadcast', ok: true, postSlugs: ['old'] })
+    await logSend({ email: 'c@d.co', kind: 'broadcast', ok: true, postSlugs: ['kept', 'old'] })
+
+    await savePost({ title: 'New', status: 'published', date: PAST }, 'old')
+
+    const stats = await statsByPost()
+    expect(stats.get('old')).toBeUndefined()
+    expect(stats.get('new')?.broadcasts).toBe(2)
+    // The other post in the digest keeps its own credit: the swap is on the list, by
+    // comma boundary, not on the column.
+    expect(stats.get('kept')?.broadcasts).toBe(1)
+  })
+
+  // A slug that names nothing is a CREATE. Treating it as a rename wrote a 301 out of a
+  // path that never existed and left the typo's post beside the real one.
+  it('a save naming a slug nothing holds creates the post and writes no redirect', async () => {
+    const saved = await savePost({ title: 'Fresh', status: 'published', date: PAST }, 'never-existed')
+    expect(saved.slug).toBe('fresh')
+    expect(await getPost('fresh')).not.toBeNull()
+    expect(await getRedirects()).toHaveLength(0)
+  })
+
+  // The redirect middleware answers before the router, so a redirect left over a restored
+  // post makes the post unreachable with nothing anywhere saying why.
+  it('restoring a trashed post clears the redirect that took its path', async () => {
+    await savePost({ title: 'Old', status: 'published', date: PAST })
+    await deletePost('old')
+    await saveRedirect({ source: '/old', destination: '/somewhere', permanent: true })
+    expect(await getRedirects()).toHaveLength(1)
+
+    await restorePost('old')
+
+    expect(await getRedirects()).toHaveLength(0)
+    expect(await getPost('old')).not.toBeNull()
+  })
+
+  it('refuses a redirect that would shadow a live post, and allows one over a trashed slug', async () => {
+    await savePost({ title: 'Live', status: 'published', date: PAST })
+    await expect(saveRedirect({ source: '/live', destination: '/elsewhere' }))
+      .rejects.toBeInstanceOf(RedirectInputError)
+
+    await deletePost('live')
+    await saveRedirect({ source: '/live', destination: '/elsewhere' })
+    expect(await getRedirects()).toHaveLength(1)
+  })
+
+  it('a rename keeps the birthday instead of restamping it as today', async () => {
+    await savePost({ title: 'Old', status: 'published', date: PAST })
+    const born = one<{ created_at: number }>(`select created_at from posts where slug = 'old'`)!.created_at
+    db().run(`update posts set created_at = ? where slug = 'old'`, [born - 90_000_000])
+
+    await savePost({ title: 'New', status: 'published', date: PAST }, 'old')
+
+    const after = one<{ created_at: number }>(`select created_at from posts where slug = 'new'`)!
+    expect(after.created_at).toBe(born - 90_000_000)
+  })
+})
+
+describe('search', () => {
+  // `ftsQuery` makes one AND-ed phrase per whitespace token, so the length of the string is
+  // the amount of work. The `/search` page capped its own input; the JSON API and the
+  // owner's search read the same field and did not.
+  it('takes a bounded amount of query, however much is sent', async () => {
+    await savePost({ title: 'Findable', content: 'a needle in it', status: 'published', date: PAST })
+    const long = `needle ${'word '.repeat(4000)}`
+    expect(long.length).toBeGreaterThan(20_000)
+    // Answers rather than hanging, and answers the same as the capped prefix would.
+    const hits = await searchPosts(long)
+    expect(Array.isArray(hits)).toBe(true)
+    expect(await searchPosts(long.slice(0, 200))).toEqual(hits)
+  })
+
+  // A NUL ended the string SQLite's parser saw: an error in the log and nothing found (2026-09-30).
+  it('reads past a control character in the query', async () => {
+    await savePost({ title: 'Findable', content: 'a needle in a haystack', status: 'published', date: PAST })
+    expect((await searchPosts('needle \u0000 haystack')).map((p) => p.slug)).toEqual(['findable'])
+  })
+})
+
+describe('lists and visibility', () => {
+  it('orders newest first, and the public list drops drafts and future dates', async () => {
+    await savePost({ title: 'Older', status: 'published', date: '2020-01-01T00:00:00.000Z' })
+    await savePost({ title: 'Newer', status: 'published', date: '2021-01-01T00:00:00.000Z' })
+    await savePost({ title: 'Draft', status: 'draft', date: PAST })
+    await savePost({ title: 'Scheduled', status: 'published', date: FUTURE })
+    expect((await getIndex()).map((p) => p.title)).toEqual(['Scheduled', 'Newer', 'Older', 'Draft'])
+    expect((await getPublicPosts()).map((p) => p.title)).toEqual(['Newer', 'Older'])
+  })
+
+  it('scores related posts by shared terms, tags weighted double', async () => {
+    await savePost({ title: 'Base', status: 'published', date: PAST, tags: ['bun'], categories: ['dev'] })
+    await savePost({ title: 'Two Tags', status: 'published', date: PAST, tags: ['bun'], categories: ['dev'] })
+    await savePost({ title: 'Cat Only', status: 'published', date: PAST, categories: ['dev'] })
+    await savePost({ title: 'Nothing', status: 'published', date: PAST, tags: ['other'] })
+    const related = await getRelatedPosts('base')
+    expect(related.map((p) => p.title)).toEqual(['Two Tags', 'Cat Only'])
+  })
+})
+
+describe('search', () => {
+  const publish = (title: string, content: string, over = {}) =>
+    savePost({ title, content, status: 'published', date: PAST, ...over })
+
+  it('folds Vietnamese diacritics, so an unaccented query finds an accented post', async () => {
+    await publish('Lập trình hằng ngày', 'viết blog mười năm')
+    expect((await searchPosts('lap trinh')).map((p) => p.slug)).toEqual(['lap-trinh-hang-ngay'])
+  })
+
+  // The reader gets the same rule the owner's search follows (`accent.ts`). The index is
+  // folded, so on its own it answers "lề" with every "lệ" and "lê" that was ever published.
+  it('an accented query means its accents, while an unaccented one still finds everything', async () => {
+    await publish('Căn lề', 'căn lề trái cho đoạn văn')
+    await publish('Tỉ lệ', 'tỉ lệ chuyển đổi của trang')
+    expect((await searchPosts('lề')).map((p) => p.slug)).toEqual(['can-le'])
+    expect((await searchPosts('lệ')).map((p) => p.slug)).toEqual(['ti-le'])
+    expect((await searchPosts('le')).map((p) => p.slug).sort()).toEqual(['can-le', 'ti-le'])
+  })
+
+  it('searches the body, not just the title', async () => {
+    await publish('Untitled', 'a paragraph about sqlite internals')
+    expect(await searchPosts('sqlite')).toHaveLength(1)
+  })
+
+  it('requires every word (implicit AND), like the websearch it replaces', async () => {
+    await publish('One', 'alpha beta')
+    await publish('Two', 'alpha only')
+    expect((await searchPosts('alpha beta')).map((p) => p.title)).toEqual(['One'])
+  })
+
+  it('never surfaces drafts, future posts or trashed posts', async () => {
+    await publish('Live', 'needle here')
+    await savePost({ title: 'Hidden Draft', content: 'needle here', status: 'draft', date: PAST })
+    await publish('Scheduled', 'needle here', { date: FUTURE })
+    await publish('Trashed', 'needle here')
+    await deletePost('trashed')
+    expect((await searchPosts('needle')).map((p) => p.title)).toEqual(['Live'])
+  })
+
+  it('treats operator characters as text instead of throwing FTS5 syntax errors', async () => {
+    await publish('Punctuated', 'writing about C++ and "quotes"')
+    // Each of these would be a syntax error if the query were passed through raw.
+    for (const q of ['C++', '"', 'OR', 'NEAR(', '-alpha', "it's"]) {
+      expect(Array.isArray(await searchPosts(q))).toBe(true)
+    }
+    expect(await searchPosts('writing')).toHaveLength(1)
+  })
+
+  it('is empty for a blank query', async () => {
+    await publish('Something', 'body')
+    expect(await searchPosts('   ')).toEqual([])
+  })
+})
+
+describe('soft delete (Invariant 6)', () => {
+  const seed = async () => {
+    await savePost({ title: 'Live', content: 'needle', status: 'published', date: PAST })
+    await savePost({ title: 'Trashed', content: 'needle', status: 'published', date: PAST })
+    await deletePost('trashed')
+  }
+
+  it('hides a trashed post from EVERY live read', async () => {
+    await seed()
+    expect((await getIndex()).map((p) => p.slug)).toEqual(['live'])
+    expect((await getPublicPosts()).map((p) => p.slug)).toEqual(['live'])
+    expect((await searchPosts('needle')).map((p) => p.slug)).toEqual(['live'])
+    expect(await getPost('trashed')).toBeNull()
+  })
+
+  it('keeps the row, so restore brings it back whole', async () => {
+    await seed()
+    expect(one<{ n: number }>(`select count(*) n from posts`)!.n).toBe(2)
+    await restorePost('trashed')
+    expect((await getPost('trashed'))!.content).toBe('needle')
+  })
+
+  it('lists the trash most-recently-deleted first', async () => {
+    await savePost({ title: 'First', date: PAST })
+    await savePost({ title: 'Second', date: PAST })
+    await deletePost('first')
+    db().run(`update posts set deleted_at = deleted_at - 1000 where slug = 'first'`)
+    await deletePost('second')
+    expect((await getTrashedPosts()).map((p) => p.title)).toEqual(['Second', 'First'])
+  })
+
+  it('a purge takes the terms, revisions and comments with it', async () => {
+    await savePost({ title: 'Doomed', content: 'v1', categories: ['dev'], tags: ['bun'] })
+    await savePost({ title: 'Doomed', content: 'v2', categories: ['dev'] }, 'doomed')
+    await addComment({ postSlug: 'doomed', parentId: null, name: 'A', email: 'a@b.co', provider: 'manual', content: 'hi' })
+    await deletePost('doomed') // a purge is of a trashed row, as the Trash sends it
+    await purgePost('doomed')
+    expect(one<{ n: number }>(`select count(*) n from posts`)!.n).toBe(0)
+    expect(all(`select 1 from post_terms`)).toHaveLength(0)
+    expect(await getRevisions('doomed')).toHaveLength(0)
+    expect(await getCommentTree('doomed')).toHaveLength(0)
+  })
+
+  it('refuses to purge a post that is live, and takes nothing with it', async () => {
+    // A second admin tab still showing it in the Trash after the first restored it.
+    await savePost({ title: 'Alive', content: 'v1', categories: ['dev'] })
+    await addComment({ postSlug: 'alive', parentId: null, name: 'A', email: 'a@b.co', provider: 'manual', content: 'hi' })
+    await purgePost('alive')
+    expect(await getPost('alive')).not.toBeNull()
+    expect(await getCommentTree('alive')).toHaveLength(1)
+  })
+
+  it('empties the posts trash and reports the count', async () => {
+    await savePost({ title: 'One', date: PAST })
+    await savePost({ title: 'Two', date: PAST })
+    await deletePost('one')
+    expect(await emptyPostsTrash()).toBe(1)
+    expect((await getIndex()).map((p) => p.title)).toEqual(['Two'])
+  })
+})
+
+// A title is one line whichever door it came in by: `Title line\nbody after enter` reached
+// <title>, og:title, the <h1> and the feeds (2026-09-30).
+describe('a title with a line break in it', () => {
+  it('is kept as one line, for a post, a page and a note', async () => {
+    const { savePage } = await import('@/content/pages')
+    const { saveNote } = await import('@/content/notes')
+    expect((await savePost({ title: 'Title line\n  body after enter', content: 'x', status: 'draft' })).title)
+      .toBe('Title line body after enter')
+    expect((await savePage({ title: 'A\r\nB', content: 'x', status: 'draft' })).title).toBe('A B')
+    expect((await saveNote({ title: 'N\nM', content: 'x', status: 'draft', date: '2020-01-01T00:00:00.000Z' })).title).toBe('N M')
+  })
+})
+
+// Two tags that differ only in case shared one address and were linked twice (2026-09-30).
+describe('terms that differ only in case', () => {
+  it('are stored once, in the spelling the blog already uses, and a comma separates them', async () => {
+    await savePost({ title: 'First', content: 'x', status: 'draft', tags: ['Chữ Việt'] })
+    const second = await savePost({ title: 'Second', content: 'x', status: 'draft', tags: ['chữ việt', 'CHỮ VIỆT', 'a,b'] })
+    expect(second.tags).toEqual(['Chữ Việt', 'a', 'b'])
+    expect(all<{ term: string }>(`select distinct term from post_terms where kind = 'tag' order by term`).map((r) => r.term))
+      .toEqual(['Chữ Việt', 'a', 'b'])
+  })
+})
+
+// A clip named after its source took the markup's letters into the address (2026-09-30).
+describe('a note named after its source', () => {
+  it('leaves the tags of a clipped title out of the slug', async () => {
+    const { saveNote } = await import('@/content/notes')
+    const note = await saveNote({ title: '', sourceTitle: '<b>evil</b> source', content: 'x', status: 'draft', date: '2020-01-01T00:00:00.000Z' })
+    expect(note.slug).toBe('evil-source')
+  })
+})
