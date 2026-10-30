@@ -29,13 +29,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
     $action = $_POST['action'] ?? '';
     
     if ($action === 'delete') {
-        // Support subfolder paths like 2025/04/file.mp3
+        // Move to trash (quireINK soft-delete)
         $rel  = ltrim(str_replace(['..','//'], '', $_POST['file'] ?? ''), '/');
         $path = MEDIA_PATH . '/' . $rel;
         if ($rel && file_exists($path) && is_file($path)) {
-            unlink($path);
+            require_once ROOT_PATH . '/core/content.php';
+            trash_media($rel);
             media_delete_meta($rel);
-            $msg = 'Archivo eliminado.';
+            $msg = 'Archivo movido a la papelera. <a href="trash.php?tab=media" style="color:var(--accent);font-weight:600;margin-left:6px;">Ver papelera →</a>';
         }
     } elseif ($action === 'save_meta') {
         // Save alt text, title, caption, description and rename file
@@ -122,6 +123,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf'] ?? '')) 
 // Collect all media metadata
 $all_meta = media_get_all_meta();
 
+// Scan usage across posts and pages (quireINK orphan detection)
+require_once ROOT_PATH . '/core/content.php';
+$usageInfo = function_exists('media_scan_usages') ? media_scan_usages() : ['map' => [], 'scanned' => 0];
+$usageMap  = $usageInfo['map'] ?? [];
+
 // Collect all media files recursively
 $files = [];
 $base_url = rtrim(base_url(), '/');
@@ -133,27 +139,43 @@ foreach ($iter as $f) {
     $mt  = media_type($ext);
     if ($mt === 'other') continue;
     $rel = str_replace(MEDIA_PATH . '/', '', $f->getPathname());
+    $fn  = $f->getFilename();
     $meta = $all_meta[$rel] ?? ['alt' => '', 'title' => '', 'caption' => '', 'description' => ''];
+    $usedIn = $usageMap[$fn] ?? ($usageMap[$rel] ?? []);
+    $isUsed = !empty($usedIn);
+
     $files[] = [
-        'name' => $f->getFilename(),
-        'rel'  => $rel,
-        'size' => $f->getSize(),
-        'time' => $f->getMTime(),
-        'url'  => $base_url . '/media/' . $rel,
-        'ext'  => $ext,
-        'type' => $mt,
-        'meta' => $meta,
+        'name'    => $fn,
+        'rel'     => $rel,
+        'size'    => $f->getSize(),
+        'time'    => $f->getMTime(),
+        'url'     => $base_url . '/media/' . $rel,
+        'ext'     => $ext,
+        'type'    => $mt,
+        'meta'    => $meta,
+        'is_used' => $isUsed,
+        'used_in' => $usedIn,
     ];
 }
 usort($files, fn($a, $b) => $b['time'] - $a['time']);
 
 // Stats
-$total_size = array_sum(array_column($files, 'size'));
-$by_type    = array_count_values(array_column($files, 'type'));
+$total_size   = array_sum(array_column($files, 'size'));
+$by_type      = array_count_values(array_column($files, 'type'));
+$used_count   = count(array_filter($files, fn($f) => !empty($f['is_used'])));
+$unused_count = count(array_filter($files, fn($f) => empty($f['is_used'])));
 
 // Filter
 $filter = $_GET['type'] ?? 'all';
-$visible = $filter === 'all' ? $files : array_values(array_filter($files, fn($f) => $f['type'] === $filter));
+if ($filter === 'used') {
+    $visible = array_values(array_filter($files, fn($f) => !empty($f['is_used'])));
+} elseif ($filter === 'unused') {
+    $visible = array_values(array_filter($files, fn($f) => empty($f['is_used'])));
+} elseif ($filter === 'all') {
+    $visible = $files;
+} else {
+    $visible = array_values(array_filter($files, fn($f) => ($f['type'] ?? '') === $filter));
+}
 
 admin_header(__("media_title"), 'media');
 ?>
@@ -167,28 +189,37 @@ admin_header(__("media_title"), 'media');
     </div>
   </div>
   <div class="page-body">
-    <?php if ($msg): ?><div class="alert alert-success">✓ <?= htmlspecialchars($msg) ?></div><?php endif; ?>
+    <?php if ($msg): ?><div class="alert alert-success">✓ <?= $msg ?></div><?php endif; ?>
     <?php if ($error): ?><div class="alert alert-error">⚠ <?= htmlspecialchars($error) ?></div><?php endif; ?>
 
     <form id="upload-form" method="POST" enctype="multipart/form-data" style="display:none">
       <input type="hidden" name="csrf" value="<?= $csrf ?>">
     </form>
 
-    <!-- Filter tabs & Stats -->
-    <div style="display:flex;gap:0.6rem;margin-bottom:1.5rem;flex-wrap:wrap;align-items:center">
-      <?php foreach (['all'=>__("media_filter_all"),'image'=>__("media_filter_image"),'audio'=>__("media_filter_audio"),'video'=>__("media_filter_video")] as $key=>$label): ?>
+    <!-- Filter tabs & Stats (quireINK style) -->
+    <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;flex-wrap:wrap;align-items:center">
+      <?php 
+      $tabs = [
+        'all'    => ['label' => __("media_filter_all"), 'count' => count($files)],
+        'image'  => ['label' => __("media_filter_image"), 'count' => ($by_type['image'] ?? 0)],
+        'audio'  => ['label' => __("media_filter_audio"), 'count' => ($by_type['audio'] ?? 0)],
+        'video'  => ['label' => __("media_filter_video"), 'count' => ($by_type['video'] ?? 0)],
+        'used'   => ['label' => 'En uso', 'count' => $used_count],
+        'unused' => ['label' => 'Sin usar (huérfanos)', 'count' => $unused_count],
+      ];
+      foreach ($tabs as $key => $tabInfo): ?>
       <a href="?type=<?= $key ?>" class="btn btn-sm <?= $filter === $key ? 'btn-primary' : 'btn-secondary' ?>">
-        <?= $label ?>
-        <span style="opacity:0.75;font-size:0.78rem;font-weight:600">(<?= $key === 'all' ? count($files) : ($by_type[$key] ?? 0) ?>)</span>
+        <?= htmlspecialchars($tabInfo['label']) ?>
+        <span style="opacity:0.75;font-size:0.75rem;font-weight:600">(<?= $tabInfo['count'] ?>)</span>
       </a>
       <?php endforeach; ?>
-      <span style="margin-left:auto;color:var(--muted);font-size:0.86rem;font-weight:500">
+      <span style="margin-left:auto;color:var(--muted);font-size:0.84rem;font-weight:500">
         <?= count($files) ?> archivos · <?= round($total_size/1024/1024,1) ?> MB
       </span>
     </div>
 
     <?php if (empty($visible)): ?>
-    <div style="text-align:center;padding:4.5rem 2rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);color:var(--muted)">
+    <div style="text-align:center;padding:4.5rem 2rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--muted)">
       <div style="font-size:3rem;margin-bottom:1rem">📂</div>
       <p style="font-size:1.05rem;font-weight:500"><?= __("media_empty") ?></p>
     </div>
@@ -211,6 +242,17 @@ admin_header(__("media_title"), 'media');
            data-description="<?= htmlspecialchars($f['meta']['description'] ?? '') ?>"
            onclick="openMediaModal(this)">
         <div class="media-thumb">
+
+          <!-- Usage status badge (quireINK orphan detector) -->
+          <?php if (!empty($f['is_used'])): ?>
+            <span class="media-badge-usage used" style="position:absolute;top:6px;left:6px;z-index:3;font-size:0.68rem;font-weight:600;padding:2px 6px;border-radius:4px;background:rgba(16,185,129,0.9);color:#fff;backdrop-filter:blur(4px);" title="En uso en: <?= htmlspecialchars(implode(', ', array_column($f['used_in'], 'title'))) ?>">
+              ✓ En uso (<?= count($f['used_in']) ?>)
+            </span>
+          <?php else: ?>
+            <span class="media-badge-usage orphan" style="position:absolute;top:6px;left:6px;z-index:3;font-size:0.68rem;font-weight:600;padding:2px 6px;border-radius:4px;background:rgba(245,158,11,0.9);color:#fff;backdrop-filter:blur(4px);" title="Huérfano: No está referenciado en ningún artículo o página">
+              ⚠ Sin usar
+            </span>
+          <?php endif; ?>
 
           <?php if ($f['type'] === 'image'): ?>
             <img src="<?= htmlspecialchars(image_cache_url($f['url'], 340, 340)) ?>" alt="<?= htmlspecialchars($f['meta']['alt'] ?: $f['name']) ?>" loading="lazy">

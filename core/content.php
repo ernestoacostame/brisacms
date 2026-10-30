@@ -276,17 +276,228 @@ function clear_cache(): void {
     invalidate_content_index();
 }
 
-// ── WordPress Importer ───────────────────────────────────────────────────
-// La funcionalidad de importación de WordPress ahora reside en el plugin
-// oficial `plugins/wp-import/`.
-if (!function_exists('import_wordpress_xml')) {
-    function import_wordpress_xml(string $xml_content, bool $download_images = true): array {
-        $plugin_file = ROOT_PATH . '/plugins/wp-import/wp-import.php';
-        if (file_exists($plugin_file)) {
-            require_once $plugin_file;
-            return import_wordpress_xml($xml_content, $download_images);
-        }
-        return ['❌ Error: El plugin wp-import no está disponible.'];
-    }
+// ── Trash & Soft-Delete (quireINK inspired) ──────────────────────────────
+function trash_path(?string $type = null): string {
+    $base = CONTENT_PATH . '/trash';
+    $dir = $type ? $base . '/' . $type : $base;
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    return $dir;
 }
+
+function trash_content(string $type, string $slug): bool {
+    $src = content_path($type) . "/$slug.json";
+    if (!file_exists($src)) return false;
+
+    $data = json_decode(file_get_contents($src), true) ?? [];
+    $data['trashed_at'] = date('c');
+
+    $destDir = trash_path($type);
+    $dest = $destDir . "/$slug.json";
+
+    file_put_contents($dest, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    @unlink($src);
+
+    // Si estaba federado en ActivityPub, retirar la nota
+    if ($type === 'articles' && cms_plugin_is_active('fediverse')) {
+        require_once ROOT_PATH . '/plugins/fediverse/activitypub.php';
+        if (function_exists('ap_delete_article')) {
+            ap_delete_article($slug);
+        }
+    }
+
+    invalidate_content_index($type);
+    clear_cache();
+    return true;
+}
+
+function restore_content(string $type, string $slug): bool {
+    $src = trash_path($type) . "/$slug.json";
+    if (!file_exists($src)) return false;
+
+    $data = json_decode(file_get_contents($src), true) ?? [];
+    unset($data['trashed_at']);
+
+    $dest = content_path($type) . "/$slug.json";
+    file_put_contents($dest, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    @unlink($src);
+
+    // Si estaba publicado, re-federar si corresponde
+    if ($type === 'articles' && ($data['status'] ?? '') === 'published' && cms_plugin_is_active('fediverse')) {
+        require_once ROOT_PATH . '/plugins/fediverse/activitypub.php';
+        if (function_exists('ap_publish_article')) {
+            ap_publish_article($data, false);
+        }
+    }
+
+    invalidate_content_index($type);
+    clear_cache();
+    return true;
+}
+
+function purge_content(string $type, string $slug): bool {
+    $src = trash_path($type) . "/$slug.json";
+    if (file_exists($src)) {
+        @unlink($src);
+        return true;
+    }
+    return false;
+}
+
+function list_trash(?string $type = null): array {
+    $items = [];
+    $types = $type ? [$type] : ['articles', 'pages', 'media'];
+
+    foreach ($types as $t) {
+        $dir = trash_path($t);
+        if (!is_dir($dir)) continue;
+
+        if ($t === 'media') {
+            $files = glob("$dir/*");
+            foreach ($files as $f) {
+                if (!is_file($f)) continue;
+                $fn = basename($f);
+                $items[] = [
+                    'type'       => 'media',
+                    'slug'       => $fn,
+                    'title'      => $fn,
+                    'file'       => $fn,
+                    'size'       => filesize($f),
+                    'trashed_at' => date('c', filemtime($f)),
+                ];
+            }
+        } else {
+            $files = glob("$dir/*.json");
+            foreach ($files as $f) {
+                $raw = @file_get_contents($f);
+                $data = $raw ? json_decode($raw, true) : null;
+                if ($data) {
+                    $items[] = [
+                        'type'       => $t,
+                        'slug'       => $data['slug'] ?? basename($f, '.json'),
+                        'title'      => $data['title'] ?? basename($f, '.json'),
+                        'status'     => $data['status'] ?? 'draft',
+                        'trashed_at' => $data['trashed_at'] ?? date('c', filemtime($f)),
+                        'date'       => $data['date'] ?? ($data['created_at'] ?? ''),
+                    ];
+                }
+            }
+        }
+    }
+
+    usort($items, fn($a, $b) => strcmp($b['trashed_at'] ?? '', $a['trashed_at'] ?? ''));
+    return $items;
+}
+
+function empty_trash(?string $type = null): int {
+    $types = $type ? [$type] : ['articles', 'pages', 'media'];
+    $count = 0;
+    foreach ($types as $t) {
+        $dir = trash_path($t);
+        if (!is_dir($dir)) continue;
+        $files = glob("$dir/*");
+        foreach ($files as $f) {
+            if (is_file($f)) {
+                @unlink($f);
+                $count++;
+            }
+        }
+    }
+    return $count;
+}
+
+function trash_media(string $rel): bool {
+    $rel = ltrim(str_replace(['..', '//'], '', $rel), '/');
+    if (!defined('MEDIA_PATH')) define('MEDIA_PATH', ROOT_PATH . '/media');
+    $src = MEDIA_PATH . '/' . $rel;
+    if (!file_exists($src) || !is_file($src)) return false;
+
+    $destDir = trash_path('media');
+    $dest = $destDir . '/' . basename($rel);
+    if (@rename($src, $dest) || (@copy($src, $dest) && @unlink($src))) {
+        return true;
+    }
+    return false;
+}
+
+function restore_media(string $fn): bool {
+    $fn = basename($fn);
+    $src = trash_path('media') . '/' . $fn;
+    if (!file_exists($src)) return false;
+
+    if (!defined('MEDIA_PATH')) define('MEDIA_PATH', ROOT_PATH . '/media');
+    $dest = MEDIA_PATH . '/' . $fn;
+    if (@rename($src, $dest) || (@copy($src, $dest) && @unlink($src))) {
+        return true;
+    }
+    return false;
+}
+
+function purge_media(string $fn): bool {
+    $fn = basename($fn);
+    $src = trash_path('media') . '/' . $fn;
+    if (file_exists($src)) {
+        return @unlink($src);
+    }
+    return false;
+}
+
+// ── Media Usage Scanner (Orphan / Unused detection) ───────────────────────
+function media_scan_usages(): array {
+    $usedMap = []; // filename => array of ['title' => ..., 'slug' => ..., 'type' => ...]
+    $allTypes = ['articles', 'pages'];
+    $scannedCount = 0;
+
+    foreach ($allTypes as $type) {
+        $dir = content_path($type);
+        if (!is_dir($dir)) continue;
+        $files = glob("$dir/*.json");
+        foreach ($files as $f) {
+            $raw = @file_get_contents($f);
+            if (!$raw) continue;
+            $post = json_decode($raw, true);
+            if (!$post) continue;
+            $scannedCount++;
+
+            $title = $post['title'] ?? basename($f, '.json');
+            $slug  = $post['slug'] ?? basename($f, '.json');
+
+            // 1. Featured image
+            if (!empty($post['featured_image'])) {
+                $feat = basename(parse_url($post['featured_image'], PHP_URL_PATH) ?? $post['featured_image']);
+                if ($feat) {
+                    $usedMap[$feat][] = ['title' => $title, 'slug' => $slug, 'type' => $type, 'field' => 'Portada'];
+                }
+            }
+
+            // 2. Images in content
+            $content = $post['content'] ?? '';
+            if ($content) {
+                // HTML <img>
+                if (preg_match_all('/<img[^>]+src=["\']([^"\']+)["\']/i', $content, $m)) {
+                    foreach ($m[1] as $imgUrl) {
+                        $fn = basename(parse_url($imgUrl, PHP_URL_PATH) ?? $imgUrl);
+                        if ($fn) {
+                            $usedMap[$fn][] = ['title' => $title, 'slug' => $slug, 'type' => $type, 'field' => 'Cuerpo'];
+                        }
+                    }
+                }
+                // Markdown ![alt](url)
+                if (preg_match_all('/!\[.*?\]\(([^)\s]+)\)/i', $content, $m)) {
+                    foreach ($m[1] as $imgUrl) {
+                        $fn = basename(parse_url($imgUrl, PHP_URL_PATH) ?? $imgUrl);
+                        if ($fn) {
+                            $usedMap[$fn][] = ['title' => $title, 'slug' => $slug, 'type' => $type, 'field' => 'Cuerpo'];
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return [
+        'map'     => $usedMap,
+        'scanned' => $scannedCount,
+    ];
+}
+
 
