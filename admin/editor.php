@@ -92,13 +92,7 @@ $label = $type === 'articles' ? __raw('nav_articles') : __raw('nav_pages');
 $content_format = 'html'; // Always HTML format now
 admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article')), $type);
 ?>
-      <?php if ($post && $post['status'] === 'published'): ?>
-      <a href="<?= base_url() ?>/<?= $type === 'articles' ? 'article' : 'page' ?>/<?= htmlspecialchars($post['slug']) ?>" target="_blank" class="btn btn-secondary btn-sm">View Live ↗</a>
-      <?php endif; ?>
-      <button form="editor-form" name="status" value="draft" class="btn btn-secondary">Guardar borrador</button>
-      <button form="editor-form" name="status" value="published" class="btn btn-primary" id="publish-btn">
-        <?= $post && $post['status'] === 'published' ? __("editor_update") : __("editor_publish") ?>
-      </button>
+      <script src="<?= base_url() ?>/admin/assets/js/prosemirror-bundle.min.js"></script>
     </div>
   </div>
   <div class="page-body">
@@ -110,213 +104,156 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
       <input type="hidden" name="content" id="content-input" value="<?= htmlspecialchars($post['content'] ?? '') ?>">
       <input type="hidden" name="content_format" id="content-format-input" value="html">
 
-      <div class="editor-layout">
-        <!-- Main editor area -->
-        <div class="editor-main">
-          <!-- Format Bar -->
-          <div class="format-bar" id="toolbar">
-            <!-- HTML mode toolbar -->
-            <div id="html-toolbar" style="display: flex; align-items: center; gap: 2px; flex-shrink: 0; overflow-x: auto;">
-              <select class="fmt-select" onchange="formatBlock(this.value); this.value='p'" title="Formato de bloque">
-                <option value="p">Párrafo</option>
-                <option value="h1">Encabezado 1</option>
-                <option value="h2">Encabezado 2</option>
-                <option value="h3">Encabezado 3</option>
-                <option value="pre">Código</option>
-                <option value="blockquote">Cita</option>
-              </select>
-              <div class="fmt-sep"></div>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('bold')" title="<?= __raw("tb_bold") ?>">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path></svg>
-              </button>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('italic')" title="<?= __raw("tb_italic") ?>">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="4" x2="10" y2="4"></line><line x1="14" y1="20" x2="5" y2="20"></line><line x1="15" y1="4" x2="9" y2="20"></line></svg>
-              </button>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('underline')" title="<?= __raw("tb_underline") ?>">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"></path><line x1="4" y1="21" x2="20" y2="21"></line></svg>
-              </button>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); execStrikeThrough()" title="<?= __raw("tb_strike") ?>">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-              </button>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('insertHorizontalRule')" title="Separador horizontal">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line></svg>
-              </button>
-              <div class="fmt-sep"></div>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('insertUnorderedList')" title="<?= __raw("tb_ul") ?>">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3" y2="6"></line><line x1="3" y1="12" x2="3" y2="12"></line><line x1="3" y1="18" x2="3" y2="18"></line></svg>
-              </button>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('insertOrderedList')" title="<?= __raw("tb_ol") ?>">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="6" x2="21" y2="6"></line><line x1="10" y1="12" x2="21" y2="12"></line><line x1="10" y1="18" x2="21" y2="18"></line><path d="M4 6h1v4"></path><path d="M4 10h2"></path><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"></path></svg>
-              </button>
-              <div class="fmt-sep"></div>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); insertLink()" title="<?= __raw("tb_link") ?>">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-              </button>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); insertImage()" title="<?= __raw("tb_image") ?>">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-              </button>
-              <button type="button" class="fmt-btn tb-upload" id="upload-img-html" title="Subir imagen">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-              </button>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); insertVideo()" title="URL de video">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
-              </button>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); insertAudio()" title="URL de audio">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-              </button>
-              <div class="fmt-sep"></div>
-              <button type="button" class="fmt-btn" id="font-size-down" title="Disminuir tamaño de fuente">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-              </button>
-              <span id="font-size-label" class="font-size-label">16</span>
-              <button type="button" class="fmt-btn" id="font-size-up" title="Aumentar tamaño de fuente">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-              </button>
-              <div class="fmt-sep"></div>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('undo')" title="<?= __raw("tb_undo") ?>">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
-              </button>
-              <button type="button" class="fmt-btn" onmousedown="event.preventDefault(); exec('redo')" title="<?= __raw("tb_redo") ?>">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path></svg>
-              </button>
-            </div>
-            
-            <!-- Mode switcher and other controls -->
-            <div id="toolbar-right" style="margin-left: auto; display: flex; align-items: center; gap: 8px; position: relative;">
-              <button type="button" class="fmt-btn mode-switch active" id="switch-visual" title="Editor visual HTML">Visual</button>
-              <button type="button" class="fmt-btn mode-switch" id="switch-raw" title="Editor HTML RAW">RAW</button>
-              <button type="button" class="fmt-btn" id="preview-btn" title="<?= __raw("tb_preview_article") ?>"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
-              <button type="button" class="fmt-btn" id="focus-btn" title="<?= __raw("tb_focus") ?>" onclick='if(window.toggleFocus)window.toggleFocus()'><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
-            </div>
-          </div>
-          
-          <div class="title-area">
-            <input type="text" name="title" id="post-title" placeholder="<?= __raw("editor_title_ph") ?>"
-              value="<?= htmlspecialchars($post['title'] ?? '') ?>" required autocomplete="off">
-          </div>
-          
-          <!-- Writing Desk: Find & Replace Bar (Ctrl+F) -->
-          <div id="find-replace-bar" class="writing-find-bar" style="display:none;">
-            <div class="find-row">
-              <div class="find-input-wrap">
-                <input type="text" id="find-input" placeholder="Buscar en el texto (Ctrl+F)..." autocomplete="off" spellcheck="false">
-                <span id="find-counter" class="find-counter">0/0</span>
+      <div class="desk-layout">
+        <!-- Main Writing Desk Area -->
+        <div class="desk-main">
+          <div class="desk-sheet">
+            <!-- Sheet Chrome (Action Line) -->
+            <div class="desk-chrome">
+              <div class="desk-chrome-left">
+                <a href="<?= base_url() ?>/admin/<?= $type ?>.php" class="desk-chrome-back">
+                  ← <?= $type === 'articles' ? 'Entradas' : 'Páginas' ?>
+                </a>
+                <span class="sheet-status-pill <?= ($post['status'] ?? 'draft') === 'published' ? 'pub' : 'draft' ?>" id="desk-status-pill">
+                  <?= ($post['status'] ?? 'draft') === 'published' ? 'Publicado' : 'Borrador' ?>
+                </span>
+                <span class="desk-metrics" id="desk-metrics">0 palabras · 1 min de lectura</span>
               </div>
-              <button type="button" id="find-prev-btn" class="find-btn" title="Anterior (Shift+Enter)">↑</button>
-              <button type="button" id="find-next-btn" class="find-btn" title="Siguiente (Enter)">↓</button>
-              <button type="button" id="find-toggle-replace" class="find-btn" title="Alternar reemplazo">⇄</button>
-              <button type="button" id="find-close-btn" class="find-btn find-close" title="Cerrar (Esc)">✕</button>
-            </div>
-            <div class="replace-row" id="replace-row" style="display:none;">
-              <div class="find-input-wrap">
-                <input type="text" id="replace-input" placeholder="Reemplazar por..." autocomplete="off" spellcheck="false">
-              </div>
-              <button type="button" id="replace-one-btn" class="find-action-btn">Reemplazar</button>
-              <button type="button" id="replace-all-btn" class="find-action-btn">Todo</button>
-            </div>
-          </div>
-
-          <!-- Editor panes -->
-          <div class="editor-wrap" style="position:relative;">
-            <!-- Writing Desk: Floating Bubble Selection Menu -->
-            <div id="bubble-menu" class="writing-bubble-menu" style="display:none;" role="toolbar" aria-label="Formato de texto">
-              <button type="button" class="bubble-btn" data-cmd="bold" title="Negrita (Ctrl+B)"><b>B</b></button>
-              <button type="button" class="bubble-btn" data-cmd="italic" title="Cursiva (Ctrl+I)"><i>I</i></button>
-              <button type="button" class="bubble-btn" data-cmd="underline" title="Subrayado (Ctrl+U)"><u>U</u></button>
-              <button type="button" class="bubble-btn" data-cmd="strikeThrough" title="Tachado"><s>S</s></button>
-              <button type="button" class="bubble-btn" data-cmd="highlight" title="Resaltador (Highlighter)">
-                <mark class="bubble-pen-mark">A</mark>
-              </button>
-              <button type="button" class="bubble-btn" data-cmd="code" title="Código en línea"><code>&lt;&gt;</code></button>
-              <div class="bubble-sep"></div>
-              <button type="button" class="bubble-btn" data-cmd="link" title="Enlace">🔗</button>
-            </div>
-
-            <!-- Writing Desk: Slash Command Palette (/) -->
-            <div id="slash-menu" class="writing-slash-menu" style="display:none;" role="menu" aria-label="Insertar bloque">
-              <div class="slash-header">Insertar bloque</div>
-              <div class="slash-items">
-                <div class="slash-item active" data-cmd="h2" role="menuitem">
-                  <span class="slash-icon">H2</span>
-                  <div class="slash-text">
-                    <span class="slash-title">Título 2</span>
-                    <span class="slash-desc">Encabezado de sección</span>
-                  </div>
-                </div>
-                <div class="slash-item" data-cmd="h3" role="menuitem">
-                  <span class="slash-icon">H3</span>
-                  <div class="slash-text">
-                    <span class="slash-title">Título 3</span>
-                    <span class="slash-desc">Subencabezado secundario</span>
-                  </div>
-                </div>
-                <div class="slash-item" data-cmd="quote" role="menuitem">
-                  <span class="slash-icon">❝</span>
-                  <div class="slash-text">
-                    <span class="slash-title">Cita</span>
-                    <span class="slash-desc">Bloque de cita o reflexión</span>
-                  </div>
-                </div>
-                <div class="slash-item" data-cmd="callout" role="menuitem">
-                  <span class="slash-icon">💡</span>
-                  <div class="slash-text">
-                    <span class="slash-title">Nota destacada</span>
-                    <span class="slash-desc">Recuadro informativo tipo callout</span>
-                  </div>
-                </div>
-                <div class="slash-item" data-cmd="code" role="menuitem">
-                  <span class="slash-icon">{ }</span>
-                  <div class="slash-text">
-                    <span class="slash-title">Bloque de código</span>
-                    <span class="slash-desc">Fragmento con sintaxis</span>
-                  </div>
-                </div>
-                <div class="slash-item" data-cmd="ul" role="menuitem">
-                  <span class="slash-icon">•</span>
-                  <div class="slash-text">
-                    <span class="slash-title">Lista con viñetas</span>
-                    <span class="slash-desc">Lista desordenada</span>
-                  </div>
-                </div>
-                <div class="slash-item" data-cmd="ol" role="menuitem">
-                  <span class="slash-icon">1.</span>
-                  <div class="slash-text">
-                    <span class="slash-title">Lista numerada</span>
-                    <span class="slash-desc">Lista de pasos ordenada</span>
-                  </div>
-                </div>
-                <div class="slash-item" data-cmd="table" role="menuitem">
-                  <span class="slash-icon">▦</span>
-                  <div class="slash-text">
-                    <span class="slash-title">Tabla</span>
-                    <span class="slash-desc">Insertar tabla 2x3</span>
-                  </div>
-                </div>
-                <div class="slash-item" data-cmd="image" role="menuitem">
-                  <span class="slash-icon">🖼</span>
-                  <div class="slash-text">
-                    <span class="slash-title">Imagen</span>
-                    <span class="slash-desc">Subir o insertar imagen</span>
-                  </div>
-                </div>
-                <div class="slash-item" data-cmd="hr" role="menuitem">
-                  <span class="slash-icon">―</span>
-                  <div class="slash-text">
-                    <span class="slash-title">Separador</span>
-                    <span class="slash-desc">Línea divisoria horizontal</span>
-                  </div>
-                </div>
+              <div class="desk-chrome-right">
+                <button type="button" class="btn btn-secondary btn-sm" id="switch-raw" title="Alternar código RAW / Visual">RAW</button>
+                <?php if ($post && ($post['status'] ?? '') === 'published'): ?>
+                <a href="<?= base_url() ?>/<?= $type === 'articles' ? 'article' : 'page' ?>/<?= htmlspecialchars($post['slug']) ?>" target="_blank" class="btn btn-secondary btn-sm" title="Ver en el sitio web">Ver ↗</a>
+                <?php endif; ?>
+                <button type="button" class="btn btn-secondary btn-sm" id="preview-btn" title="Previsualizar">Vista previa</button>
+                <button type="submit" form="editor-form" name="status" value="<?= ($post['status'] ?? 'draft') === 'published' ? 'published' : 'draft' ?>" class="btn btn-primary btn-sm" id="publish-btn">
+                  <?= ($post['status'] ?? 'draft') === 'published' ? 'Actualizado ✓' : 'Publicar' ?>
+                </button>
               </div>
             </div>
 
-            <!-- HTML visual editor (contentEditable div) -->
-            <div id="editor" class="prose-editor" contenteditable="true"><?= $post['content'] ?? '' ?></div>
-            <!-- Hidden textarea to store content for form submission -->
-            <textarea id="editor-hidden" name="content" style="display:none"><?= htmlspecialchars($post['content'] ?? '') ?></textarea>
-            <!-- RAW HTML textarea -->
-            <textarea id="raw-editor" class="raw-editor" style="display:none"><?= htmlspecialchars($post['content'] ?? '') ?></textarea>
+            <!-- Title Area (Seamless Editorial Heading) -->
+            <div class="desk-title-wrap">
+              <input type="text" name="title" id="post-title" class="desk-title-input" placeholder="Título del artículo..."
+                value="<?= htmlspecialchars($post['title'] ?? '') ?>" required autocomplete="off">
+            </div>
+
+            <!-- Writing Desk: Find & Replace Bar (Ctrl+F) -->
+            <div id="find-replace-bar" class="writing-find-bar" style="display:none;">
+              <div class="find-row">
+                <div class="find-input-wrap">
+                  <input type="text" id="find-input" placeholder="Buscar en el texto (Ctrl+F)..." autocomplete="off" spellcheck="false">
+                  <span id="find-counter" class="find-counter">0/0</span>
+                </div>
+                <button type="button" id="find-prev-btn" class="find-btn" title="Anterior (Shift+Enter)">↑</button>
+                <button type="button" id="find-next-btn" class="find-btn" title="Siguiente (Enter)">↓</button>
+                <button type="button" id="find-toggle-replace" class="find-btn" title="Alternar reemplazo">⇄</button>
+                <button type="button" id="find-close-btn" class="find-btn find-close" title="Cerrar (Esc)">✕</button>
+              </div>
+              <div class="replace-row" id="replace-row" style="display:none;">
+                <div class="find-input-wrap">
+                  <input type="text" id="replace-input" placeholder="Reemplazar por..." autocomplete="off" spellcheck="false">
+                </div>
+                <button type="button" id="replace-one-btn" class="find-action-btn">Reemplazar</button>
+                <button type="button" id="replace-all-btn" class="find-action-btn">Todo</button>
+              </div>
+            </div>
+
+            <!-- Writing Canvas Container -->
+            <div class="desk-canvas-wrap" style="position:relative;">
+              <!-- Writing Desk: Floating Bubble Selection Menu -->
+              <div id="bubble-menu" class="writing-bubble-menu" style="display:none;" role="toolbar" aria-label="Formato de texto">
+                <button type="button" class="bubble-btn" data-cmd="bold" title="Negrita (Ctrl+B)"><b>B</b></button>
+                <button type="button" class="bubble-btn" data-cmd="italic" title="Cursiva (Ctrl+I)"><i>I</i></button>
+                <button type="button" class="bubble-btn" data-cmd="underline" title="Subrayado (Ctrl+U)"><u>U</u></button>
+                <button type="button" class="bubble-btn" data-cmd="strikeThrough" title="Tachado"><s>S</s></button>
+                <button type="button" class="bubble-btn" data-cmd="highlight" title="Resaltador (Highlighter)">
+                  <mark class="bubble-pen-mark">A</mark>
+                </button>
+                <button type="button" class="bubble-btn" data-cmd="code" title="Código en línea"><code>&lt;&gt;</code></button>
+                <div class="bubble-sep"></div>
+                <button type="button" class="bubble-btn" data-cmd="link" title="Enlace">🔗</button>
+              </div>
+
+              <!-- Writing Desk: Slash Command Palette (/) -->
+              <div id="slash-menu" class="writing-slash-menu" style="display:none;" role="menu" aria-label="Insertar bloque">
+                <div class="slash-header">Insertar bloque (ProseMirror)</div>
+                <div class="slash-items">
+                  <div class="slash-item active" data-cmd="h2" role="menuitem">
+                    <span class="slash-icon">H2</span>
+                    <div class="slash-text">
+                      <span class="slash-title">Título 2</span>
+                      <span class="slash-desc">Encabezado de sección</span>
+                    </div>
+                  </div>
+                  <div class="slash-item" data-cmd="h3" role="menuitem">
+                    <span class="slash-icon">H3</span>
+                    <div class="slash-text">
+                      <span class="slash-title">Título 3</span>
+                      <span class="slash-desc">Subencabezado secundario</span>
+                    </div>
+                  </div>
+                  <div class="slash-item" data-cmd="quote" role="menuitem">
+                    <span class="slash-icon">❝</span>
+                    <div class="slash-text">
+                      <span class="slash-title">Cita</span>
+                      <span class="slash-desc">Bloque de cita editorial</span>
+                    </div>
+                  </div>
+                  <div class="slash-item" data-cmd="callout" role="menuitem">
+                    <span class="slash-icon">💡</span>
+                    <div class="slash-text">
+                      <span class="slash-title">Nota destacada</span>
+                      <span class="slash-desc">Recuadro informativo callout</span>
+                    </div>
+                  </div>
+                  <div class="slash-item" data-cmd="code" role="menuitem">
+                    <span class="slash-icon">{ }</span>
+                    <div class="slash-text">
+                      <span class="slash-title">Bloque de código</span>
+                      <span class="slash-desc">Código con fondo oscuro</span>
+                    </div>
+                  </div>
+                  <div class="slash-item" data-cmd="ul" role="menuitem">
+                    <span class="slash-icon">•</span>
+                    <div class="slash-text">
+                      <span class="slash-title">Lista con viñetas</span>
+                      <span class="slash-desc">Lista desordenada</span>
+                    </div>
+                  </div>
+                  <div class="slash-item" data-cmd="ol" role="menuitem">
+                    <span class="slash-icon">1.</span>
+                    <div class="slash-text">
+                      <span class="slash-title">Lista numerada</span>
+                      <span class="slash-desc">Lista de pasos ordenada</span>
+                    </div>
+                  </div>
+                  <div class="slash-item" data-cmd="image" role="menuitem">
+                    <span class="slash-icon">🖼</span>
+                    <div class="slash-text">
+                      <span class="slash-title">Imagen</span>
+                      <span class="slash-desc">Insertar imagen o foto</span>
+                    </div>
+                  </div>
+                  <div class="slash-item" data-cmd="hr" role="menuitem">
+                    <span class="slash-icon">―</span>
+                    <div class="slash-text">
+                      <span class="slash-title">Separador</span>
+                      <span class="slash-desc">Línea divisoria horizontal</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ProseMirror Mount Target -->
+              <div id="prosemirror-mount" class="desk-prosemirror-mount"></div>
+
+              <!-- Fallback / Legacy Visual Editor (hidden when ProseMirror active) -->
+              <div id="editor" class="prose-editor" contenteditable="true" style="display:none;"><?= $post['content'] ?? '' ?></div>
+
+              <!-- RAW Editor Textarea (hidden by default) -->
+              <textarea id="raw-editor" class="desk-raw-editor" style="display:none;"><?= htmlspecialchars($post['content'] ?? '') ?></textarea>
+            </div>
           </div>
-          
         </div>
 
         <!-- Attributes Inspector Sheet (quireINK Aesthetic) -->
@@ -2760,115 +2697,207 @@ const htmlToolbar  = document.getElementById('html-toolbar');
 // WRITING DESK ENHANCEMENTS (QUIREINK INSPIRED)
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════════
+// WRITING DESK & PROSEMIRROR INITIALIZATION (QUIREINK ENGINE)
+// ═══════════════════════════════════════════════════════════════════════════
+
 (function initWritingDesk() {
-  const visualEditor = document.getElementById('editor');
+  const pmMount = document.getElementById('prosemirror-mount');
+  const fallbackEditor = document.getElementById('editor');
+  const rawEditor = document.getElementById('raw-editor');
+  const contentInput = document.getElementById('content-input');
+  const postTitle = document.getElementById('post-title');
   const bubbleMenu = document.getElementById('bubble-menu');
   const slashMenu = document.getElementById('slash-menu');
   const findBar = document.getElementById('find-replace-bar');
-  if (!visualEditor) return;
+  const deskMetrics = document.getElementById('desk-metrics');
+  const publishBtn = document.getElementById('publish-btn');
+  const deskStatusPill = document.getElementById('desk-status-pill');
 
-  // 1. FLOATING BUBBLE SELECTION MENU
-  function updateBubbleMenu() {
-    if (mode !== 'visual' || !bubbleMenu) return;
-    const sel = window.getSelection();
-    if (!sel || sel.isCollapsed || !sel.rangeCount) {
-      bubbleMenu.style.display = 'none';
-      return;
-    }
+  let isDirty = false;
+  let originalHtml = contentInput?.value || '';
 
-    const range = sel.getRangeAt(0);
-    if (!visualEditor.contains(range.commonAncestorContainer)) {
-      bubbleMenu.style.display = 'none';
-      return;
-    }
-
-    const text = sel.toString().trim();
-    if (!text) {
-      bubbleMenu.style.display = 'none';
-      return;
-    }
-
-    const rect = range.getBoundingClientRect();
-    const wrapRect = visualEditor.parentElement.getBoundingClientRect();
-
-    const top = (rect.top - wrapRect.top) + visualEditor.parentElement.scrollTop - 44;
-    const left = Math.max(10, Math.min(
-      wrapRect.width - 250,
-      (rect.left - wrapRect.left) + (rect.width / 2) - 120
-    ));
-
-    bubbleMenu.style.top = `${Math.max(4, top)}px`;
-    bubbleMenu.style.left = `${left}px`;
-    bubbleMenu.style.display = 'flex';
+  // 1. UPDATE METRICS (Words & Reading Time)
+  function updateMetrics(text) {
+    if (!deskMetrics) return;
+    const words = (text.trim().match(/\S+/g) || []).length;
+    const minutes = Math.max(1, Math.ceil(words / 220));
+    deskMetrics.textContent = `${words.toLocaleString()} palabras · ${minutes} min de lectura`;
   }
 
-  document.addEventListener('selectionchange', () => {
-    requestAnimationFrame(updateBubbleMenu);
-  });
+  function markDirty() {
+    if (!isDirty) {
+      isDirty = true;
+      if (publishBtn) {
+        const curStatus = document.getElementById('status-select')?.value || 'draft';
+        if (curStatus === 'published') {
+          publishBtn.textContent = 'Actualizar';
+          publishBtn.style.opacity = '1';
+        } else {
+          publishBtn.textContent = 'Publicar';
+        }
+      }
+    }
+  }
 
-  visualEditor.addEventListener('scroll', () => {
-    if (bubbleMenu.style.display !== 'none') updateBubbleMenu();
-  });
+  // 2. TITLE ENTER KEY -> JUMP TO BODY
+  if (postTitle) {
+    postTitle.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (window.pmEditor) {
+          window.pmEditor.commands.focus('start');
+        } else if (fallbackEditor) {
+          fallbackEditor.focus();
+        }
+      }
+    });
+    postTitle.addEventListener('input', markDirty);
+  }
+
+  // 3. MOUNT PROSEMIRROR (TIPTAP ENGINE)
+  if (window.KutProseMirror && pmMount) {
+    const { Editor, StarterKit, Underline, Highlight, Link, Image, Placeholder } = window.KutProseMirror;
+
+    window.pmEditor = new Editor({
+      element: pmMount,
+      extensions: [
+        StarterKit.configure({
+          heading: { levels: [2, 3, 4] },
+          codeBlock: { HTMLAttributes: { class: 'prose-code-block' } },
+          blockquote: { HTMLAttributes: { class: 'prose-blockquote' } }
+        }),
+        Underline,
+        Highlight.configure({ multicolor: false }),
+        Link.configure({
+          openOnClick: false,
+          HTMLAttributes: { class: 'prose-link' }
+        }),
+        Image.configure({
+          inline: false,
+          HTMLAttributes: { class: 'prose-image' }
+        }),
+        Placeholder.configure({
+          placeholder: 'Comienza a escribir tu historia, o pulsa "/" para insertar bloques...'
+        })
+      ],
+      content: originalHtml || '<p></p>',
+      onUpdate({ editor }) {
+        const html = editor.getHTML();
+        if (contentInput) contentInput.value = html;
+        if (rawEditor) rawEditor.value = html;
+        if (fallbackEditor) fallbackEditor.innerHTML = html;
+        updateMetrics(editor.getText());
+        markDirty();
+      },
+      onSelectionUpdate({ editor }) {
+        updateBubblePosition(editor);
+      }
+    });
+
+    // Initial word count
+    updateMetrics(window.pmEditor.getText());
+
+    // Drag & Drop image upload onto ProseMirror
+    pmMount.addEventListener('dragover', (e) => e.preventDefault());
+    pmMount.addEventListener('drop', (e) => {
+      const files = Array.from(e.dataTransfer?.files || []).filter(f => f.type.startsWith('image/'));
+      if (files.length > 0) {
+        e.preventDefault();
+        files.forEach(uploadAndInsertPmImage);
+      }
+    });
+
+  } else if (fallbackEditor) {
+    // Fallback if bundle fails to load
+    fallbackEditor.style.display = 'block';
+    updateMetrics(fallbackEditor.innerText || '');
+    fallbackEditor.addEventListener('input', () => {
+      const html = fallbackEditor.innerHTML;
+      if (contentInput) contentInput.value = html;
+      if (rawEditor) rawEditor.value = html;
+      updateMetrics(fallbackEditor.innerText || '');
+      markDirty();
+    });
+  }
+
+  async function uploadAndInsertPmImage(file) {
+    const fd = new FormData();
+    fd.append('upload', file);
+    fd.append('csrf', <?= json_encode($csrf) ?>);
+    try {
+      const r = await fetch(<?= json_encode(base_url() . '/admin/media.php') ?>, { method: 'POST', body: fd });
+      const txt = await r.text();
+      // Match uploaded filename or path
+      const m = txt.match(/media\/([^\s"'<>]+\.(?:jpg|jpeg|png|webp|gif|avif))/i);
+      if (m && window.pmEditor) {
+        const fullUrl = <?= json_encode(base_url()) ?> + '/' + m[0];
+        window.pmEditor.chain().focus().setImage({ src: fullUrl, alt: file.name }).run();
+      }
+    } catch(err) {
+      console.warn('Upload image error:', err);
+    }
+  }
+
+  // 4. FLOATING BUBBLE SELECTION MENU
+  function updateBubblePosition(editor) {
+    if (!bubbleMenu || mode !== 'visual') return;
+    const { from, to, empty } = editor.state.selection;
+    if (empty || !editor.isFocused) {
+      bubbleMenu.style.display = 'none';
+      return;
+    }
+
+    // Toggle active classes on bubble buttons
+    bubbleMenu.querySelector('[data-cmd="bold"]')?.classList.toggle('active', editor.isActive('bold'));
+    bubbleMenu.querySelector('[data-cmd="italic"]')?.classList.toggle('active', editor.isActive('italic'));
+    bubbleMenu.querySelector('[data-cmd="underline"]')?.classList.toggle('active', editor.isActive('underline'));
+    bubbleMenu.querySelector('[data-cmd="strikeThrough"]')?.classList.toggle('active', editor.isActive('strike'));
+    bubbleMenu.querySelector('[data-cmd="highlight"]')?.classList.toggle('active', editor.isActive('highlight'));
+    bubbleMenu.querySelector('[data-cmd="code"]')?.classList.toggle('active', editor.isActive('code'));
+    bubbleMenu.querySelector('[data-cmd="link"]')?.classList.toggle('active', editor.isActive('link'));
+
+    const view = editor.view;
+    const start = view.coordsAtPos(from);
+    const end = view.coordsAtPos(to);
+
+    bubbleMenu.style.display = 'flex';
+    const menuRect = bubbleMenu.getBoundingClientRect();
+    const left = ((start.left + end.left) / 2) - (menuRect.width / 2);
+    const top = start.top - menuRect.height - 10;
+
+    bubbleMenu.style.position = 'fixed';
+    bubbleMenu.style.left = `${Math.max(10, Math.min(window.innerWidth - menuRect.width - 10, left))}px`;
+    bubbleMenu.style.top = `${Math.max(10, top)}px`;
+    bubbleMenu.style.zIndex = '9999';
+  }
 
   bubbleMenu?.querySelectorAll('.bubble-btn').forEach(btn => {
     btn.addEventListener('mousedown', (e) => {
       e.preventDefault();
       const cmd = btn.getAttribute('data-cmd');
-      if (cmd === 'highlight') {
-        const sel = window.getSelection();
-        if (sel && !sel.isCollapsed) {
-          const range = sel.getRangeAt(0);
-          const parentMark = sel.anchorNode?.parentElement?.closest('mark.pen-highlight');
-          if (parentMark) {
-            const textNode = document.createTextNode(parentMark.textContent);
-            parentMark.parentNode.replaceChild(textNode, parentMark);
-          } else {
-            const mark = document.createElement('mark');
-            mark.className = 'pen-highlight';
-            mark.style.cssText = 'background:var(--pen, #d5f856); color:var(--on-pen, #2c3208); border-radius:2px; padding:0 2px;';
-            try {
-              range.surroundContents(mark);
-            } catch (err) {
-              document.execCommand('hiliteColor', false, '#d5f856');
-            }
-          }
+      if (window.pmEditor) {
+        if (cmd === 'bold') window.pmEditor.chain().focus().toggleBold().run();
+        else if (cmd === 'italic') window.pmEditor.chain().focus().toggleItalic().run();
+        else if (cmd === 'underline') window.pmEditor.chain().focus().toggleUnderline().run();
+        else if (cmd === 'strikeThrough') window.pmEditor.chain().focus().toggleStrike().run();
+        else if (cmd === 'highlight') window.pmEditor.chain().focus().toggleHighlight().run();
+        else if (cmd === 'code') window.pmEditor.chain().focus().toggleCode().run();
+        else if (cmd === 'link') {
+          const prev = window.pmEditor.getAttributes('link').href || '';
+          const url = prompt('Introduce la URL del enlace:', prev);
+          if (url === null) return;
+          if (url === '') window.pmEditor.chain().focus().unsetLink().run();
+          else window.pmEditor.chain().focus().setLink({ href: url }).run();
         }
-      } else if (cmd === 'code') {
-        const sel = window.getSelection();
-        if (sel && !sel.isCollapsed) {
-          const range = sel.getRangeAt(0);
-          const parentCode = sel.anchorNode?.parentElement?.closest('code');
-          if (parentCode) {
-            const textNode = document.createTextNode(parentCode.textContent);
-            parentCode.parentNode.replaceChild(textNode, parentCode);
-          } else {
-            const code = document.createElement('code');
-            code.style.cssText = 'background:var(--surface2); padding:2px 5px; border-radius:4px; font-family:var(--font-mono); font-size:0.9em;';
-            try {
-              range.surroundContents(code);
-            } catch (err) {
-              document.execCommand('formatBlock', false, 'pre');
-            }
-          }
-        }
-      } else if (cmd === 'link') {
-        if (typeof window.insertLink === 'function') window.insertLink();
-        else {
-          const url = prompt('Introduce la URL del enlace:');
-          if (url) document.execCommand('createLink', false, url);
-        }
-      } else if (cmd === 'strikeThrough') {
-        if (typeof window.execStrikeThrough === 'function') window.execStrikeThrough();
-        else document.execCommand('strikeThrough');
+        updateBubblePosition(window.pmEditor);
       } else {
         document.execCommand(cmd, false, null);
       }
-      updateBubbleMenu();
-      if (typeof window.triggerAutoSave === 'function') window.triggerAutoSave();
     });
   });
 
-  // 2. SLASH COMMAND PALETTE (/)
+  // 5. SLASH COMMAND PALETTE (/)
   let slashActive = false;
   let slashIdx = 0;
 
@@ -2877,35 +2906,20 @@ const htmlToolbar  = document.getElementById('html-toolbar');
     if (slashMenu) slashMenu.style.display = 'none';
   }
 
-  function getCaretCoordinates() {
-    const sel = window.getSelection();
-    if (!sel || !sel.rangeCount) return null;
-    const range = sel.getRangeAt(0).cloneRange();
-    range.collapse(true);
-    let rect = range.getClientRects()[0];
-    if (!rect) {
-      const span = document.createElement('span');
-      span.appendChild(document.createTextNode('\u200b'));
-      range.insertNode(span);
-      rect = span.getBoundingClientRect();
-      span.parentNode.removeChild(span);
-    }
-    return rect;
-  }
-
   function openSlashMenu() {
     if (!slashMenu) return;
-    const rect = getCaretCoordinates();
-    if (!rect) return;
-    const wrapRect = visualEditor.parentElement.getBoundingClientRect();
-    const top = (rect.bottom - wrapRect.top) + visualEditor.parentElement.scrollTop + 6;
-    const left = Math.max(10, Math.min(wrapRect.width - 300, (rect.left - wrapRect.left)));
-    slashMenu.style.top = `${top}px`;
-    slashMenu.style.left = `${left}px`;
-    slashMenu.style.display = 'block';
-    slashActive = true;
-    slashIdx = 0;
-    updateSlashSelection();
+    if (window.pmEditor) {
+      const { from } = window.pmEditor.state.selection;
+      const coords = window.pmEditor.view.coordsAtPos(from);
+      slashMenu.style.position = 'fixed';
+      slashMenu.style.top = `${coords.bottom + 6}px`;
+      slashMenu.style.left = `${Math.min(window.innerWidth - 300, Math.max(10, coords.left))}px`;
+      slashMenu.style.zIndex = '9999';
+      slashMenu.style.display = 'block';
+      slashActive = true;
+      slashIdx = 0;
+      updateSlashSelection();
+    }
   }
 
   function updateSlashSelection() {
@@ -2919,18 +2933,140 @@ const htmlToolbar  = document.getElementById('html-toolbar');
 
   function executeSlashCommand(cmd) {
     closeSlashMenu();
-    const sel = window.getSelection();
-    if (sel && sel.rangeCount) {
-      const range = sel.getRangeAt(0);
-      if (range.startOffset > 0) {
-        range.setStart(range.startContainer, range.startOffset - 1);
-        if (range.toString() === '/') {
-          range.deleteContents();
+    if (!window.pmEditor) return;
+
+    const { $from } = window.pmEditor.state.selection;
+    const from = $from.pos - 1;
+    const to = $from.pos;
+    const chain = window.pmEditor.chain().focus().deleteRange({ from, to });
+
+    switch (cmd) {
+      case 'h2':
+        chain.toggleHeading({ level: 2 }).run();
+        break;
+      case 'h3':
+        chain.toggleHeading({ level: 3 }).run();
+        break;
+      case 'quote':
+        chain.toggleBlockquote().run();
+        break;
+      case 'callout':
+        chain.insertContent('<blockquote class="callout-note"><strong>💡 Nota:</strong> Escribe tu apunte destacado aquí...</blockquote><p></p>').run();
+        break;
+      case 'code':
+        chain.toggleCodeBlock().run();
+        break;
+      case 'ul':
+        chain.toggleBulletList().run();
+        break;
+      case 'ol':
+        chain.toggleOrderedList().run();
+        break;
+      case 'table':
+        chain.insertContent('<table style="width:100%; border-collapse:collapse; margin:1.25rem 0; border:1px solid var(--border);"><thead><tr style="background:var(--bg3);"><th style="border:1px solid var(--border); padding:8px 12px; text-align:left;">Encabezado 1</th><th style="border:1px solid var(--border); padding:8px 12px; text-align:left;">Encabezado 2</th></tr></thead><tbody><tr><td style="border:1px solid var(--border); padding:8px 12px;">Dato 1</td><td style="border:1px solid var(--border); padding:8px 12px;">Dato 2</td></tr><tr><td style="border:1px solid var(--border); padding:8px 12px;">Dato 3</td><td style="border:1px solid var(--border); padding:8px 12px;">Dato 4</td></tr></tbody></table><p></p>').run();
+        break;
+      case 'image':
+        const url = prompt('Introduce la URL de la imagen:');
+        if (url) chain.setImage({ src: url, alt: '' }).run();
+        break;
+      case 'hr':
+        chain.setHorizontalRule().run();
+        break;
+    }
+  }
+
+  slashMenu?.querySelectorAll('.slash-item').forEach((item, idx) => {
+    item.addEventListener('click', () => {
+      executeSlashCommand(item.getAttribute('data-cmd'));
+    });
+    item.addEventListener('mouseenter', () => {
+      slashIdx = idx;
+      updateSlashSelection();
+    });
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (slashActive) {
+      const items = slashMenu.querySelectorAll('.slash-item');
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        slashIdx = (slashIdx + 1) % items.length;
+        updateSlashSelection();
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        slashIdx = (slashIdx - 1 + items.length) % items.length;
+        updateSlashSelection();
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (items[slashIdx]) {
+          executeSlashCommand(items[slashIdx].getAttribute('data-cmd'));
         }
+        return;
+      }
+      if (e.key === 'Escape' || e.key === 'Backspace') {
+        closeSlashMenu();
+        return;
       }
     }
 
-    switch (cmd) {
+    if (e.key === '/' && !slashActive && window.pmEditor && window.pmEditor.isFocused) {
+      setTimeout(() => {
+        const { $from } = window.pmEditor.state.selection;
+        if ($from.parent.textContent === '/') {
+          openSlashMenu();
+        }
+      }, 20);
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (slashActive && !slashMenu.contains(e.target)) {
+      closeSlashMenu();
+    }
+  });
+
+  // 6. RAW / VISUAL SWITCHER
+  const switchRaw = document.getElementById('switch-raw');
+  let isRawMode = false;
+
+  if (switchRaw) {
+    switchRaw.addEventListener('click', (e) => {
+      e.preventDefault();
+      isRawMode = !isRawMode;
+      switchRaw.classList.toggle('btn-primary', isRawMode);
+      switchRaw.classList.toggle('btn-secondary', !isRawMode);
+      switchRaw.textContent = isRawMode ? 'Visual' : 'RAW';
+
+      if (isRawMode) {
+        // Switch to RAW
+        const html = window.pmEditor ? window.pmEditor.getHTML() : (fallbackEditor?.innerHTML || '');
+        if (rawEditor) {
+          rawEditor.value = html;
+          rawEditor.style.display = 'block';
+        }
+        if (pmMount) pmMount.style.display = 'none';
+        if (fallbackEditor) fallbackEditor.style.display = 'none';
+        closeSlashMenu();
+        if (bubbleMenu) bubbleMenu.style.display = 'none';
+      } else {
+        // Switch to Visual
+        const rawHtml = rawEditor ? rawEditor.value : '';
+        if (window.pmEditor) {
+          window.pmEditor.commands.setContent(rawHtml);
+          pmMount.style.display = 'block';
+        } else if (fallbackEditor) {
+          fallbackEditor.innerHTML = rawHtml;
+          fallbackEditor.style.display = 'block';
+        }
+        if (rawEditor) rawEditor.style.display = 'none';
+      }
+    });
+  }
+})();
       case 'h2':
         document.execCommand('formatBlock', false, 'h2');
         break;
@@ -3434,104 +3570,75 @@ document.getElementById('editor-form').addEventListener('submit', () => {
 
 // Function to sync content before save
 function syncContentBeforeSave() {
-  console.log('Syncing content before save, mode:', mode);
+  if (window.pmEditor) {
+    const pmHtml = window.pmEditor.getHTML();
+    if (contentInput) contentInput.value = pmHtml;
+    const edHid = document.getElementById('editor-hidden');
+    if (edHid) edHid.value = pmHtml;
+    return;
+  }
   
   if (mode === 'raw') {
     const rawContent = rawEditor ? rawEditor.value : '';
-    console.log('Raw HTML content length:', rawContent.length);
-    
-    // Update both hidden fields
     contentInput.value = rawContent;
-    document.getElementById('editor-hidden').value = rawContent;
+    const edHid = document.getElementById('editor-hidden');
+    if (edHid) edHid.value = rawContent;
   } else {
     const editor = document.getElementById('editor');
     const htmlContent = editor ? editor.innerHTML : '';
-    console.log('Visual HTML content length:', htmlContent.length);
-    
-    // Update both hidden fields
     contentInput.value = htmlContent;
-    document.getElementById('editor-hidden').value = htmlContent;
+    const edHid = document.getElementById('editor-hidden');
+    if (edHid) edHid.value = htmlContent;
   }
   
-  fmtInput.value = 'html'; // Always HTML format
-  console.log('Content format set to: html');
-  
-  // Force a DOM update
+  fmtInput.value = 'html';
   contentInput.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 // ── Mode switch Visual ↔ RAW ───────────────────────────────────────────────
-document.getElementById('switch-visual').addEventListener('click', function(e) {
+document.getElementById('switch-visual')?.addEventListener('click', function(e) {
   e.preventDefault();
   switchMode('visual');
   this.classList.add('active');
-  document.getElementById('switch-raw').classList.remove('active');
+  document.getElementById('switch-raw')?.classList.remove('active');
 });
 
-document.getElementById('switch-raw').addEventListener('click', function(e) {
+document.getElementById('switch-raw')?.addEventListener('click', function(e) {
   e.preventDefault();
-  switchMode('raw');
-  this.classList.add('active');
-  document.getElementById('switch-visual').classList.remove('active');
+  switchMode(mode === 'raw' ? 'visual' : 'raw');
 });
 
 function switchMode(newMode) {
   if (newMode === mode) return;
+  const pmMount = document.getElementById('prosemirror-mount');
+  const visualEditor = document.getElementById('editor');
+  const rawEditor = document.getElementById('raw-editor');
 
   if (newMode === 'raw') {
-    // Convert visual HTML to raw HTML text
-    const visualEditor = document.getElementById('editor');
-    const rawEditor = document.getElementById('raw-editor');
-    
-    // Get HTML content and escape it for the textarea
-    let htmlContent = visualEditor.innerHTML;
-    
-    // Clean up the HTML for better readability
-    htmlContent = htmlContent
-      .replace(/&nbsp;/g, ' ')
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/p>/gi, '</p>\n')
-      .replace(/<\/div>/gi, '</div>\n')
-      .replace(/<\/h[1-6]>/gi, '</h$1>\n')
-      .replace(/<\/li>/gi, '</li>\n')
-      .replace(/<\/ul>/gi, '</ul>\n')
-      .replace(/<\/ol>/gi, '</ol>\n')
-      .replace(/<\/blockquote>/gi, '</blockquote>\n')
-      .replace(/<\/pre>/gi, '</pre>\n');
-    
-    // Set raw editor content
-    rawEditor.value = htmlContent;
-    
-    // Switch to raw mode
-    visualEditor.style.display = 'none';
-    rawEditor.style.display = '';
-    htmlToolbar.style.display = 'none';
+    let htmlContent = window.pmEditor ? window.pmEditor.getHTML() : (visualEditor ? visualEditor.innerHTML : '');
+    if (rawEditor) {
+      rawEditor.value = htmlContent;
+      rawEditor.style.display = 'block';
+    }
+    if (pmMount) pmMount.style.display = 'none';
+    if (visualEditor) visualEditor.style.display = 'none';
   } else {
-    // Convert raw HTML text to visual editor
-    const rawEditor = document.getElementById('raw-editor');
-    const visualEditor = document.getElementById('editor');
-    
-    // Get raw HTML content
-    let rawContent = rawEditor.value;
-    
-    // Clean up line breaks and whitespace
-    rawContent = rawContent
-      .replace(/\n\s*\n/g, '\n')
-      .trim();
-    
-    // Set visual editor content
-    visualEditor.innerHTML = rawContent;
-    
-    // Switch to visual mode
-    rawEditor.style.display = 'none';
-    visualEditor.style.display = '';
-    htmlToolbar.style.display = 'flex';
+    let rawContent = rawEditor ? rawEditor.value : '';
+    if (window.pmEditor) {
+      window.pmEditor.commands.setContent(rawContent);
+      if (pmMount) pmMount.style.display = 'block';
+    } else if (visualEditor) {
+      visualEditor.innerHTML = rawContent;
+      visualEditor.style.display = 'block';
+    }
+    if (rawEditor) rawEditor.style.display = 'none';
   }
 
   mode = newMode;
-  fmtInput.value = 'html'; // Always HTML format now
-  document.getElementById('switch-visual').classList.toggle('active', mode === 'visual');
-  document.getElementById('switch-raw').classList.toggle('active', mode === 'raw');
+  fmtInput.value = 'html';
+  document.getElementById('switch-visual')?.classList.toggle('active', mode === 'visual');
+  document.getElementById('switch-raw')?.classList.toggle('active', mode === 'raw');
+  document.getElementById('switch-raw')?.classList.toggle('btn-primary', mode === 'raw');
 }
 
 // ── HTML Editor Toolbar ──────────────────────────────────────────────────
