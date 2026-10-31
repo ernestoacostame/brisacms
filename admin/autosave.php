@@ -21,9 +21,12 @@ $title   = trim($_POST['title'] ?? '');
 $content = $_POST['content'] ?? '';
 $format  = in_array($_POST['content_format'] ?? '', ['html','markdown']) ? $_POST['content_format'] : 'html';
 
-// Require at least a title to autosave
+// Require at least a title or some content to autosave
 if (!$title) {
-    echo json_encode(['ok' => false, 'error' => 'No title yet']); exit;
+    if (empty($content)) {
+        echo json_encode(['ok' => false, 'error' => 'No title or content yet']); exit;
+    }
+    $title = 'Borrador sin título';
 }
 
 // If no slug yet, generate one from the title
@@ -52,6 +55,8 @@ if (!$slug) {
 
 // Existing article — load and update content only (preserve status and other fields)
 $existing = get_content($type, $slug) ?? [];
+$existing['slug']           = $slug;
+$existing['original_slug']  = $slug;
 $existing['title']          = $title;
 $existing['content']        = $content;
 $existing['content_format'] = $format;

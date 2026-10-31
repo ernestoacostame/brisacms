@@ -3210,7 +3210,10 @@ const htmlToolbar  = document.getElementById('html-toolbar');
         }
       }
     });
-    postTitle.addEventListener('input', markDirty);
+    postTitle.addEventListener('input', () => {
+      markDirty();
+      if (window.triggerAutosave) window.triggerAutosave();
+    });
   }
 
   // 3. MOUNT PROSEMIRROR (TIPTAP ENGINE)
@@ -3388,6 +3391,9 @@ const htmlToolbar  = document.getElementById('html-toolbar');
         if (fallbackEditor) fallbackEditor.innerHTML = html;
         updateMetrics(editor.getText());
         markDirty();
+        if (window.triggerAutosave) {
+          window.triggerAutosave();
+        }
         if (!editor.isActive('image')) {
           hideImageBubble();
         }
@@ -4146,21 +4152,25 @@ function showAutosaveMsg(msg, color) {
 }
 
 function getCurrentContent() {
+  if (window.pmEditor) {
+    return window.pmEditor.getHTML();
+  }
   if (mode === 'raw') {
     // Get content from raw HTML editor
     return rawEditor ? rawEditor.value : '';
   } else {
     // For visual editor, get the innerHTML
     const editor = document.getElementById('editor');
-    return editor ? editor.innerHTML : '';
+    return editor ? editor.innerHTML : (contentInput ? contentInput.value : '');
   }
 }
 
 function getFormData() {
+  const titleEl = document.getElementById('post-title');
   return {
-    title:          document.getElementById('post-title').value,
+    title:          titleEl ? titleEl.value.trim() : '',
     content:        getCurrentContent(),
-    content_format: mode,
+    content_format: 'html',
     excerpt:        document.querySelector('[name="excerpt"]')?.value || '',
     categories:     document.getElementById('cat-hidden')?.value || '',
     tags:           document.getElementById('tag-hidden')?.value || '',
@@ -4176,7 +4186,7 @@ function simpleHash(str) {
   return h;
 }
 
-let localSaveTimer;
+let localSaveTimer = null;
 function scheduleLocalSave() {
   clearTimeout(localSaveTimer);
   localSaveTimer = setTimeout(() => {
@@ -4189,22 +4199,37 @@ function scheduleLocalSave() {
         savedAt: Date.now(),
       }));
     } catch(e) {}
-  }, 2000);
+  }, 1000);
 }
+
+let serverSyncDebounce = null;
+function scheduleServerSync(delay = 3500) {
+  clearTimeout(serverSyncDebounce);
+  serverSyncDebounce = setTimeout(() => {
+    syncToServer();
+  }, delay);
+}
+
+window.triggerAutosave = function() {
+  scheduleLocalSave();
+  scheduleServerSync(3500);
+};
 
 async function syncToServer() {
   const data = getFormData();
-  if (!data.title) return;
+  // Don't autosave if both title and content are empty
+  if (!data.title && (!data.content || data.content === '<p></p>' || data.content === '')) return;
 
-  const hash = simpleHash(data.title + data.content);
+  const hash = simpleHash(data.title + '|' + data.content + '|' + data.excerpt + '|' + data.categories + '|' + data.tags + '|' + data.featured_image);
   if (hash === lastSavedHash) return;
 
   try {
     const fd = new FormData();
-    fd.append('csrf',           AUTOSAVE_CSRF);
+    const csrfVal = document.querySelector('input[name="csrf"]')?.value || AUTOSAVE_CSRF;
+    fd.append('csrf',           csrfVal);
     fd.append('type',           <?= json_encode($type) ?>);
-    fd.append('slug',           autosaveSlug);
-    fd.append('title',          data.title);
+    fd.append('slug',           autosaveSlug || '');
+    fd.append('title',          data.title || 'Borrador sin título');
     fd.append('content',        data.content);
     fd.append('content_format', data.content_format);
     fd.append('excerpt',        data.excerpt);
@@ -4224,32 +4249,45 @@ async function syncToServer() {
         const url = new URL(location.href);
         url.searchParams.set('slug', json.slug);
         history.replaceState({}, '', url);
+
+        const customSlugInput = document.getElementById('custom-slug');
+        if (customSlugInput && !customSlugInput.value) {
+          customSlugInput.value = json.slug;
+        }
       }
       showAutosaveMsg('✓ Borrador guardado automáticamente', 'var(--green)');
       try { localStorage.removeItem(AUTOSAVE_KEY); } catch(e) {}
       
-      // Also update the hidden form fields to keep them in sync
-      contentInput.value = data.content;
-      document.getElementById('editor-hidden').value = data.content;
-      fmtInput.value = data.content_format;
+      // Update the hidden form fields to keep them in sync
+      if (contentInput) contentInput.value = data.content;
+      const edHidden = document.getElementById('editor-hidden');
+      if (edHidden) edHidden.value = data.content;
+      if (fmtInput) fmtInput.value = data.content_format;
       
       console.log('Autosave completed, content synced');
+    } else {
+      console.warn('Autosave error response:', json);
     }
   } catch(e) {
     console.error('Autosave error:', e);
   }
 }
 
-serverSyncTimer = setInterval(syncToServer, 60000);
+serverSyncTimer = setInterval(syncToServer, 30000);
 
 [rawEditor, document.getElementById('editor')].forEach(el => {
-  el?.addEventListener('input', scheduleLocalSave);
+  el?.addEventListener('input', () => window.triggerAutosave && window.triggerAutosave());
 });
-document.getElementById('post-title')?.addEventListener('input', scheduleLocalSave);
+document.getElementById('post-title')?.addEventListener('input', () => window.triggerAutosave && window.triggerAutosave());
+document.querySelector('[name="excerpt"]')?.addEventListener('input', () => window.triggerAutosave && window.triggerAutosave());
+document.getElementById('cat-hidden')?.addEventListener('change', () => window.triggerAutosave && window.triggerAutosave());
+document.getElementById('tag-hidden')?.addEventListener('change', () => window.triggerAutosave && window.triggerAutosave());
+document.getElementById('featured_image_input')?.addEventListener('input', () => window.triggerAutosave && window.triggerAutosave());
 
-document.getElementById('editor-form').addEventListener('submit', () => {
+document.getElementById('editor-form')?.addEventListener('submit', () => {
   try { localStorage.removeItem(AUTOSAVE_KEY); } catch(e) {}
   clearInterval(serverSyncTimer);
+  clearTimeout(serverSyncDebounce);
   lastSavedHash = null;
 }, true);
 
