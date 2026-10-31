@@ -5971,7 +5971,7 @@ body.scheme-light .floating-publish-btn {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 14px;
-  width: 660px;
+  width: 780px;
   max-width: 95vw;
   max-height: 88vh;
   display: flex;
@@ -6195,25 +6195,28 @@ body.scheme-light .floating-publish-btn {
 }
 .img-lib-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
-  gap: 10px;
-  max-height: 250px;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  grid-auto-rows: 130px;
+  gap: 12px;
+  height: 360px;
+  max-height: 52vh;
   overflow-y: auto;
-  padding: 4px;
+  padding: 8px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 10px;
-  min-height: 180px;
 }
 .img-lib-item {
   position: relative;
-  aspect-ratio: 1/1;
+  width: 100%;
+  height: 130px;
   border-radius: 8px;
   overflow: hidden;
-  border: 2px solid transparent;
+  border: 2px solid var(--border);
   cursor: pointer;
-  background: var(--surface);
-  transition: all 0.15s;
+  background: var(--surface2);
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
 }
 .img-lib-item img {
   width: 100%;
@@ -6223,7 +6226,8 @@ body.scheme-light .floating-publish-btn {
 }
 .img-lib-item:hover {
   border-color: var(--accent);
-  transform: scale(1.02);
+  transform: translateY(-2px);
+  z-index: 2;
 }
 .img-lib-item.selected {
   border-color: var(--accent);
@@ -6232,31 +6236,34 @@ body.scheme-light .floating-publish-btn {
 .img-lib-item.selected::after {
   content: '✓';
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 6px;
+  right: 6px;
   background: var(--accent);
   color: #fff;
   border-radius: 50%;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: bold;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
 }
 .img-lib-item-name {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 2px 4px;
-  background: rgba(0,0,0,0.65);
+  padding: 14px 6px 4px;
+  background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 60%, transparent 100%);
   color: #fff;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  pointer-events: none;
 }
 .img-lib-empty {
   grid-column: 1 / -1;
