@@ -1830,26 +1830,42 @@ mark.find-match.current {
 .prose-editor pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; font-family: monospace; font-size: 0.875rem; overflow-x: auto; margin: 1rem 0; }
 .prose-editor ul, .prose-editor ol { padding-left: 1.5rem; margin: 0 0 1rem; }
 .prose-editor li { margin-bottom: 0.25rem; }
-.prose-editor img { max-width: 100%; border-radius: 8px; margin: 0.5rem 0; transition: outline 0.15s; }
-.prose-editor img.align-center {
+.ProseMirror img,
+.prose-editor img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 0.5rem 0;
+  transition: outline 0.15s;
+}
+.ProseMirror img.align-center,
+.prose-editor img.align-center,
+img.align-center,
+[data-align="center"] {
   display: block !important;
   margin: 1.5rem auto !important;
   float: none !important;
   clear: both;
 }
-.prose-editor img.align-left {
+.ProseMirror img.align-left,
+.prose-editor img.align-left,
+img.align-left,
+[data-align="left"] {
   float: left !important;
   margin: 0.6rem 1.6rem 1rem 0 !important;
-  max-width: 50% !important;
   display: block !important;
 }
-.prose-editor img.align-right {
+.ProseMirror img.align-right,
+.prose-editor img.align-right,
+img.align-right,
+[data-align="right"] {
   float: right !important;
   margin: 0.6rem 0 1rem 1.6rem !important;
-  max-width: 50% !important;
   display: block !important;
 }
-.prose-editor img.align-full {
+.ProseMirror img.align-full,
+.prose-editor img.align-full,
+img.align-full,
+[data-align="full"] {
   display: block !important;
   width: 100% !important;
   max-width: 100% !important;
@@ -1857,14 +1873,16 @@ mark.find-match.current {
   float: none !important;
   clear: both;
 }
+.ProseMirror::after,
 .prose-editor::after {
   content: "";
   display: table;
   clear: both;
 }
+.ProseMirror img.ProseMirror-selectednode,
 .prose-editor img.ProseMirror-selectednode {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 3px !important;
 }
 .prose-editor hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
 .prose-editor code { background: var(--surface2); padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.875em; }
@@ -3280,10 +3298,7 @@ const htmlToolbar  = document.getElementById('html-toolbar');
             parseHTML: element => element.getAttribute('width') || element.style.width || null,
             renderHTML: attributes => {
               if (!attributes.width) return {};
-              return {
-                width: attributes.width,
-                style: `width: ${attributes.width};`
-              };
+              return { width: attributes.width };
             }
           },
           align: {
@@ -3292,6 +3307,7 @@ const htmlToolbar  = document.getElementById('html-toolbar');
               if (element.classList.contains('align-left') || element.getAttribute('data-align') === 'left' || element.style.float === 'left') return 'left';
               if (element.classList.contains('align-right') || element.getAttribute('data-align') === 'right' || element.style.float === 'right') return 'right';
               if (element.classList.contains('align-full') || element.getAttribute('data-align') === 'full') return 'full';
+              if (element.classList.contains('align-center') || element.getAttribute('data-align') === 'center' || element.style.margin?.includes('auto')) return 'center';
               return 'center';
             },
             renderHTML: attributes => {
@@ -3303,6 +3319,40 @@ const htmlToolbar  = document.getElementById('html-toolbar');
             }
           }
         };
+      },
+      renderHTML({ node, HTMLAttributes }) {
+        const align = node.attrs.align || 'center';
+        const width = node.attrs.width || null;
+        let style = '';
+
+        if (align === 'left') {
+          style = 'float: left; margin: 0.6rem 1.6rem 1rem 0; display: block;';
+          if (width) style += ` width: ${width}; max-width: 100%;`;
+          else style += ' max-width: 50%;';
+        } else if (align === 'right') {
+          style = 'float: right; margin: 0.6rem 0 1rem 1.6rem; display: block;';
+          if (width) style += ` width: ${width}; max-width: 100%;`;
+          else style += ' max-width: 50%;';
+        } else if (align === 'full') {
+          style = 'display: block; width: 100%; max-width: 100%; margin: 1.8rem auto; float: none; clear: both;';
+        } else {
+          // center (default)
+          style = 'display: block; margin: 1.5rem auto; float: none; clear: both;';
+          if (width) style += ` width: ${width}; max-width: 100%;`;
+        }
+
+        const mergedAttrs = {
+          ...this.options?.HTMLAttributes,
+          ...HTMLAttributes,
+          class: `prose-image align-${align}`,
+          'data-align': align,
+          style: style.trim()
+        };
+        if (width) {
+          mergedAttrs.width = width;
+        }
+
+        return ['img', mergedAttrs];
       }
     }) : Image;
 
@@ -3427,13 +3477,25 @@ const htmlToolbar  = document.getElementById('html-toolbar');
         });
 
         const view = editor.view;
-        const start = view.coordsAtPos(from);
-        const end = view.coordsAtPos(to);
+        const nodeDom = (typeof view.nodeDOM === 'function' ? view.nodeDOM(from) : null) || view.dom.querySelector('.ProseMirror-selectednode') || view.dom.querySelector('img.align-left, img.align-right, img.align-center, img.align-full, img[src]');
+        const imgRect = (nodeDom && typeof nodeDom.getBoundingClientRect === 'function') ? nodeDom.getBoundingClientRect() : null;
 
         imageBubbleMenu.style.display = 'flex';
         const menuRect = imageBubbleMenu.getBoundingClientRect();
-        const left = ((start.left + end.left) / 2) - (menuRect.width / 2);
-        const top = start.top - menuRect.height - 10;
+
+        let left, top;
+        if (imgRect && imgRect.width > 0) {
+          left = imgRect.left + (imgRect.width / 2) - (menuRect.width / 2);
+          top = imgRect.top - menuRect.height - 10;
+          if (top < 10) {
+            top = imgRect.bottom + 10;
+          }
+        } else {
+          const start = view.coordsAtPos(from);
+          const end = view.coordsAtPos(to);
+          left = ((start.left + end.left) / 2) - (menuRect.width / 2);
+          top = start.top - menuRect.height - 10;
+        }
 
         imageBubbleMenu.style.position = 'fixed';
         imageBubbleMenu.style.left = `${Math.max(10, Math.min(window.innerWidth - menuRect.width - 10, left))}px`;
@@ -3486,6 +3548,7 @@ const htmlToolbar  = document.getElementById('html-toolbar');
       if (window.pmEditor) {
         window.pmEditor.chain().focus().updateAttributes('image', { align }).run();
         updateBubblePosition(window.pmEditor);
+        setTimeout(() => { if (window.pmEditor) updateBubblePosition(window.pmEditor); }, 30);
       }
     });
   });
@@ -3498,6 +3561,7 @@ const htmlToolbar  = document.getElementById('html-toolbar');
       if (window.pmEditor) {
         window.pmEditor.chain().focus().updateAttributes('image', { width }).run();
         updateBubblePosition(window.pmEditor);
+        setTimeout(() => { if (window.pmEditor) updateBubblePosition(window.pmEditor); }, 30);
       }
     });
   });
