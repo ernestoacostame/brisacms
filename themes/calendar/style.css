@@ -73,6 +73,48 @@ img {
   display: block;
 }
 
+/* Image Alignments */
+img.align-left, .calendar-prose img.align-left {
+  float: left;
+  margin: 0.6rem 1.6rem 1.25rem 0;
+  max-width: 50%;
+  display: block;
+}
+img.align-right, .calendar-prose img.align-right {
+  float: right;
+  margin: 0.6rem 0 1.25rem 1.6rem;
+  max-width: 50%;
+  display: block;
+}
+img.align-center, .calendar-prose img.align-center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  float: none;
+  clear: both;
+}
+img.align-full, .calendar-prose img.align-full {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin: 2rem auto;
+  float: none;
+  clear: both;
+}
+@media (max-width: 640px) {
+  img.align-left, .calendar-prose img.align-left,
+  img.align-right, .calendar-prose img.align-right {
+    float: none;
+    max-width: 100%;
+    margin: 1.5rem auto;
+  }
+}
+.calendar-prose::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
 button {
   font-family: inherit;
   cursor: pointer;

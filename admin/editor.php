@@ -232,6 +232,46 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
                 <button type="button" class="bubble-btn" data-cmd="link" title="Enlace">🔗</button>
               </div>
 
+              <!-- Writing Desk: Floating Image Alignment Menu -->
+              <div id="image-bubble-menu" class="writing-bubble-menu image-align-toolbar" style="display:none;" role="toolbar" aria-label="Alineación de imagen">
+                <button type="button" class="bubble-btn" data-align="left" title="Alinear a la izquierda (flotar con texto)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="4" width="8" height="8" rx="1"></rect>
+                    <line x1="14" y1="5" x2="21" y2="5"></line>
+                    <line x1="14" y1="9" x2="21" y2="9"></line>
+                    <line x1="3" y1="15" x2="21" y2="15"></line>
+                    <line x1="3" y1="19" x2="21" y2="19"></line>
+                  </svg>
+                </button>
+                <button type="button" class="bubble-btn" data-align="center" title="Centrar">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="3" y1="4" x2="21" y2="4"></line>
+                    <rect x="7" y="8" width="10" height="8" rx="1"></rect>
+                    <line x1="3" y1="20" x2="21" y2="20"></line>
+                  </svg>
+                </button>
+                <button type="button" class="bubble-btn" data-align="right" title="Alinear a la derecha (flotar con texto)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="13" y="4" width="8" height="8" rx="1"></rect>
+                    <line x1="3" y1="5" x2="10" y2="5"></line>
+                    <line x1="3" y1="9" x2="10" y2="9"></line>
+                    <line x1="3" y1="15" x2="21" y2="15"></line>
+                    <line x1="3" y1="19" x2="21" y2="19"></line>
+                  </svg>
+                </button>
+                <button type="button" class="bubble-btn" data-align="full" title="Ancho completo">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="6" width="18" height="12" rx="1"></rect>
+                    <polyline points="1 12 3 10 3 14"></polyline>
+                    <polyline points="23 12 21 10 21 14"></polyline>
+                  </svg>
+                </button>
+                <div class="bubble-sep"></div>
+                <button type="button" class="bubble-btn" id="img-btn-alt" title="Editar texto alternativo (alt)" style="font-size:0.75rem;font-weight:700;padding:0 6px;">
+                  ALT
+                </button>
+              </div>
+
               <!-- Writing Desk: Slash Command Palette (/) -->
               <div id="slash-menu" class="writing-slash-menu" style="display:none;" role="menu" aria-label="Insertar bloque">
                 <div class="slash-header">Insertar bloque (ProseMirror)</div>
@@ -1751,7 +1791,42 @@ mark.find-match.current {
 .prose-editor pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; font-family: monospace; font-size: 0.875rem; overflow-x: auto; margin: 1rem 0; }
 .prose-editor ul, .prose-editor ol { padding-left: 1.5rem; margin: 0 0 1rem; }
 .prose-editor li { margin-bottom: 0.25rem; }
-.prose-editor img { max-width: 100%; border-radius: 8px; margin: 0.5rem 0; }
+.prose-editor img { max-width: 100%; border-radius: 8px; margin: 0.5rem 0; transition: outline 0.15s; }
+.prose-editor img.align-center {
+  display: block !important;
+  margin: 1.5rem auto !important;
+  float: none !important;
+  clear: both;
+}
+.prose-editor img.align-left {
+  float: left !important;
+  margin: 0.6rem 1.6rem 1rem 0 !important;
+  max-width: 50% !important;
+  display: block !important;
+}
+.prose-editor img.align-right {
+  float: right !important;
+  margin: 0.6rem 0 1rem 1.6rem !important;
+  max-width: 50% !important;
+  display: block !important;
+}
+.prose-editor img.align-full {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 1.8rem auto !important;
+  float: none !important;
+  clear: both;
+}
+.prose-editor::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+.prose-editor img.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
 .prose-editor hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
 .prose-editor code { background: var(--surface2); padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.875em; }
 .prose-editor strong { font-weight: 700; }
@@ -3152,6 +3227,30 @@ const htmlToolbar  = document.getElementById('html-toolbar');
       },
     }) : null;
 
+    const CustomImage = (Image && typeof Image.extend === 'function') ? Image.extend({
+      addAttributes() {
+        return {
+          ...this.parent?.(),
+          align: {
+            default: 'center',
+            parseHTML: element => {
+              if (element.classList.contains('align-left') || element.getAttribute('data-align') === 'left' || element.style.float === 'left') return 'left';
+              if (element.classList.contains('align-right') || element.getAttribute('data-align') === 'right' || element.style.float === 'right') return 'right';
+              if (element.classList.contains('align-full') || element.getAttribute('data-align') === 'full') return 'full';
+              return 'center';
+            },
+            renderHTML: attributes => {
+              const a = attributes.align || 'center';
+              return {
+                'data-align': a,
+                class: `prose-image align-${a}`
+              };
+            }
+          }
+        };
+      }
+    }) : Image;
+
     const extensions = [
       StarterKit.configure({
         heading: { levels: [2, 3, 4] },
@@ -3164,9 +3263,8 @@ const htmlToolbar  = document.getElementById('html-toolbar');
         openOnClick: false,
         HTMLAttributes: { class: 'prose-link' }
       }),
-      Image.configure({
-        inline: false,
-        HTMLAttributes: { class: 'prose-image' }
+      (CustomImage || Image).configure({
+        inline: false
       }),
       Placeholder.configure({
         placeholder: 'Comienza a escribir tu historia, o pulsa "/" para insertar bloques...'
@@ -3235,10 +3333,43 @@ const htmlToolbar  = document.getElementById('html-toolbar');
     }
   }
 
-  // 4. FLOATING BUBBLE SELECTION MENU
+  // 4. FLOATING BUBBLE SELECTION MENU & IMAGE ALIGNMENT MENU
+  const imageBubbleMenu = document.getElementById('image-bubble-menu');
+
   function updateBubblePosition(editor) {
-    if (!bubbleMenu || mode !== 'visual') return;
+    if (mode !== 'visual') return;
     const { from, to, empty } = editor.state.selection;
+
+    // Check if an image node is selected
+    if (editor.isActive('image')) {
+      if (bubbleMenu) bubbleMenu.style.display = 'none';
+      if (imageBubbleMenu) {
+        const attrs = editor.getAttributes('image');
+        const align = attrs.align || 'center';
+        imageBubbleMenu.querySelectorAll('[data-align]').forEach(btn => {
+          btn.classList.toggle('active', btn.getAttribute('data-align') === align);
+        });
+
+        const view = editor.view;
+        const start = view.coordsAtPos(from);
+        const end = view.coordsAtPos(to);
+
+        imageBubbleMenu.style.display = 'flex';
+        const menuRect = imageBubbleMenu.getBoundingClientRect();
+        const left = ((start.left + end.left) / 2) - (menuRect.width / 2);
+        const top = start.top - menuRect.height - 10;
+
+        imageBubbleMenu.style.position = 'fixed';
+        imageBubbleMenu.style.left = `${Math.max(10, Math.min(window.innerWidth - menuRect.width - 10, left))}px`;
+        imageBubbleMenu.style.top = `${Math.max(10, top)}px`;
+        imageBubbleMenu.style.zIndex = '9999';
+      }
+      return;
+    } else {
+      if (imageBubbleMenu) imageBubbleMenu.style.display = 'none';
+    }
+
+    if (!bubbleMenu) return;
     if (empty || !editor.isFocused) {
       bubbleMenu.style.display = 'none';
       return;
@@ -3270,6 +3401,40 @@ const htmlToolbar  = document.getElementById('html-toolbar');
     bubbleMenu.style.top = `${Math.max(10, top)}px`;
     bubbleMenu.style.zIndex = '9999';
   }
+
+  // Handle image alignment toolbar buttons
+  imageBubbleMenu?.querySelectorAll('[data-align]').forEach(btn => {
+    btn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const align = btn.getAttribute('data-align');
+      if (window.pmEditor) {
+        window.pmEditor.chain().focus().updateAttributes('image', { align }).run();
+        updateBubblePosition(window.pmEditor);
+      }
+    });
+  });
+
+  imageBubbleMenu?.querySelector('#img-btn-alt')?.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    if (window.pmEditor) {
+      const currentAlt = window.pmEditor.getAttributes('image').alt || '';
+      const newAlt = prompt('Texto alternativo (alt) de la imagen:', currentAlt);
+      if (newAlt !== null) {
+        window.pmEditor.chain().focus().updateAttributes('image', { alt: newAlt }).run();
+      }
+    }
+  });
+
+  // Clicking an image in the editor directly selects it
+  pmMount?.addEventListener('click', (e) => {
+    const img = e.target.closest('img');
+    if (img && window.pmEditor) {
+      const pos = window.pmEditor.view.posAtDOM(img, 0);
+      if (typeof pos === 'number' && pos >= 0) {
+        window.pmEditor.chain().focus().setNodeSelection(pos).run();
+      }
+    }
+  });
 
   bubbleMenu?.querySelectorAll('.bubble-btn').forEach(btn => {
     btn.addEventListener('mousedown', (e) => {
