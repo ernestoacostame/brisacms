@@ -53,9 +53,11 @@ if ($status_filter === 'published') {
 $all_items = list_content('articles', false, 1, 9999);
 $filtered_items = $all_items['items'];
 if ($status_filter === 'published') {
-    $filtered_items = array_filter($filtered_items, fn($p) => $p['status'] === 'published');
+    $filtered_items = array_filter($filtered_items, fn($p) => ($p['status'] ?? '') === 'published');
 } elseif ($status_filter === 'draft') {
-    $filtered_items = array_filter($filtered_items, fn($p) => $p['status'] === 'draft');
+    $filtered_items = array_filter($filtered_items, fn($p) => ($p['status'] ?? '') === 'draft');
+} elseif ($status_filter === 'scheduled') {
+    $filtered_items = array_filter($filtered_items, fn($p) => ($p['status'] ?? '') === 'scheduled');
 }
 $per_page = 10;
 $total = count($filtered_items);
@@ -66,10 +68,16 @@ $result = ['items' => $items, 'total' => $total, 'pages' => $pages, 'page' => $p
 
 admin_header(__("nav_articles"), 'articles');
 ?>
-      <a href="<?= base_url() ?>/admin/editor.php?type=articles" class="btn btn-primary">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        <?= __('list_new_article') ?>
-      </a>
+      <div style="display:flex;gap:0.5rem;align-items:center">
+        <a href="<?= base_url() ?>/admin/calendar.php" class="btn btn-secondary">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          Calendario
+        </a>
+        <a href="<?= base_url() ?>/admin/editor.php?type=articles" class="btn btn-primary">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <?= __('list_new_article') ?>
+        </a>
+      </div>
     </div>
   </div>
   <div class="page-body">
@@ -80,15 +88,18 @@ admin_header(__("nav_articles"), 'articles');
         <span class="card-title">
             <?php if ($status_filter === 'published'): ?>
                 <?= $result['total'] ?> <?= __("dash_published", "Publicados") ?>
+            <?php elseif ($status_filter === 'scheduled'): ?>
+                <?= $result['total'] ?> <?= __("status_scheduled", "Programados") ?>
             <?php elseif ($status_filter === 'draft'): ?>
                 <?= $result['total'] ?> <?= __("dash_drafts", "Borradores") ?>
             <?php else: ?>
                 <?= $result['total'] ?> <?= __("nav_articles") ?>
             <?php endif; ?>
         </span>
-        <div style="display:flex;gap:0.4rem;align-items:center">
+        <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap">
           <a href="articles.php" class="btn btn-sm <?= !$status_filter ? 'btn-primary' : 'btn-secondary' ?>"><?= __("all", "Todos") ?></a>
           <a href="articles.php?status=published" class="btn btn-sm <?= $status_filter === 'published' ? 'btn-primary' : 'btn-secondary' ?>"><?= __("dash_published", "Publicados") ?></a>
+          <a href="articles.php?status=scheduled" class="btn btn-sm <?= $status_filter === 'scheduled' ? 'btn-primary' : 'btn-secondary' ?>">⏰ <?= __("status_scheduled", "Programados") ?></a>
           <a href="articles.php?status=draft" class="btn btn-sm <?= $status_filter === 'draft' ? 'btn-primary' : 'btn-secondary' ?>"><?= __("dash_drafts", "Borradores") ?></a>
         </div>
       </div>
@@ -153,14 +164,21 @@ admin_header(__("nav_articles"), 'articles');
               </a>
             </td>
             <td>
-              <?php if ($post['status'] === 'published'): ?>
+              <?php if (($post['status'] ?? '') === 'published'): ?>
                 <span class="badge badge-green">✓ <?= __('badge_published', 'Publicado') ?></span>
+              <?php elseif (($post['status'] ?? '') === 'scheduled'): ?>
+                <span class="badge badge-blue">⏰ <?= __('badge_scheduled', 'Programado') ?></span>
               <?php else: ?>
                 <span class="badge badge-yellow">● <?= __('badge_draft', 'Borrador') ?></span>
               <?php endif; ?>
             </td>
             <td style="color:var(--text2);font-size:0.88rem"><?= htmlspecialchars(implode(', ', $post['categories'] ?? [])) ?: '<span style="color:var(--muted)">—</span>' ?></td>
-            <td style="color:var(--muted);font-size:0.88rem"><?= date('M j, Y', strtotime($post['created_at'] ?? 'now')) ?></td>
+            <td style="color:var(--muted);font-size:0.88rem">
+              <?= date('M j, Y H:i', strtotime($post['created_at'] ?? 'now')) ?>
+              <?php if (($post['status'] ?? '') === 'scheduled'): ?>
+                <div style="font-size:0.75rem;color:#3b82f6;font-weight:600">Programado</div>
+              <?php endif; ?>
+            </td>
             <td style="text-align:right">
               <a href="<?= base_url() ?>/admin/editor.php?type=articles&slug=<?= htmlspecialchars($post['slug']) ?>" class="btn btn-secondary btn-sm"><?= __("edit", "Editar") ?></a>
               <?php if ($post['status'] === 'published'): ?>

@@ -34,12 +34,20 @@ $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verify_csrf($_POST['csrf'] ?? '')) { $error = 'Security error. Refresh and try again.'; }
     else {
+        $target_status = in_array($_POST['status'] ?? '', ['published', 'draft', 'scheduled']) ? $_POST['status'] : 'draft';
+        $post_created_at = !empty($_POST['created_at']) ? date('c', strtotime($_POST['created_at'])) : ($post['created_at'] ?? date('c'));
+        
+        // Si el usuario seleccionó fecha en el futuro y no forzó 'draft'
+        if ($target_status === 'published' && strtotime($post_created_at) > time()) {
+            $target_status = 'scheduled';
+        }
+
         $data = [
             'title'         => trim($_POST['title'] ?? ''),
             'content'       => $_POST['content'] ?? '',
             'excerpt'       => trim($_POST['excerpt'] ?? ''),
             'slug'          => sanitize_filename(trim($_POST['custom_slug'] ?? '') ?: slug_from_title($_POST['title'] ?? '')),
-            'status'        => in_array($_POST['status'] ?? '', ['published', 'draft']) ? $_POST['status'] : 'draft',
+            'status'        => $target_status,
             'categories'    => array_filter(array_map('trim', explode(',', $_POST['categories'] ?? ''))),
             'tags'          => array_filter(array_map('trim', explode(',', $_POST['tags'] ?? ''))),
             'featured_image'  => trim($_POST['featured_image'] ?? ''),
@@ -47,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'kutpod_url'      => trim($_POST['kutpod_url'] ?? ($post['kutpod_url'] ?? '')),
             'podcast_meta'    => $post['podcast_meta'] ?? null,
             'original_slug' => $slug,
-            'created_at'    => $post['created_at'] ?? '',
+            'created_at'    => $post_created_at,
         ];
         if (!$data['title']) { $error = __("editor_error_title"); }
         else {
@@ -58,7 +66,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             $new_slug = save_content($type, $data);
-            $msg = __("editor_saved");
+            $msg = $target_status === 'scheduled' 
+                ? '¡Artículo programado para el ' . date('d/m/Y H:i', strtotime($post_created_at)) . '!'
+                : __("editor_saved");
             $slug = $new_slug;
             $post = get_content($type, $new_slug);
             $is_new = false;
@@ -69,13 +79,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($post['status'] === 'published') {
                         $resend = !empty($_POST['fediverse_resend']);
                         ap_publish_article($post, $resend);
-                    } elseif ($post['status'] === 'draft') {
-                        // Si estaba federado y se pasa a borrador, eliminar la publicación en el Fediverso
+                    } elseif ($post['status'] === 'draft' || $post['status'] === 'scheduled') {
+                        // Si estaba federado y se pasa a borrador o programado, eliminar la publicación en el Fediverso
                         ap_delete_article($slug);
                     }
                 }
 
-                // Envío de Newsletter al publicar
+                // Envío de Newsletter al publicar de inmediato (los programados se enviarán al llegar la fecha)
                 if ($post['status'] === 'published' && !empty($_POST['newsletter_broadcast'])) {
                     require_once dirname(__DIR__) . '/core/newsletter.php';
                     $nRes = newsletter_broadcast_post($post, !empty($_POST['newsletter_resend']));
@@ -105,6 +115,31 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
       <input type="hidden" name="content" id="content-input" value="<?= htmlspecialchars($post['content'] ?? '') ?>">
       <input type="hidden" name="content_format" id="content-format-input" value="html">
 
+      <?php
+      $cur_status = $post['status'] ?? 'draft';
+      if ($is_new && !empty($_GET['date'])) {
+          $post['created_at'] = date('c', strtotime($_GET['date'] . ' 09:00:00'));
+          if (strtotime($post['created_at']) > time()) {
+              $cur_status = 'scheduled';
+          }
+      }
+      $status_label = match($cur_status) {
+          'published' => 'Publicado',
+          'scheduled' => 'Programado',
+          default     => 'Borrador'
+      };
+      $status_class = match($cur_status) {
+          'published' => 'pub',
+          'scheduled' => 'scheduled',
+          default     => 'draft'
+      };
+      $publish_btn_label = match($cur_status) {
+          'published' => ($is_new ? 'Publicar' : 'Actualizado ✓'),
+          'scheduled' => ($is_new ? 'Programar' : 'Actualizar programado'),
+          default     => 'Publicar'
+      };
+      ?>
+
       <div class="desk-layout">
         <!-- Main Writing Desk Area -->
         <div class="desk-main">
@@ -115,8 +150,8 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
                 <a href="<?= base_url() ?>/admin/<?= $type ?>.php" class="desk-chrome-back">
                   ← <?= $type === 'articles' ? 'Entradas' : 'Páginas' ?>
                 </a>
-                <span class="sheet-status-pill <?= ($post['status'] ?? 'draft') === 'published' ? 'pub' : 'draft' ?>" id="desk-status-pill">
-                  <?= ($post['status'] ?? 'draft') === 'published' ? 'Publicado' : 'Borrador' ?>
+                <span class="sheet-status-pill <?= $status_class ?>" id="desk-status-pill">
+                  <?= $status_label ?>
                 </span>
                 <span class="desk-metrics" id="desk-metrics">0 palabras · 1 min de lectura</span>
               </div>
@@ -126,8 +161,8 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
                 <a href="<?= base_url() ?>/<?= $type === 'articles' ? 'article' : 'page' ?>/<?= htmlspecialchars($post['slug']) ?>" target="_blank" class="btn btn-secondary btn-sm" title="Ver en el sitio web">Ver ↗</a>
                 <?php endif; ?>
                 <button type="button" class="btn btn-secondary btn-sm" id="preview-btn" title="Previsualizar">Vista previa</button>
-                <button type="submit" form="editor-form" name="status" value="<?= ($post['status'] ?? 'draft') === 'published' ? 'published' : 'draft' ?>" class="btn btn-primary btn-sm" id="publish-btn">
-                  <?= ($post['status'] ?? 'draft') === 'published' ? 'Actualizado ✓' : 'Publicar' ?>
+                <button type="submit" form="editor-form" name="status" value="<?= htmlspecialchars($cur_status) ?>" class="btn btn-primary btn-sm" id="publish-btn">
+                  <?= $publish_btn_label ?>
                 </button>
               </div>
             </div>
@@ -275,8 +310,8 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
         <aside class="editor-sidebar editor-sidebar-sheet">
           <div class="sheet-head">
             <span class="sheet-head-title">Propiedades</span>
-            <span class="sheet-status-pill <?= ($post['status'] ?? 'draft') === 'published' ? 'pub' : 'draft' ?>" id="sheet-header-pill">
-              <?= ($post['status'] ?? 'draft') === 'published' ? 'Publicado' : 'Borrador' ?>
+            <span class="sheet-status-pill <?= $status_class ?>" id="sheet-header-pill">
+              <?= $status_label ?>
             </span>
           </div>
 
@@ -284,22 +319,39 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
           <div class="sheet-group">
             <label class="sheet-label">Estado de publicación</label>
             <div class="sheet-segmented">
-              <label class="sheet-seg-item <?= ($post['status'] ?? 'draft') === 'draft' ? 'active' : '' ?>">
-                <input type="radio" name="status_radio" value="draft" <?= ($post['status'] ?? 'draft') === 'draft' ? 'checked' : '' ?> class="sheet-seg-radio">
+              <label class="sheet-seg-item <?= $cur_status === 'draft' ? 'active' : '' ?>">
+                <input type="radio" name="status_radio" value="draft" <?= $cur_status === 'draft' ? 'checked' : '' ?> class="sheet-seg-radio">
                 <span class="sheet-dot draft"></span>
                 <span><?= __("status_draft") ?></span>
               </label>
-              <label class="sheet-seg-item <?= ($post['status'] ?? '') === 'published' ? 'active' : '' ?>">
-                <input type="radio" name="status_radio" value="published" <?= ($post['status'] ?? '') === 'published' ? 'checked' : '' ?> class="sheet-seg-radio">
+              <label class="sheet-seg-item <?= $cur_status === 'scheduled' ? 'active' : '' ?>">
+                <input type="radio" name="status_radio" value="scheduled" <?= $cur_status === 'scheduled' ? 'checked' : '' ?> class="sheet-seg-radio">
+                <span class="sheet-dot scheduled"></span>
+                <span><?= __("status_scheduled", "Programado") ?></span>
+              </label>
+              <label class="sheet-seg-item <?= $cur_status === 'published' ? 'active' : '' ?>">
+                <input type="radio" name="status_radio" value="published" <?= $cur_status === 'published' ? 'checked' : '' ?> class="sheet-seg-radio">
                 <span class="sheet-dot pub"></span>
                 <span><?= __("status_published") ?></span>
               </label>
             </div>
             <!-- Campo oculto sincronizado para compatibilidad con form submit y scripts -->
-            <input type="hidden" name="status" id="status-select" value="<?= htmlspecialchars($post['status'] ?? 'draft') ?>">
+            <input type="hidden" name="status" id="status-select" value="<?= htmlspecialchars($cur_status) ?>">
           </div>
 
-          <!-- 2. URL Slug -->
+          <!-- 2. Fecha de publicación -->
+          <div class="sheet-group">
+            <div class="sheet-label-split" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <label class="sheet-label" for="post-created-at" style="margin-bottom:0">Fecha de publicación</label>
+              <button type="button" id="btn-set-now" class="sheet-now-btn" style="background:none;border:none;color:var(--accent);font-size:0.75rem;cursor:pointer;padding:0;font-weight:600">Ahora</button>
+            </div>
+            <input type="datetime-local" name="created_at" id="post-created-at"
+              value="<?= htmlspecialchars(isset($post['created_at']) && $post['created_at'] ? date('Y-m-d\TH:i', strtotime($post['created_at'])) : date('Y-m-d\TH:i')) ?>"
+              style="width:100%;padding:0.5rem 0.75rem;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:0.88rem;outline:none">
+            <div class="sheet-hint" id="date-hint">Modifica la fecha para retroceder la publicación o fijar una fecha futura para programarla.</div>
+          </div>
+
+          <!-- 3. URL Slug -->
           <div class="sheet-group">
             <label class="sheet-label" for="custom-slug">Slug de enlace</label>
             <div class="sheet-field-prefix">
@@ -1840,6 +1892,11 @@ body.focus-mode .floating-buttons-container { display: none !important; }
   color: #10b981;
   border: 1px solid rgba(16, 185, 129, 0.25);
 }
+.sheet-status-pill.scheduled {
+  background: rgba(59, 130, 246, 0.12);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
 
 .sheet-group {
   padding: 14px 16px;
@@ -1877,10 +1934,10 @@ body.focus-mode .floating-buttons-container { display: none !important; }
   margin-top: 5px;
 }
 
-/* Status Segmented Control (Draft vs Published) */
+/* Status Segmented Control (Draft vs Scheduled vs Published) */
 .sheet-segmented {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 4px;
   background: var(--surface2);
   padding: 3px;
@@ -1920,6 +1977,7 @@ body.focus-mode .floating-buttons-container { display: none !important; }
   flex-shrink: 0;
 }
 .sheet-dot.draft { background: var(--muted); }
+.sheet-dot.scheduled { background: #3b82f6; }
 .sheet-dot.pub { background: #10b981; }
 
 /* URL Slug Affix Input */
@@ -3951,32 +4009,96 @@ titleInput.addEventListener('input', () => {
 slugInput.addEventListener('input', () => { slugManuallySet = true; });
 
 // ── Segmented status controller (quireINK style) ────────────────────────
-document.querySelectorAll('input[name="status_radio"]').forEach(radio => {
-  radio.addEventListener('change', function() {
-    const val = this.value;
-    const statusSelect = document.getElementById('status-select');
-    if (statusSelect) statusSelect.value = val;
-    
-    document.querySelectorAll('.sheet-seg-item').forEach(item => {
-      const r = item.querySelector('input[type="radio"]');
-      if (r && r.value === val) item.classList.add('active');
-      else item.classList.remove('active');
-    });
-    
-    const pill = document.getElementById('sheet-header-pill');
-    if (pill) {
-      pill.className = 'sheet-status-pill ' + (val === 'published' ? 'pub' : 'draft');
-      pill.textContent = val === 'published' ? 'Publicado' : 'Borrador';
-    }
-    
-    const pubBtn = document.getElementById('publish-btn');
-    if (pubBtn) {
-      pubBtn.textContent = val === 'published' 
-        ? <?= json_encode(($post && ($post['status'] ?? '') === 'published') ? __raw("editor_update") : __raw("editor_publish")) ?>
-        : 'Guardar borrador';
+function updateStatusUI(val) {
+  const statusSelect = document.getElementById('status-select');
+  if (statusSelect) statusSelect.value = val;
+  
+  document.querySelectorAll('.sheet-seg-item').forEach(item => {
+    const r = item.querySelector('input[type="radio"]');
+    if (r && r.value === val) {
+      item.classList.add('active');
+      r.checked = true;
+    } else {
+      item.classList.remove('active');
     }
   });
+  
+  const statusLabels = { 'published': 'Publicado', 'scheduled': 'Programado', 'draft': 'Borrador' };
+  const statusClasses = { 'published': 'pub', 'scheduled': 'scheduled', 'draft': 'draft' };
+  
+  const pillHeader = document.getElementById('sheet-header-pill');
+  if (pillHeader) {
+    pillHeader.className = 'sheet-status-pill ' + (statusClasses[val] || 'draft');
+    pillHeader.textContent = statusLabels[val] || 'Borrador';
+  }
+  const pillDesk = document.getElementById('desk-status-pill');
+  if (pillDesk) {
+    pillDesk.className = 'sheet-status-pill ' + (statusClasses[val] || 'draft');
+    pillDesk.textContent = statusLabels[val] || 'Borrador';
+  }
+  
+  const pubBtn = document.getElementById('publish-btn');
+  if (pubBtn) {
+    if (val === 'published') {
+      pubBtn.textContent = <?= json_encode(($post && ($post['status'] ?? '') === 'published') ? __raw("editor_update") : __raw("editor_publish")) ?>;
+      pubBtn.value = 'published';
+    } else if (val === 'scheduled') {
+      pubBtn.textContent = 'Programar';
+      pubBtn.value = 'scheduled';
+    } else {
+      pubBtn.textContent = 'Guardar borrador';
+      pubBtn.value = 'draft';
+    }
+  }
+
+  const floatLabel = document.getElementById('floating-publish-label');
+  if (floatLabel) {
+    floatLabel.textContent = val === 'published' ? '<?= __raw("editor_update") ?>' : (val === 'scheduled' ? 'Programar' : 'Publicar');
+  }
+}
+
+document.querySelectorAll('input[name="status_radio"]').forEach(radio => {
+  radio.addEventListener('change', function() {
+    updateStatusUI(this.value);
+  });
 });
+
+// ── Date picker & auto-scheduling ─────────────────────────────────────────
+const postCreatedAtInput = document.getElementById('post-created-at');
+const btnSetNow = document.getElementById('btn-set-now');
+const dateHint = document.getElementById('date-hint');
+
+if (btnSetNow && postCreatedAtInput) {
+  btnSetNow.addEventListener('click', () => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    postCreatedAtInput.value = now.toISOString().slice(0, 16);
+    if (dateHint) dateHint.textContent = 'Fecha fijada a la hora actual.';
+    const curStatus = document.getElementById('status-select')?.value;
+    if (curStatus === 'scheduled') {
+      updateStatusUI('published');
+    }
+  });
+}
+
+if (postCreatedAtInput) {
+  postCreatedAtInput.addEventListener('change', function() {
+    const chosenTime = new Date(this.value).getTime();
+    const nowTime = Date.now();
+    const curStatus = document.getElementById('status-select')?.value;
+    if (chosenTime > nowTime) {
+      if (curStatus !== 'draft') {
+        updateStatusUI('scheduled');
+      }
+      if (dateHint) dateHint.innerHTML = '<span style="color:#3b82f6">📅 Fecha futura: el artículo se programará para publicarse automáticamente en este momento.</span>';
+    } else {
+      if (curStatus === 'scheduled') {
+        updateStatusUI('published');
+      }
+      if (dateHint) dateHint.textContent = 'Modifica la fecha para retroceder la publicación o fijar una fecha futura para programarla.';
+    }
+  });
+}
 
 // ── Excerpt character counter ──────────────────────────────────────────────
 const excerptArea = document.getElementById('post-excerpt');

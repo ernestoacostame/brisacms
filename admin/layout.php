@@ -279,6 +279,8 @@ body.sidebar-open .sidebar { transform: translateX(0) !important; }
 }
 .badge-green { background: rgba(16,185,129,0.12); color: var(--green); border: 1px solid rgba(16,185,129,0.25); }
 .badge-yellow { background: rgba(245,158,11,0.12); color: var(--yellow); border: 1px solid rgba(245,158,11,0.25); }
+.badge-blue { background: rgba(59,130,246,0.12); color: #3b82f6; border: 1px solid rgba(59,130,246,0.25); }
+.badge-purple { background: rgba(139,92,246,0.12); color: #8b5cf6; border: 1px solid rgba(139,92,246,0.25); }
 .badge-red { background: rgba(244,63,94,0.12); color: var(--red); border: 1px solid rgba(244,63,94,0.25); }
 .badge-gray { background: var(--surface2); color: var(--text2); border: 1px solid var(--border2); }
 
@@ -381,6 +383,8 @@ body.scheme-light .alert-success { background: #ecfdf5; border-color: #6ee7b7; c
 body.scheme-light .alert-error   { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
 body.scheme-light .badge-green { background: #d1fae5; color: #065f46; }
 body.scheme-light .badge-yellow { background: #fef3c7; color: #92400e; }
+body.scheme-light .badge-blue   { background: #dbeafe; color: #1e40af; }
+body.scheme-light .badge-purple { background: #ede9fe; color: #5b21b6; }
 body.scheme-light .badge-gray  { background: #f3f4f6; color: #4b5563; }
 body.scheme-light .floating-buttons-container {
   background: #ffffff !important;
@@ -468,6 +472,10 @@ body.scheme-light .floating-publish-btn {
     <a href="<?= base_url() ?>/admin/articles.php" class="nav-item <?= $active === 'articles' ? 'active' : '' ?>" data-label="Artículos">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
       <span class="nav-label"><?= __("nav_articles") ?></span>
+    </a>
+    <a href="<?= base_url() ?>/admin/calendar.php" class="nav-item <?= $active === 'calendar' ? 'active' : '' ?>" data-label="Calendario">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <span class="nav-label">Calendario</span>
     </a>
     <a href="<?= base_url() ?>/admin/pages.php" class="nav-item <?= $active === 'pages' ? 'active' : '' ?>" data-label="Páginas">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>

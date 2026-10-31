@@ -84,6 +84,7 @@ return [
     // Editor sidebar panels
     'panel_status'      => 'Estado',
     'status_draft'      => 'Borrador',
+    'status_scheduled'  => 'Programado',
     'status_published'  => 'Publicado',
     'panel_slug'        => 'URL Slug',
     'panel_slug_hint'   => 'Deja vacío para generar automáticamente del título.',

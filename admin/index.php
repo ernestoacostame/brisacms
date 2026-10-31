@@ -8,7 +8,9 @@ require_login();
 
 $articles = list_content('articles', false, 1, 9999);
 $pages = list_content('pages', false, 1, 9999);
-$published_articles = array_filter($articles['items'], fn($p) => $p['status'] === 'published');
+$published_articles = array_filter($articles['items'], fn($p) => ($p['status'] ?? '') === 'published');
+$scheduled_articles = array_filter($articles['items'], fn($p) => ($p['status'] ?? '') === 'scheduled');
+$draft_articles     = array_filter($articles['items'], fn($p) => ($p['status'] ?? '') === 'draft');
 $recent = array_slice($articles['items'], 0, 8);
 
 admin_header(__("dash_title"), 'dashboard');
@@ -81,8 +83,10 @@ admin_header(__("dash_title"), 'dashboard');
               </a>
             </td>
             <td>
-              <?php if ($post['status'] === 'published'): ?>
+              <?php if (($post['status'] ?? '') === 'published'): ?>
                 <span class="badge badge-green">✓ <?= __("dash_published", "Publicado") ?></span>
+              <?php elseif (($post['status'] ?? '') === 'scheduled'): ?>
+                <span class="badge badge-blue">⏰ <?= __("status_scheduled", "Programado") ?></span>
               <?php else: ?>
                 <span class="badge badge-yellow">● <?= __("dash_drafts", "Borrador") ?></span>
               <?php endif; ?>

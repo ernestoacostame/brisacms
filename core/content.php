@@ -108,7 +108,12 @@ function save_content(string $type, array $data): string {
     unset($data['original_slug']);
     $data['slug'] = $slug;
     $data['updated_at'] = date('c');
-    if (empty($data['created_at'])) $data['created_at'] = date('c');
+    if (empty($data['created_at'])) {
+        $data['created_at'] = date('c');
+    } else {
+        $ts = strtotime($data['created_at']);
+        $data['created_at'] = $ts ? date('c', $ts) : date('c');
+    }
     
     // Create a backup before saving
     save_content_backup($type, $data);
@@ -220,7 +225,66 @@ function invalidate_content_index(?string $type = null): void {
     }
 }
 
+/**
+ * Revisa si existen artículos con estado 'scheduled' cuya fecha de publicación
+ * programada ya haya sido alcanzada, y los publica automáticamente.
+ */
+function check_scheduled_posts(): void {
+    static $already_checked = false;
+    if ($already_checked) return;
+    $already_checked = true;
+
+    $items = get_content_index('articles', false);
+    $now = time();
+    $to_publish = [];
+
+    foreach ($items as $item) {
+        if (($item['status'] ?? '') === 'scheduled') {
+            $post_time = strtotime($item['created_at'] ?? '');
+            if ($post_time && $post_time <= $now) {
+                $to_publish[] = $item['slug'];
+            }
+        }
+    }
+
+    if (empty($to_publish)) return;
+
+    $updated = false;
+    foreach ($to_publish as $slug) {
+        $post = get_content('articles', $slug);
+        if ($post && ($post['status'] ?? '') === 'scheduled') {
+            $post['status'] = 'published';
+            save_content('articles', $post);
+            $updated = true;
+
+            // Trigger Fediverse si está activo
+            if (cms_plugin_is_active('fediverse')) {
+                require_once dirname(__DIR__) . '/plugins/fediverse/activitypub.php';
+                if (function_exists('ap_publish_article')) {
+                    ap_publish_article($post, false);
+                }
+            }
+
+            // Trigger Newsletter si estaba configurado
+            if (!empty($post['newsletter_broadcast'])) {
+                require_once dirname(__DIR__) . '/core/newsletter.php';
+                if (function_exists('newsletter_broadcast_post')) {
+                    newsletter_broadcast_post($post, false);
+                }
+            }
+        }
+    }
+
+    if ($updated) {
+        invalidate_content_index('articles');
+        clear_cache();
+    }
+}
+
 function list_content(string $type, bool $published_only = false, int $page = 1, int $per_page = 10): array {
+    if ($type === 'articles') {
+        check_scheduled_posts();
+    }
     $dir = content_path($type);
     if (!is_dir($dir)) return ['items' => [], 'total' => 0, 'pages' => 0];
 
