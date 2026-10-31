@@ -356,7 +356,7 @@ function newsletter_email_shell(string $title, string $innerHtml, string $unsubU
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#09090b; width:100%; padding:32px 16px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:580px; background-color:#18181b; border:1px solid #27272a; border-radius:12px; overflow:hidden; box-shadow:0 10px 25px rgba(0,0,0,0.4);">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:620px; background-color:#18181b; border:1px solid #27272a; border-radius:12px; overflow:hidden; box-shadow:0 10px 25px rgba(0,0,0,0.4);">
           <!-- Header -->
           <tr>
             <td style="padding:24px 32px; border-bottom:1px solid #27272a; text-align:left;">
@@ -367,7 +367,7 @@ function newsletter_email_shell(string $title, string $innerHtml, string $unsubU
           </tr>
           <!-- Body -->
           <tr>
-            <td style="padding:32px; text-align:left; font-size:15px; line-height:1.65; color:#d4d4d8;">
+            <td style="padding:32px 32px 40px 32px; text-align:left; font-size:16px; line-height:1.75; color:#d4d4d8;">
               {$innerHtml}
             </td>
           </tr>
@@ -379,6 +379,128 @@ function newsletter_email_shell(string $title, string $innerHtml, string $unsubU
 </body>
 </html>
 HTML;
+}
+
+/**
+ * Format post HTML content for email clients
+ * - Converts relative URLs to absolute URLs
+ * - Embeds email-safe YouTube preview cards instead of iframes (which are blocked in email clients)
+ * - Embeds email-safe audio cards with direct listen/download links
+ * - Inlines clean styling for headings, paragraphs, lists, blockquotes, code, tables, images
+ */
+function newsletter_format_content_for_email(string $html, string $base, string $postUrl): string {
+    if (trim($html) === '') return '';
+
+    // 1. Convert relative URLs to absolute in src and href attributes
+    $html = preg_replace_callback(
+        '/\b(src|href)=["\'](\/[^"\']*)["\']/i',
+        function ($m) use ($base) {
+            return $m[1] . '="' . htmlspecialchars($base . $m[2]) . '"';
+        },
+        $html
+    );
+
+    // Also relative paths like src="media/..." without leading slash
+    $html = preg_replace_callback(
+        '/\bsrc=["\'](media\/[^"\']*)["\']/i',
+        function ($m) use ($base) {
+            return 'src="' . htmlspecialchars($base . '/' . $m[1]) . '"';
+        },
+        $html
+    );
+
+    // 2. Convert YouTube iframes into email-safe clickable video preview cards
+    $html = preg_replace_callback(
+        '/(?:<div[^>]*class=["\'][^"\']*yt-embed[^"\']*["\'][^>]*>\s*)?<iframe[^>]*src=["\'][^"\']*(?:youtube(?:-nocookie)?\.com\/embed\/|youtu\.be\/)([a-zA-Z0-9_-]{11})[^"\']*["\'][^>]*><\/iframe>(?:\s*<\/div>)?/i',
+        function ($m) {
+            $vid = $m[1];
+            return '<div style="margin:24px 0; border:1px solid #27272a; border-radius:8px; overflow:hidden; background-color:#000000; text-align:center;">'
+                . '<a href="https://www.youtube.com/watch?v=' . $vid . '" target="_blank" style="text-decoration:none; display:block;">'
+                . '<img src="https://img.youtube.com/vi/' . $vid . '/hqdefault.jpg" alt="Ver video en YouTube" style="width:100%; max-width:580px; height:auto; display:block; margin:0 auto; border:none;">'
+                . '<div style="padding:10px 16px; background-color:#18181b; color:#fafafa; font-size:13px; font-weight:600; text-align:center;">'
+                . '▶ Ver video en YouTube ↗'
+                . '</div></a></div>';
+        },
+        $html
+    );
+
+    // 3. Convert Vimeo iframes into email-safe clickable card
+    $html = preg_replace_callback(
+        '/(?:<div[^>]*class=["\'][^"\']*yt-embed[^"\']*["\'][^>]*>\s*)?<iframe[^>]*src=["\'][^"\']*player\.vimeo\.com\/video\/(\d+)[^"\']*["\'][^>]*><\/iframe>(?:\s*<\/div>)?/i',
+        function ($m) {
+            $vid = $m[1];
+            return '<div style="margin:24px 0; padding:16px; border:1px solid #27272a; border-radius:8px; background-color:#18181b; text-align:center;">'
+                . '<a href="https://vimeo.com/' . $vid . '" target="_blank" style="color:#818cf8; text-decoration:none; font-weight:600; font-size:14px;">'
+                . '🎬 Reproducir video en Vimeo ↗'
+                . '</a></div>';
+        },
+        $html
+    );
+
+    // 4. Convert <audio> player into email-safe podcast/audio banner
+    $html = preg_replace_callback(
+        '/(?:<div[^>]*class=["\'][^"\']*media-audio[^"\']*["\'][^>]*>\s*)?<audio[^>]*src=["\']([^"\']+)["\'][^>]*>.*?<\/audio>(?:\s*<\/div>)?/is',
+        function ($m) {
+            $src = $m[1];
+            return '<div style="margin:22px 0; background-color:#27272a; border-left:4px solid #6366f1; border-radius:8px; padding:14px 18px; font-size:14px;">'
+                . '<span style="font-size:18px; margin-right:8px; vertical-align:middle;">🎵</span>'
+                . '<a href="' . htmlspecialchars($src) . '" target="_blank" style="color:#818cf8; text-decoration:none; font-weight:600;">'
+                . 'Reproducir audio / Escuchar episodio ↗'
+                . '</a></div>';
+        },
+        $html
+    );
+
+    // 5. Convert <video> tags into link box
+    $html = preg_replace_callback(
+        '/<video[^>]*src=["\']([^"\']+)["\'][^>]*>.*?<\/video>/is',
+        function ($m) {
+            $src = $m[1];
+            return '<div style="margin:22px 0; background-color:#18181b; border:1px solid #27272a; border-radius:8px; padding:16px; text-align:center;">'
+                . '<a href="' . htmlspecialchars($src) . '" target="_blank" style="color:#818cf8; text-decoration:none; font-weight:600; font-size:14px;">'
+                . '🎬 Reproducir archivo de video en el navegador ↗'
+                . '</a></div>';
+        },
+        $html
+    );
+
+    // 6. Style typography elements with inline CSS
+    // Paragraphs
+    $html = preg_replace('/<p\b(?![^>]*style=)[^>]*>/i', '<p style="margin:0 0 18px 0; font-size:16px; line-height:1.75; color:#d4d4d8;">', $html);
+
+    // Headings
+    $html = preg_replace('/<h2\b(?![^>]*style=)[^>]*>/i', '<h2 style="margin:34px 0 14px 0; font-size:22px; font-weight:700; color:#fafafa; line-height:1.3; letter-spacing:-0.02em;">', $html);
+    $html = preg_replace('/<h3\b(?![^>]*style=)[^>]*>/i', '<h3 style="margin:26px 0 12px 0; font-size:18px; font-weight:600; color:#fafafa; line-height:1.35;">', $html);
+    $html = preg_replace('/<h4\b(?![^>]*style=)[^>]*>/i', '<h4 style="margin:22px 0 10px 0; font-size:16px; font-weight:600; color:#fafafa; line-height:1.4;">', $html);
+
+    // Callout notes & blockquotes
+    $html = preg_replace('/<blockquote\b[^>]*class=["\'][^"\']*callout-note[^"\']*["\'][^>]*>/i', '<blockquote style="margin:22px 0; padding:14px 18px; border-left:4px solid #6366f1; background-color:rgba(99,102,241,0.1); border-radius:0 8px 8px 0; color:#f4f4f5; font-style:normal; font-size:15px; line-height:1.65;">', $html);
+    $html = preg_replace('/<blockquote\b(?![^>]*style=)[^>]*>/i', '<blockquote style="margin:22px 0; padding:10px 0 10px 18px; border-left:3px solid #6366f1; color:#a1a1aa; font-style:italic; font-size:16px; line-height:1.65; background-color:#18181b; border-radius:0 6px 6px 0;">', $html);
+
+    // Pre & Code
+    $html = preg_replace('/<pre\b(?![^>]*style=)[^>]*>/i', '<pre style="background-color:#18181b; border:1px solid #27272a; border-radius:8px; padding:14px 18px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; color:#e4e4e7; overflow-x:auto; line-height:1.55; margin:22px 0;">', $html);
+    $html = preg_replace('/<code\b(?![^>]*style=)[^>]*>/i', '<code style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:0.9em; background-color:#27272a; color:#a5b4fc; padding:2px 5px; border-radius:4px;">', $html);
+
+    // Lists
+    $html = preg_replace('/<ul\b(?![^>]*style=)[^>]*>/i', '<ul style="margin:0 0 18px 0; padding-left:24px; color:#d4d4d8; line-height:1.75;">', $html);
+    $html = preg_replace('/<ol\b(?![^>]*style=)[^>]*>/i', '<ol style="margin:0 0 18px 0; padding-left:24px; color:#d4d4d8; line-height:1.75;">', $html);
+    $html = preg_replace('/<li\b(?![^>]*style=)[^>]*>/i', '<li style="margin-bottom:6px;">', $html);
+
+    // Links (that don't already have a style attribute)
+    $html = preg_replace('/<a\b(?![^>]*style=)([^>]*)>/i', '<a style="color:#818cf8; text-decoration:underline; text-underline-offset:3px;"$1>', $html);
+
+    // Images (ensure max-width & styling)
+    $html = preg_replace('/<img\b(?![^>]*style=)([^>]*)>/i', '<img style="max-width:100% !important; height:auto !important; border-radius:8px; margin:22px 0; display:block;"$1>', $html);
+
+    // Horizontal Rule
+    $html = preg_replace('/<hr\b(?![^>]*style=)[^>]*>/i', '<hr style="border:none; border-top:1px solid #27272a; margin:32px 0;">', $html);
+
+    // Tables
+    $html = preg_replace('/<table\b(?![^>]*style=)[^>]*>/i', '<table style="width:100%; border-collapse:collapse; margin:24px 0; font-size:14px; border:1px solid #27272a;">', $html);
+    $html = preg_replace('/<th\b(?![^>]*style=)[^>]*>/i', '<th style="padding:8px 12px; background-color:#27272a; color:#fafafa; border:1px solid #3f3f46; text-align:left;">', $html);
+    $html = preg_replace('/<td\b(?![^>]*style=)[^>]*>/i', '<td style="padding:8px 12px; border:1px solid #27272a; color:#d4d4d8;">', $html);
+
+    return $html;
 }
 
 /**
@@ -417,24 +539,51 @@ function newsletter_render_broadcast_email(array $post, string $token): string {
     $title = htmlspecialchars($post['title'] ?? 'Nuevo artículo');
     $excerpt = htmlspecialchars($post['excerpt'] ?? '');
     
+    // Cover / Featured Image
     $coverHtml = '';
     if (!empty($post['featured_image'])) {
         $cover = $post['featured_image'];
         if (str_starts_with($cover, '/')) $cover = $base . $cover;
-        $coverHtml = '<div style="margin:0 0 20px 0; border-radius:8px; overflow:hidden;"><img src="' . htmlspecialchars($cover) . '" alt="" style="width:100%; height:auto; display:block;"></div>';
+        elseif (!str_starts_with($cover, 'http://') && !str_starts_with($cover, 'https://')) $cover = $base . '/' . $cover;
+        $coverHtml = '<div style="margin:0 0 24px 0; border-radius:8px; overflow:hidden;"><a href="' . $postUrl . '"><img src="' . htmlspecialchars($cover) . '" alt="' . $title . '" style="width:100%; height:auto; display:block; border-radius:8px;"></a></div>';
+    }
+
+    // Date & Reading time metadata
+    $dateStr = !empty($post['created_at']) ? date('d/m/Y', strtotime($post['created_at'])) : date('d/m/Y');
+    $author = htmlspecialchars($post['author'] ?? ($post['user'] ?? ''));
+    $words = str_word_count(strip_tags($post['content'] ?? ''));
+    $readingMin = max(1, (int)ceil($words / 220));
+    $metaParts = [];
+    if ($author) $metaParts[] = "Por {$author}";
+    $metaParts[] = $dateStr;
+    $metaParts[] = "{$readingMin} min de lectura";
+    $metaLine = implode(' · ', $metaParts);
+
+    // Format full article content for email
+    $rawContent = $post['content'] ?? '';
+    $formattedBody = newsletter_format_content_for_email($rawContent, $base, $postUrl);
+
+    // Optional lead / excerpt
+    $excerptHtml = '';
+    if ($excerpt !== '') {
+        $excerptHtml = '<p style="margin:0 0 24px 0; font-size:17px; color:#a1a1aa; line-height:1.65; font-style:italic; border-bottom:1px solid #27272a; padding-bottom:18px;">' . $excerpt . '</p>';
     }
 
     $inner = <<<HTML
       {$coverHtml}
-      <h1 style="margin:0 0 16px 0; font-size:24px; font-weight:700; color:#fafafa; line-height:1.3; letter-spacing:-0.02em;">
+      <h1 style="margin:0 0 14px 0; font-size:26px; font-weight:700; color:#fafafa; line-height:1.25; letter-spacing:-0.02em;">
         <a href="{$postUrl}" style="color:#fafafa; text-decoration:none;">{$title}</a>
       </h1>
-      <p style="margin:0 0 24px 0; font-size:16px; color:#a1a1aa; line-height:1.6;">
-        {$excerpt}
-      </p>
-      <div style="margin:30px 0;">
-        <a href="{$postUrl}" style="display:inline-block; background-color:#6366f1; color:#ffffff; font-size:15px; font-weight:600; text-decoration:none; padding:12px 24px; border-radius:8px;">
-          Leer artículo completo en el blog →
+      <div style="font-size:13px; color:#71717a; margin-bottom:20px; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        {$metaLine}
+      </div>
+      {$excerptHtml}
+      <div class="article-body" style="font-size:16px; line-height:1.75; color:#d4d4d8;">
+        {$formattedBody}
+      </div>
+      <div style="margin:36px 0 10px 0; padding-top:24px; border-top:1px solid #27272a; text-align:center;">
+        <a href="{$postUrl}" style="display:inline-block; background-color:#6366f1; color:#ffffff; font-size:14px; font-weight:600; text-decoration:none; padding:12px 26px; border-radius:8px; box-shadow:0 2px 8px rgba(99,102,241,0.3);">
+          Ver o comentar en el blog ↗
         </a>
       </div>
 HTML;
