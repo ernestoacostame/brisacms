@@ -139,7 +139,7 @@ $detected_base = (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . $_SERVE
 <body>
 <div class="installer">
   <div class="logo">
-    <h1>Flux<span>CMS</span></h1>
+    <h1>Kut<span>Blog</span></h1>
     <p>Simple, fast, file-based publishing</p>
   </div>
   <div class="card">
