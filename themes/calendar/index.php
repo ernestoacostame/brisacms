@@ -31,7 +31,7 @@ $days_es = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'S�
 <?php else: ?>
 
 <div class="calendar-two-columns">
-  <!-- ── COLUMNA IZQUIERDA: Artículos ───────────────────────────────────── -->
+  <!-- ── COLUMNA IZQUIERDA: Artículos (Estilo compacto SystemInside) ──────── -->
   <section class="calendar-posts-stream" id="posts-stream">
     <?php
     $first_post_info = null;
@@ -47,7 +47,7 @@ $days_es = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'S�
       $weekday = $days_es[(int)date('w', $ts)] ?? '';
       $date_formatted = $day_num . ' de ' . $month_str . ', ' . $year;
 
-      $first_cat = !empty($post['categories'][0]) ? $post['categories'][0] : 'General';
+      $first_cat = !empty($post['categories'][0]) ? $post['categories'][0] : null;
       $has_image = !empty($post['featured_image']);
       $words = str_word_count(strip_tags($post['content'] ?? ''));
       $read_time = max(1, (int)ceil($words / 200));
@@ -55,7 +55,7 @@ $days_es = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'S�
 
       $excerpt = $post['excerpt'] ?? '';
       if (!$excerpt && !empty($post['content'])) {
-        $excerpt = mb_substr(strip_tags($post['content']), 0, 175) . '…';
+        $excerpt = mb_substr(strip_tags($post['content']), 0, 140) . '…';
       }
 
       if ($idx === 0) {
@@ -69,7 +69,7 @@ $days_es = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'S�
       }
     ?>
     <article
-      class="calendar-card <?= $idx === 0 ? 'is-active-card' : '' ?>"
+      class="calendar-card <?= $has_image ? 'has-thumb' : '' ?> <?= $idx === 0 ? 'is-active-card' : '' ?>"
       id="post-<?= htmlspecialchars($post['slug']) ?>"
       data-post-slug="<?= htmlspecialchars($post['slug']) ?>"
       data-day="<?= $day ?>"
@@ -78,60 +78,55 @@ $days_es = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'S�
       data-weekday="<?= $weekday ?>"
       data-title="<?= htmlspecialchars($post['title'] ?? 'Sin título') ?>"
     >
-      <!-- Meta con fecha e información -->
-      <div class="card-meta">
-        <div class="card-date-badge">
-          <span class="badge-day"><?= $day ?></span>
-          <span class="badge-month"><?= $month_short ?></span>
-        </div>
-
-        <div class="card-meta-details">
-          <?php if (!empty($post['categories'][0])): ?>
-            <a href="<?= $base ?>/category/<?= urlencode($first_cat) ?>" class="card-cat-link">
-              <?= htmlspecialchars($first_cat) ?>
-            </a>
-            <span class="meta-dot">·</span>
-          <?php endif; ?>
-          <span class="card-readtime"><?= $read_time ?> min de lectura</span>
-          <?php if ($has_podcast): ?>
-            <span class="meta-dot">·</span>
-            <span class="card-podcast-badge" title="Episodio con audio disponible">🎙️ Podcast</span>
-          <?php endif; ?>
-        </div>
-      </div>
-
-      <!-- Título -->
-      <h2 class="card-title">
-        <a href="<?= $post_url ?>">
-          <?= htmlspecialchars($post['title'] ?? 'Sin título') ?>
-        </a>
-      </h2>
-
-      <!-- Imagen Destacada -->
       <?php if ($has_image): ?>
-      <a href="<?= $post_url ?>" class="card-image-wrap" aria-label="<?= htmlspecialchars($post['title'] ?? '') ?>">
+      <a href="<?= $post_url ?>" class="card-thumb" aria-label="<?= htmlspecialchars($post['title'] ?? '') ?>">
         <img src="<?= htmlspecialchars($post['featured_image']) ?>"
              alt="<?= htmlspecialchars($post['title'] ?? '') ?>"
              loading="<?= $idx === 0 ? 'eager' : 'lazy' ?>">
       </a>
       <?php endif; ?>
 
-      <!-- Extracto -->
-      <?php if (!empty($excerpt)): ?>
-      <p class="card-excerpt">
-        <?= htmlspecialchars($excerpt) ?>
-      </p>
-      <?php endif; ?>
+      <div class="card-body">
+        <!-- Meta con fecha e información -->
+        <div class="card-meta">
+          <span class="card-date-badge"><?= $day ?> <?= $month_short ?></span>
+          <?php if ($first_cat): ?>
+            <a href="<?= $base ?>/category/<?= urlencode($first_cat) ?>" class="card-cat-link">
+              <?= htmlspecialchars($first_cat) ?>
+            </a>
+            <span class="meta-dot">·</span>
+          <?php endif; ?>
+          <span class="card-readtime"><?= $read_time ?> min</span>
+          <?php if ($has_podcast): ?>
+            <span class="meta-dot">·</span>
+            <span class="card-podcast-badge" title="Episodio con audio disponible">🎙️ Podcast</span>
+          <?php endif; ?>
+        </div>
 
-      <!-- Enlace para continuar leyendo -->
-      <div class="card-actions">
-        <a href="<?= $post_url ?>" class="card-read-more">
-          <span>Leer artículo</span>
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-            <polyline points="12 5 19 12 12 19"></polyline>
-          </svg>
-        </a>
+        <!-- Título -->
+        <h2 class="card-title">
+          <a href="<?= $post_url ?>">
+            <?= htmlspecialchars($post['title'] ?? 'Sin título') ?>
+          </a>
+        </h2>
+
+        <!-- Extracto -->
+        <?php if (!empty($excerpt)): ?>
+        <p class="card-excerpt">
+          <?= htmlspecialchars($excerpt) ?>
+        </p>
+        <?php endif; ?>
+
+        <!-- Enlace Leer -->
+        <div class="card-actions">
+          <a href="<?= $post_url ?>" class="card-read-more">
+            <span>Leer</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </a>
+        </div>
       </div>
     </article>
     <?php endforeach; ?>
@@ -175,10 +170,10 @@ $days_es = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'S�
     <?php endif; ?>
   </section>
 
-  <!-- ── COLUMNA DERECHA: Sticky Calendar & Timeline ────────────────────── -->
+  <!-- ── COLUMNA DERECHA: Barra Lateral Fija (Timeline & Calendario) ────── -->
   <aside class="calendar-timeline-aside">
     <div class="timeline-sticky-box" id="timeline-sticky-box">
-      <!-- Widget Visual del Calendario Dinámico -->
+      <!-- Widget Visual del Calendario Dinámico (Simple y recto) -->
       <div class="calendar-active-widget">
         <div class="widget-calendar-card">
           <div class="cal-card-header">
@@ -203,7 +198,7 @@ $days_es = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'S�
       <div class="timeline-scroll-container">
         <div class="timeline-header">
           <span class="timeline-title">Línea de tiempo</span>
-          <span class="timeline-count"><?= count($posts['items']) ?> posts</span>
+          <span class="timeline-count"><?= count($posts['items']) ?></span>
         </div>
 
         <div class="timeline-track" id="timeline-track">
@@ -283,22 +278,16 @@ document.addEventListener('DOMContentLoaded', function() {
       if (match) activeNode = node;
     });
 
-    // 3. Actualizar widget visual del calendario con animación sutil
-    if (widgetDay && widgetMonth && widgetYear && widgetTitle) {
+    // 3. Actualizar widget visual del calendario
+    if (widgetDay && widgetMonth && widgetYear) {
       widgetDay.textContent = postEl.getAttribute('data-day') || '';
       widgetMonth.textContent = postEl.getAttribute('data-month') || '';
       widgetYear.textContent = postEl.getAttribute('data-year') || '';
       if (widgetWeekday) {
         widgetWeekday.textContent = postEl.getAttribute('data-weekday') || '';
       }
-      widgetTitle.textContent = postEl.getAttribute('data-title') || '';
-
-      // Destello sutil
-      const widget = document.querySelector('.calendar-active-widget');
-      if (widget) {
-        widget.classList.remove('pulse-change');
-        void widget.offsetWidth; // trigger reflow
-        widget.classList.add('pulse-change');
+      if (widgetTitle) {
+        widgetTitle.textContent = postEl.getAttribute('data-title') || '';
       }
     }
 
@@ -306,7 +295,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (smoothScrollTimeline && activeNode && trackContainer) {
       const containerRect = trackContainer.getBoundingClientRect();
       const nodeRect = activeNode.getBoundingClientRect();
-      if (nodeRect.top < containerRect.top + 40 || nodeRect.bottom > containerRect.bottom - 40) {
+      if (nodeRect.top < containerRect.top + 30 || nodeRect.bottom > containerRect.bottom - 30) {
         activeNode.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
     }
@@ -324,7 +313,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         setActivePost(targetEl, false);
 
-        const headerOffset = 80;
+        const headerOffset = 70;
         const elementPosition = targetEl.getBoundingClientRect().top;
         const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
 
@@ -350,14 +339,13 @@ document.addEventListener('DOMContentLoaded', function() {
   // IntersectionObserver para detectar cuál artículo está enfocado
   const observerOptions = {
     root: null,
-    rootMargin: '-15% 0px -55% 0px',
-    threshold: [0, 0.25, 0.5, 0.75, 1.0]
+    rootMargin: '-10% 0px -60% 0px',
+    threshold: [0, 0.2, 0.5, 0.8]
   };
 
   const observer = new IntersectionObserver((entries) => {
     if (isUserClicking) return;
 
-    // Buscar el artículo que tenga mayor visibilidad o esté en la zona media-superior
     const visibleEntries = entries.filter(e => e.isIntersecting);
     if (visibleEntries.length > 0) {
       visibleEntries.sort((a, b) => b.intersectionRatio - a.intersectionRatio);
@@ -367,13 +355,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
   posts.forEach(p => observer.observe(p));
 
-  // Fallback para scroll fino al llegar al top o bottom
+  // Fallback para scroll fino al llegar al top
   let ticking = false;
   window.addEventListener('scroll', () => {
     if (ticking || isUserClicking) return;
     ticking = true;
     requestAnimationFrame(() => {
-      if (window.scrollY < 120 && posts[0]) {
+      if (window.scrollY < 80 && posts[0]) {
         setActivePost(posts[0]);
       }
       ticking = false;
@@ -383,4 +371,3 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <?php endif; ?>
-

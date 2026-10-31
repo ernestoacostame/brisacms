@@ -45,43 +45,49 @@ $days_es = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'S�
         $excerpt = mb_substr(strip_tags($post['content']), 0, 160) . '…';
       }
     ?>
-    <article class="calendar-card" id="post-<?= htmlspecialchars($post['slug']) ?>">
-      <div class="card-meta">
-        <div class="card-date-badge">
-          <span class="badge-day"><?= $day ?></span>
-          <span class="badge-month"><?= $month_short ?></span>
-        </div>
-        <div class="card-meta-details">
+    <?php $has_image = !empty($post['featured_image']); ?>
+    <article class="calendar-card <?= $has_image ? 'has-thumb' : '' ?>" id="post-<?= htmlspecialchars($post['slug']) ?>">
+      <?php if ($has_image): ?>
+      <a href="<?= $post_url ?>" class="card-thumb" aria-label="<?= htmlspecialchars($post['title'] ?? '') ?>">
+        <img src="<?= htmlspecialchars($post['featured_image']) ?>"
+             alt="<?= htmlspecialchars($post['title'] ?? '') ?>"
+             loading="lazy">
+      </a>
+      <?php endif; ?>
+
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="card-date-badge"><?= $day ?> <?= $month_short ?></span>
           <a href="<?= $base ?>/category/<?= urlencode($first_cat) ?>" class="card-cat-link">
             <?= htmlspecialchars($first_cat) ?>
           </a>
           <span class="meta-dot">·</span>
-          <span class="card-readtime"><?= $read_time ?> min de lectura</span>
+          <span class="card-readtime"><?= $read_time ?> min</span>
           <span class="meta-dot">·</span>
           <time datetime="<?= $post['created_at'] ?? '' ?>"><?= $year ?></time>
         </div>
-      </div>
 
-      <h2 class="card-title">
-        <a href="<?= $post_url ?>">
-          <?= htmlspecialchars($post['title'] ?? 'Sin título') ?>
-        </a>
-      </h2>
+        <h2 class="card-title">
+          <a href="<?= $post_url ?>">
+            <?= htmlspecialchars($post['title'] ?? 'Sin título') ?>
+          </a>
+        </h2>
 
-      <?php if (!empty($excerpt)): ?>
-      <p class="card-excerpt">
-        <?= htmlspecialchars($excerpt) ?>
-      </p>
-      <?php endif; ?>
+        <?php if (!empty($excerpt)): ?>
+        <p class="card-excerpt">
+          <?= htmlspecialchars($excerpt) ?>
+        </p>
+        <?php endif; ?>
 
-      <div class="card-actions">
-        <a href="<?= $post_url ?>" class="card-read-more">
-          <span>Leer artículo</span>
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-            <polyline points="12 5 19 12 12 19"></polyline>
-          </svg>
-        </a>
+        <div class="card-actions">
+          <a href="<?= $post_url ?>" class="card-read-more">
+            <span>Leer</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </a>
+        </div>
       </div>
     </article>
     <?php endforeach; ?>
