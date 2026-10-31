@@ -509,7 +509,7 @@ function kutpod_filter_content(string $content, array $post): string {
         // Construir HTML del reproductor
         $playerHtml = '
         <div class="kutpod-player-container">
-          <iframe id="kutpod-player-frame" src="' . htmlspecialchars($embedSrc) . '" class="kutpod-player-frame" style="width:100%; height:175px; min-height:175px; border:none;" allow="autoplay" loading="lazy"></iframe>
+          <iframe id="kutpod-player-frame" src="' . htmlspecialchars($embedSrc) . '" class="kutpod-player-frame" style="width:100%; height:175px; min-height:175px; border:none;" allow="encrypted-media; fullscreen" loading="lazy"></iframe>
           ' . $statsBar . '
         </div>';
 
@@ -1013,7 +1013,7 @@ function kutpod_render_related_box($episodesOrSingle, array $cfg): string {
         ' . ($showName !== '' ? '<span class="kutpod-related-showname" style="font-weight:500; opacity:0.8; font-size:0.8rem; margin-left:auto;">' . $showName . '</span>' : '') . '
       </div>
       <div class="kutpod-related-player-wrap" style="border-radius:12px; overflow:hidden;">
-        <iframe src="' . htmlspecialchars($embedSrc) . '" class="kutpod-player-frame" style="width:100%; height:175px; min-height:175px; border:none; display:block;" allow="autoplay" loading="lazy"></iframe>
+        <iframe src="' . htmlspecialchars($embedSrc) . '" class="kutpod-player-frame" style="width:100%; height:175px; min-height:175px; border:none; display:block;" allow="encrypted-media; fullscreen" loading="lazy"></iframe>
       </div>
       ' . $playlistHtml . '
     </div>';

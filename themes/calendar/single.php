@@ -18,6 +18,17 @@ $content = preg_replace_callback(
     $content
 );
 
+// Sanitizar enlaces y recursos file:/// para prevenir Security Error en navegadores
+$content = preg_replace_callback('/<a\s+[^>]*href=["\']file:\/\/[^"\']*["\'][^>]*>(.*?)<\/a>/is', function($m) {
+    return '<code>' . $m[1] . '</code>';
+}, $content);
+$content = preg_replace('/<(?:img|audio|video|source)\s+[^>]*src=["\']file:\/\/[^"\']*["\'][^>]*>/is', '', $content);
+
+$featured_image = $post['featured_image'] ?? '';
+if (str_starts_with($featured_image, 'file://')) {
+    $featured_image = '';
+}
+
 $article_mastodon_url = $post['mastodon_url'] ?? '';
 $words = str_word_count(strip_tags($post['content'] ?? ''));
 $read_time = max(1, (int)ceil($words / 200));
@@ -88,9 +99,9 @@ $recent_articles = function_exists('list_content') ? list_content('articles', tr
     </header>
 
     <!-- Imagen destacada -->
-    <?php if (!empty($post['featured_image'])): ?>
+    <?php if (!empty($featured_image)): ?>
     <div class="single-featured-image">
-      <img src="<?= htmlspecialchars($post['featured_image']) ?>"
+      <img src="<?= htmlspecialchars($featured_image) ?>"
            alt="<?= htmlspecialchars($post['title'] ?? '') ?>">
     </div>
     <?php endif; ?>
@@ -304,12 +315,14 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // ── Indicador de Progreso de Lectura ──────────────────────────────────────
+  // ── Indicador de Progreso de Lectura con requestAnimationFrame ───────────
   const readingFill = document.getElementById('reading-fill');
   const readingPercent = document.getElementById('reading-percent');
   const articleEl = document.getElementById('article-content-wrapper');
 
   if (readingFill && readingPercent && articleEl) {
+    let ticking = false;
+
     function updateProgress() {
       const rect = articleEl.getBoundingClientRect();
       const totalHeight = rect.height - window.innerHeight;
@@ -324,8 +337,18 @@ document.addEventListener('DOMContentLoaded', function() {
       readingPercent.textContent = percent + '%';
     }
 
-    window.addEventListener('scroll', updateProgress, { passive: true });
-    window.addEventListener('resize', updateProgress, { passive: true });
+    function onScrollProgress() {
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          updateProgress();
+          ticking = false;
+        });
+        ticking = true;
+      }
+    }
+
+    window.addEventListener('scroll', onScrollProgress, { passive: true });
+    window.addEventListener('resize', onScrollProgress, { passive: true });
     updateProgress();
   }
 });

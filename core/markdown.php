@@ -193,8 +193,12 @@ function md_inline(string $text): string {
     // Links
     $text = preg_replace_callback('/\[([^\]]+)\]\(([^)]+)\)/', function($m) {
         $label = $m[1];
-        $href = htmlspecialchars($m[2]);
-        $ext = preg_match('/^https?:\/\//', $m[2]) ? ' target="_blank" rel="noopener"' : '';
+        $url = trim($m[2]);
+        if (preg_match('/^file:\/\//i', $url)) {
+            return "<code>{$label}</code>";
+        }
+        $href = htmlspecialchars($url);
+        $ext = preg_match('/^https?:\/\//', $url) ? ' target="_blank" rel="noopener"' : '';
         return "<a href=\"{$href}\"{$ext}>{$label}</a>";
     }, $text);
 
