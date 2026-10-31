@@ -3143,7 +3143,12 @@ const htmlToolbar  = document.getElementById('html-toolbar');
   const contentInput = document.getElementById('content-input');
   const postTitle = document.getElementById('post-title');
   const bubbleMenu = document.getElementById('bubble-menu');
+  const imageBubbleMenu = document.getElementById('image-bubble-menu');
   const slashMenu = document.getElementById('slash-menu');
+
+  function hideImageBubble() {
+    if (imageBubbleMenu) imageBubbleMenu.style.display = 'none';
+  }
   const findBar = document.getElementById('find-replace-bar');
   const deskMetrics = document.getElementById('desk-metrics');
   const publishBtn = document.getElementById('publish-btn');
@@ -3333,9 +3338,22 @@ const htmlToolbar  = document.getElementById('html-toolbar');
         if (fallbackEditor) fallbackEditor.innerHTML = html;
         updateMetrics(editor.getText());
         markDirty();
+        if (!editor.isActive('image')) {
+          hideImageBubble();
+        }
       },
       onSelectionUpdate({ editor }) {
         updateBubblePosition(editor);
+      },
+      onBlur({ editor }) {
+        setTimeout(() => {
+          if (!editor.isFocused) {
+            const activeEl = document.activeElement;
+            if (!imageBubbleMenu?.contains(activeEl) && !imageBubbleMenu?.matches(':hover')) {
+              hideImageBubble();
+            }
+          }
+        }, 150);
       }
     });
 
@@ -3384,10 +3402,12 @@ const htmlToolbar  = document.getElementById('html-toolbar');
   }
 
   // 4. FLOATING BUBBLE SELECTION MENU & IMAGE ALIGNMENT MENU
-  const imageBubbleMenu = document.getElementById('image-bubble-menu');
-
   function updateBubblePosition(editor) {
-    if (mode !== 'visual') return;
+    if (mode !== 'visual' || isRawMode) {
+      hideImageBubble();
+      if (bubbleMenu) bubbleMenu.style.display = 'none';
+      return;
+    }
     const { from, to, empty } = editor.state.selection;
 
     // Check if an image node is selected
@@ -3422,7 +3442,7 @@ const htmlToolbar  = document.getElementById('html-toolbar');
       }
       return;
     } else {
-      if (imageBubbleMenu) imageBubbleMenu.style.display = 'none';
+      hideImageBubble();
     }
 
     if (!bubbleMenu) return;
@@ -3511,9 +3531,11 @@ const htmlToolbar  = document.getElementById('html-toolbar');
   // Handle delete image button
   imageBubbleMenu?.querySelector('#img-btn-delete')?.addEventListener('mousedown', (e) => {
     e.preventDefault();
+    hideImageBubble();
     if (window.pmEditor) {
       window.pmEditor.chain().focus().deleteSelection().run();
-      if (imageBubbleMenu) imageBubbleMenu.style.display = 'none';
+      hideImageBubble();
+      setTimeout(hideImageBubble, 50);
     }
   });
 
@@ -3532,8 +3554,10 @@ const htmlToolbar  = document.getElementById('html-toolbar');
   pmMount?.addEventListener('keydown', (e) => {
     if ((e.key === 'Backspace' || e.key === 'Delete') && window.pmEditor && window.pmEditor.isActive('image')) {
       e.preventDefault();
+      hideImageBubble();
       window.pmEditor.chain().focus().deleteSelection().run();
-      if (imageBubbleMenu) imageBubbleMenu.style.display = 'none';
+      hideImageBubble();
+      setTimeout(hideImageBubble, 50);
     }
   });
 
@@ -3722,11 +3746,26 @@ const htmlToolbar  = document.getElementById('html-toolbar');
     }
   });
 
-  document.addEventListener('click', (e) => {
+  document.addEventListener('mousedown', (e) => {
     if (slashActive && !slashMenu.contains(e.target)) {
       closeSlashMenu();
     }
+    if (imageBubbleMenu && imageBubbleMenu.style.display !== 'none') {
+      if (!imageBubbleMenu.contains(e.target) && !e.target.closest('img')) {
+        hideImageBubble();
+      }
+    }
   });
+
+  window.addEventListener('scroll', () => {
+    if (imageBubbleMenu && imageBubbleMenu.style.display !== 'none') {
+      if (window.pmEditor && window.pmEditor.isActive('image')) {
+        updateBubblePosition(window.pmEditor);
+      } else {
+        hideImageBubble();
+      }
+    }
+  }, { passive: true });
 
   // 6. RAW / VISUAL SWITCHER
   const switchRaw = document.getElementById('switch-raw');
@@ -3751,6 +3790,7 @@ const htmlToolbar  = document.getElementById('html-toolbar');
         if (fallbackEditor) fallbackEditor.style.display = 'none';
         closeSlashMenu();
         if (bubbleMenu) bubbleMenu.style.display = 'none';
+        hideImageBubble();
       } else {
         // Switch to Visual
         const rawHtml = rawEditor ? rawEditor.value : '';
@@ -3762,6 +3802,7 @@ const htmlToolbar  = document.getElementById('html-toolbar');
           fallbackEditor.style.display = 'block';
         }
         if (rawEditor) rawEditor.style.display = 'none';
+        hideImageBubble();
       }
     });
   }
@@ -4841,6 +4882,7 @@ const siteBase     = <?= json_encode(base_url()) ?>;
 previewBtn?.addEventListener('click', openPreview);
 
 function openPreview() {
+  document.getElementById('image-bubble-menu')?.style.setProperty('display', 'none');
   const adminBase = siteBase + '/admin';
   
   // Get current content
