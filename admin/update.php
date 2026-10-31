@@ -389,6 +389,10 @@ function cmsUpdateCheck() {
   const btn = document.getElementById('btn-check');
   const status = document.getElementById('update-status');
   const available = document.getElementById('update-available');
+  const progress = document.getElementById('update-progress');
+  const result = document.getElementById('update-result');
+  const applyBtn = document.getElementById('btn-apply');
+  const manualStatus = document.getElementById('manual-upload-status');
 
   btn.disabled = true;
   btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: middle; animation: spin 1.5s linear infinite;"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg> Buscando...';
@@ -397,6 +401,13 @@ function cmsUpdateCheck() {
   status.style.color = 'var(--text2)';
   status.textContent = 'Consultando GitHub...';
   available.style.display = 'none';
+  if (progress) progress.style.display = 'none';
+  if (result) result.style.display = 'none';
+  if (manualStatus) manualStatus.style.display = 'none';
+  if (applyBtn) {
+    applyBtn.disabled = false;
+    applyBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 3px; vertical-align: middle;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> <?= __('update_btn_apply', 'Actualizar ahora') ?>';
+  }
 
   fetch('<?= base_url() ?>/api/update.php?action=check')
     .then(r => r.json())
@@ -417,6 +428,10 @@ function cmsUpdateCheck() {
         _updateData = data;
         status.style.display = 'none';
         available.style.display = 'block';
+        if (applyBtn) {
+          applyBtn.disabled = false;
+          applyBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 3px; vertical-align: middle;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> <?= __('update_btn_apply', 'Actualizar ahora') ?>';
+        }
         document.getElementById('update-version-label').textContent = data.name || ('v' + data.new_version);
         document.getElementById('update-date-label').textContent = data.published_at
           ? 'Publicado el ' + new Date(data.published_at).toLocaleDateString('es', {year:'numeric', month:'long', day:'numeric'})
@@ -441,6 +456,7 @@ function cmsUpdateApply() {
   if (!confirm('¿Actualizar KutBlog de v' + _updateData.current_version + ' a v' + _updateData.new_version + '?\n\nSe creará un backup automáticamente antes de aplicar los cambios.')) return;
 
   const btn = document.getElementById('btn-apply');
+  const checkBtn = document.getElementById('btn-check');
   const progress = document.getElementById('update-progress');
   const progressBar = document.getElementById('progress-bar');
   const progressLabel = document.getElementById('progress-label');
@@ -458,6 +474,7 @@ function cmsUpdateApply() {
     document.getElementById('result-title').textContent = '❌ Error';
     document.getElementById('result-body').textContent = msg;
     btn.disabled = false;
+    if (checkBtn) checkBtn.disabled = false;
     available.style.display = 'block';
   };
 
@@ -522,10 +539,17 @@ function cmsUpdateApply() {
               'KutBlog actualizado de <strong>v' + data.from + '</strong> a <strong>v' + data.to + '</strong>. ' +
               data.files_updated + ' ficheros actualizados.<br><br>' +
               '<a href="<?= base_url() ?>/admin/update.php" class="btn btn-primary" style="margin-top:8px">Recargar página</a>';
+            btn.disabled = false;
+            btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 3px; vertical-align: middle;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> <?= __('update_btn_apply', 'Actualizar ahora') ?>';
+            if (checkBtn) checkBtn.disabled = false;
+            _updateData = null;
           }
         });
     })
-    .catch(e => showError(e.message));
+    .catch(e => {
+      showError(e.message);
+      if (checkBtn) checkBtn.disabled = false;
+    });
 }
 
 function cmsUpdateRollback() {
@@ -791,6 +815,8 @@ function cmsManualUpdateUpload(e) {
     fileInput.value = '';
     btn.disabled = false;
     btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: middle;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> Subir e instalar actualización';
+    const checkBtn = document.getElementById('btn-check');
+    if (checkBtn) checkBtn.disabled = false;
   })
   .catch(err => {
     status.style.background = 'rgba(248, 113, 113, 0.1)';
@@ -798,6 +824,8 @@ function cmsManualUpdateUpload(e) {
     status.innerHTML = '<strong>❌ Error de conexión:</strong><div style="margin-top: 6px; font-size: 13px;">' + err.message + '</div>';
     btn.disabled = false;
     btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: middle;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> Subir e instalar actualización';
+    const checkBtn = document.getElementById('btn-check');
+    if (checkBtn) checkBtn.disabled = false;
   });
 }
 </script>
