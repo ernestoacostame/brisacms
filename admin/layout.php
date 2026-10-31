@@ -581,7 +581,6 @@ body.scheme-light .floating-publish-btn {
           color:<?= $cur_lang==='en' ? '#ffffff' : 'var(--muted)' ?>;">EN</a>
       </div>
 
-<?php } ?>
 <script>
 // Run immediately — body already exists at this point
 (function() {
@@ -622,3 +621,4 @@ body.scheme-light .floating-publish-btn {
   });
 })();
 </script>
+<?php } ?>
