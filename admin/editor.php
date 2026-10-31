@@ -207,6 +207,28 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
                 </button>
                 <button type="button" class="bubble-btn" data-cmd="code" title="Código en línea"><code>&lt;&gt;</code></button>
                 <div class="bubble-sep"></div>
+                <button type="button" class="bubble-btn" data-cmd="align-left" title="Alinear a la izquierda (Ctrl+Shift+L)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="21" y1="6" x2="3" y2="6"></line>
+                    <line x1="15" y1="12" x2="3" y2="12"></line>
+                    <line x1="19" y1="18" x2="3" y2="18"></line>
+                  </svg>
+                </button>
+                <button type="button" class="bubble-btn" data-cmd="align-center" title="Alinear al centro (Ctrl+Shift+E)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="6"></line>
+                    <line x1="21" y1="12" x2="3" y2="12"></line>
+                    <line x1="18" y1="18" x2="6" y2="18"></line>
+                  </svg>
+                </button>
+                <button type="button" class="bubble-btn" data-cmd="align-right" title="Alinear a la derecha (Ctrl+Shift+R)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="21" y1="6" x2="3" y2="6"></line>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                    <line x1="21" y1="18" x2="5" y2="18"></line>
+                  </svg>
+                </button>
+                <div class="bubble-sep"></div>
                 <button type="button" class="bubble-btn" data-cmd="link" title="Enlace">🔗</button>
               </div>
 
@@ -289,6 +311,27 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
                     <div class="slash-text">
                       <span class="slash-title">Separador</span>
                       <span class="slash-desc">Línea divisoria horizontal</span>
+                    </div>
+                  </div>
+                  <div class="slash-item" data-cmd="align-left" role="menuitem">
+                    <span class="slash-icon">⇤</span>
+                    <div class="slash-text">
+                      <span class="slash-title">Alinear a la izquierda</span>
+                      <span class="slash-desc">Alinear el texto a la izquierda</span>
+                    </div>
+                  </div>
+                  <div class="slash-item" data-cmd="align-center" role="menuitem">
+                    <span class="slash-icon">≡</span>
+                    <div class="slash-text">
+                      <span class="slash-title">Centrar texto</span>
+                      <span class="slash-desc">Alinear el párrafo al centro</span>
+                    </div>
+                  </div>
+                  <div class="slash-item" data-cmd="align-right" role="menuitem">
+                    <span class="slash-icon">⇥</span>
+                    <div class="slash-text">
+                      <span class="slash-title">Alinear a la derecha</span>
+                      <span class="slash-desc">Alinear el párrafo a la derecha</span>
                     </div>
                   </div>
                 </div>
@@ -662,9 +705,15 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
   background: var(--surface2);
   color: var(--text);
 }
+.bubble-btn svg {
+  display: block;
+}
 .bubble-btn.active {
   background: var(--accent);
   color: #fff;
+}
+.bubble-btn.active svg {
+  stroke: #fff;
 }
 .bubble-sep {
   width: 1px;
@@ -3028,30 +3077,105 @@ const htmlToolbar  = document.getElementById('html-toolbar');
 
   // 3. MOUNT PROSEMIRROR (TIPTAP ENGINE)
   if (window.KutProseMirror && pmMount) {
-    const { Editor, StarterKit, Underline, Highlight, Link, Image, Placeholder } = window.KutProseMirror;
+    const { Editor, Extension, StarterKit, Underline, Highlight, Link, Image, Placeholder } = window.KutProseMirror;
+
+    const TextAlign = Extension ? Extension.create({
+      name: 'textAlign',
+      addOptions() {
+        return {
+          types: ['heading', 'paragraph', 'blockquote'],
+          alignments: ['left', 'center', 'right', 'justify'],
+          defaultAlignment: 'left',
+        };
+      },
+      addGlobalAttributes() {
+        return [
+          {
+            types: this.options.types,
+            attributes: {
+              textAlign: {
+                default: this.options.defaultAlignment,
+                parseHTML: element => element.style.textAlign || this.options.defaultAlignment,
+                renderHTML: attributes => {
+                  if (!attributes.textAlign || attributes.textAlign === this.options.defaultAlignment) {
+                    return {};
+                  }
+                  return { style: `text-align: ${attributes.textAlign}` };
+                },
+              },
+            },
+          },
+        ];
+      },
+      addCommands() {
+        return {
+          setTextAlign: (alignment) => ({ commands }) => {
+            if (!this.options.alignments.includes(alignment)) {
+              return false;
+            }
+            let ran = false;
+            for (const type of this.options.types) {
+              if (commands.updateAttributes(type, { textAlign: alignment })) {
+                ran = true;
+              }
+            }
+            return ran;
+          },
+          unsetTextAlign: () => ({ commands }) => {
+            let ran = false;
+            for (const type of this.options.types) {
+              if (commands.resetAttributes(type, 'textAlign')) {
+                ran = true;
+              }
+            }
+            return ran;
+          },
+          toggleTextAlign: (alignment) => ({ editor, commands }) => {
+            if (!this.options.alignments.includes(alignment)) {
+              return false;
+            }
+            if (editor.isActive({ textAlign: alignment })) {
+              return commands.unsetTextAlign();
+            }
+            return commands.setTextAlign(alignment);
+          },
+        };
+      },
+      addKeyboardShortcuts() {
+        return {
+          'Mod-Shift-l': () => this.editor.commands.setTextAlign('left'),
+          'Mod-Shift-e': () => this.editor.commands.setTextAlign('center'),
+          'Mod-Shift-r': () => this.editor.commands.setTextAlign('right'),
+          'Mod-Shift-j': () => this.editor.commands.setTextAlign('justify'),
+        };
+      },
+    }) : null;
+
+    const extensions = [
+      StarterKit.configure({
+        heading: { levels: [2, 3, 4] },
+        codeBlock: { HTMLAttributes: { class: 'prose-code-block' } },
+        blockquote: { HTMLAttributes: { class: 'prose-blockquote' } }
+      }),
+      Underline,
+      Highlight.configure({ multicolor: false }),
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: { class: 'prose-link' }
+      }),
+      Image.configure({
+        inline: false,
+        HTMLAttributes: { class: 'prose-image' }
+      }),
+      Placeholder.configure({
+        placeholder: 'Comienza a escribir tu historia, o pulsa "/" para insertar bloques...'
+      })
+    ];
+    if (TextAlign) extensions.push(TextAlign);
 
     window.pmEditor = new Editor({
       element: pmMount,
-      extensions: [
-        StarterKit.configure({
-          heading: { levels: [2, 3, 4] },
-          codeBlock: { HTMLAttributes: { class: 'prose-code-block' } },
-          blockquote: { HTMLAttributes: { class: 'prose-blockquote' } }
-        }),
-        Underline,
-        Highlight.configure({ multicolor: false }),
-        Link.configure({
-          openOnClick: false,
-          HTMLAttributes: { class: 'prose-link' }
-        }),
-        Image.configure({
-          inline: false,
-          HTMLAttributes: { class: 'prose-image' }
-        }),
-        Placeholder.configure({
-          placeholder: 'Comienza a escribir tu historia, o pulsa "/" para insertar bloques...'
-        })
-      ],
+      extensions: extensions,
       content: originalHtml || '<p></p>',
       onUpdate({ editor }) {
         const html = editor.getHTML();
@@ -3126,6 +3250,9 @@ const htmlToolbar  = document.getElementById('html-toolbar');
     bubbleMenu.querySelector('[data-cmd="strikeThrough"]')?.classList.toggle('active', editor.isActive('strike'));
     bubbleMenu.querySelector('[data-cmd="highlight"]')?.classList.toggle('active', editor.isActive('highlight'));
     bubbleMenu.querySelector('[data-cmd="code"]')?.classList.toggle('active', editor.isActive('code'));
+    bubbleMenu.querySelector('[data-cmd="align-left"]')?.classList.toggle('active', editor.isActive({ textAlign: 'left' }));
+    bubbleMenu.querySelector('[data-cmd="align-center"]')?.classList.toggle('active', editor.isActive({ textAlign: 'center' }));
+    bubbleMenu.querySelector('[data-cmd="align-right"]')?.classList.toggle('active', editor.isActive({ textAlign: 'right' }));
     bubbleMenu.querySelector('[data-cmd="link"]')?.classList.toggle('active', editor.isActive('link'));
 
     const view = editor.view;
@@ -3154,6 +3281,9 @@ const htmlToolbar  = document.getElementById('html-toolbar');
         else if (cmd === 'strikeThrough') window.pmEditor.chain().focus().toggleStrike().run();
         else if (cmd === 'highlight') window.pmEditor.chain().focus().toggleHighlight().run();
         else if (cmd === 'code') window.pmEditor.chain().focus().toggleCode().run();
+        else if (cmd === 'align-left') window.pmEditor.chain().focus().setTextAlign('left').run();
+        else if (cmd === 'align-center') window.pmEditor.chain().focus().setTextAlign('center').run();
+        else if (cmd === 'align-right') window.pmEditor.chain().focus().setTextAlign('right').run();
         else if (cmd === 'link') {
           const prev = window.pmEditor.getAttributes('link').href || '';
           const url = prompt('Introduce la URL del enlace:', prev);
@@ -3163,7 +3293,10 @@ const htmlToolbar  = document.getElementById('html-toolbar');
         }
         updateBubblePosition(window.pmEditor);
       } else {
-        document.execCommand(cmd, false, null);
+        if (cmd === 'align-left') document.execCommand('justifyLeft', false, null);
+        else if (cmd === 'align-center') document.execCommand('justifyCenter', false, null);
+        else if (cmd === 'align-right') document.execCommand('justifyRight', false, null);
+        else document.execCommand(cmd, false, null);
       }
     });
   });
@@ -3262,6 +3395,15 @@ const htmlToolbar  = document.getElementById('html-toolbar');
         break;
       case 'hr':
         chain.setHorizontalRule().run();
+        break;
+      case 'align-left':
+        chain.setTextAlign('left').run();
+        break;
+      case 'align-center':
+        chain.setTextAlign('center').run();
+        break;
+      case 'align-right':
+        chain.setTextAlign('right').run();
         break;
     }
   }
