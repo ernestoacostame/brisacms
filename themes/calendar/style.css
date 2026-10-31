@@ -105,29 +105,31 @@ button {
   display: flex;
   align-items: center;
   gap: 0.65rem;
-  font-weight: 700;
-  font-size: 1.1rem;
-  letter-spacing: -0.02em;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
   color: var(--text);
+  text-decoration: none;
 }
 
-.brand-calendar-icon {
+.brand-link .site-logo-img {
+  height: 32px;
+  width: auto;
+  max-width: 140px;
+  object-fit: contain;
+  vertical-align: middle;
+}
+
+.brand-icon {
+  width: 32px;
+  height: 32px;
+  background: var(--accent);
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
-  background-color: var(--surface-2);
-  color: var(--accent);
-  border: 1px solid var(--border);
-}
-
-.brand-logo {
-  height: 28px;
-  max-height: 32px;
-  width: auto;
-  object-fit: contain;
-  display: block;
+  font-weight: 800;
+  font-size: 0.95rem;
 }
 
 .nav-links {

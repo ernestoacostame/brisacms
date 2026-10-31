@@ -60,22 +60,15 @@ if ($mastodon_url): ?>
 
 <header class="calendar-header">
   <div class="calendar-header-inner">
-    <!-- Brand / Logo -->
+    <!-- Brand -->
     <a href="<?= $base ?>/" class="brand-link" aria-label="<?= htmlspecialchars($site_title) ?>">
-      <?php $logo_url = !empty($site_logo) ? $site_logo : ($config['site_logo'] ?? ''); ?>
-      <?php if (!empty($logo_url)): ?>
-        <img src="<?= htmlspecialchars($logo_url) ?>" alt="<?= htmlspecialchars($site_title) ?>" class="brand-logo">
+      <?php $logo = !empty($site_logo) ? $site_logo : ($config['site_logo'] ?? ''); ?>
+      <?php if (!empty($logo)): ?>
+        <img src="<?= htmlspecialchars($logo) ?>" alt="<?= htmlspecialchars($site_title) ?>" class="site-logo-img">
       <?php else: ?>
-        <span class="brand-calendar-icon">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="3" ry="3"></rect>
-            <line x1="16" y1="2" x2="16" y2="6"></line>
-            <line x1="8" y1="2" x2="8" y2="6"></line>
-            <line x1="3" y1="10" x2="21" y2="10"></line>
-          </svg>
-        </span>
-        <span class="brand-name"><?= htmlspecialchars($site_title) ?></span>
+        <span class="brand-icon"><?= mb_strtoupper(mb_substr($site_title, 0, 1)) ?></span>
       <?php endif; ?>
+      <span><?= htmlspecialchars($site_title) ?></span>
     </a>
 
     <!-- Desktop Navigation -->
