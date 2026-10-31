@@ -122,7 +122,10 @@ button {
 
 .brand-logo {
   height: 28px;
+  max-height: 32px;
   width: auto;
+  object-fit: contain;
+  display: block;
 }
 
 .nav-links {
