@@ -177,6 +177,13 @@ if ($filter === 'used') {
     $visible = array_values(array_filter($files, fn($f) => ($f['type'] ?? '') === $filter));
 }
 
+// JSON / AJAX API endpoint for media picker
+if (!empty($_GET['json']) || !empty($_GET['ajax'])) {
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['ok' => true, 'files' => $visible]);
+    exit;
+}
+
 admin_header(__("media_title"), 'media');
 ?>
       <label class="btn btn-primary" style="cursor:pointer">

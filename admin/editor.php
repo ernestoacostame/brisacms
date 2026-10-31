@@ -491,6 +491,7 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
                   <span>Elegir archivo</span>
                   <input type="file" id="feat-upload" accept="image/*" style="display:none">
                 </label>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="openFeaturedImagePicker()">Biblioteca</button>
                 <button type="button" id="feat-drop-btn" class="btn btn-danger btn-sm" style="<?= empty($featuredRaw) ? 'display:none;' : '' ?>">Quitar</button>
               </div>
               <input type="text" name="featured_image" id="featured_image_input" placeholder="O pega una URL: https://…"
@@ -3370,8 +3371,7 @@ const htmlToolbar  = document.getElementById('html-toolbar');
         chain.insertContent('<table style="width:100%; border-collapse:collapse; margin:1.25rem 0; border:1px solid var(--border);"><thead><tr style="background:var(--bg3);"><th style="border:1px solid var(--border); padding:8px 12px; text-align:left;">Encabezado 1</th><th style="border:1px solid var(--border); padding:8px 12px; text-align:left;">Encabezado 2</th></tr></thead><tbody><tr><td style="border:1px solid var(--border); padding:8px 12px;">Dato 1</td><td style="border:1px solid var(--border); padding:8px 12px;">Dato 2</td></tr><tr><td style="border:1px solid var(--border); padding:8px 12px;">Dato 3</td><td style="border:1px solid var(--border); padding:8px 12px;">Dato 4</td></tr></tbody></table><p></p>').run();
         break;
       case 'image':
-        const url = prompt('Introduce la URL de la imagen:');
-        if (url) chain.setImage({ src: url, alt: '' }).run();
+        insertImage();
         break;
       case 'audio':
         const audioUrl = prompt('Introduce la URL del audio (MP3, OGG, WAV o podcast):');
@@ -4037,13 +4037,8 @@ function insertLink() {
   }
 }
 
-function insertImage() {
-  const url = prompt('URL de la imagen:');
-  if (url) {
-    const editor = document.getElementById('editor');
-    editor.focus();
-    document.execCommand('insertHTML', false, `<img src="${url}" alt="" style="max-width:100%;">`);
-  }
+function insertImage(callback) {
+  openImageInsertModal(callback);
 }
 
 
@@ -5117,11 +5112,452 @@ function clearAllBackups(type, slug) {
         .catch(() => alert('Error al limpiar las copias de seguridad.'));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// MODAL INSERTAR IMAGEN (URL / Cargar Ordenador / Biblioteca)
+// ═══════════════════════════════════════════════════════════════════════════
+window._imgModalCallback = null;
+window._imgSelectedFile = null;
+window._imgSelectedLibUrl = null;
+window._imgLibFiles = [];
+window._imgLibLoaded = false;
+
+function openImageInsertModal(callback) {
+  window._imgModalCallback = callback || null;
+  resetUploadTab();
+  const urlInput = document.getElementById('img-url-input');
+  const urlAlt = document.getElementById('img-url-alt');
+  const libAlt = document.getElementById('img-lib-alt');
+  if (urlInput) urlInput.value = '';
+  if (urlAlt) urlAlt.value = '';
+  if (libAlt) libAlt.value = '';
+  const urlPreview = document.getElementById('img-url-preview-wrap');
+  if (urlPreview) urlPreview.style.display = 'none';
+
+  switchImageModalTab('upload');
+  const modal = document.getElementById('image-insert-modal');
+  if (modal) modal.style.display = 'flex';
+  loadMediaLibrary(false);
+}
+
+function closeImageInsertModal() {
+  const modal = document.getElementById('image-insert-modal');
+  if (modal) modal.style.display = 'none';
+  window._imgModalCallback = null;
+}
+
+function switchImageModalTab(tab) {
+  const tabs = ['upload', 'library', 'url'];
+  tabs.forEach(t => {
+    const btn = document.getElementById('tab-btn-' + t);
+    const panel = document.getElementById('img-panel-' + t);
+    if (btn) btn.classList.toggle('active', t === tab);
+    if (panel) panel.style.display = (t === tab) ? 'flex' : 'none';
+  });
+  if (tab === 'library') {
+    loadMediaLibrary(false);
+  }
+}
+
+function handleImageFileSelected(file) {
+  if (!file || !file.type.startsWith('image/')) {
+    alert('Por favor, selecciona un archivo de imagen válido.');
+    return;
+  }
+  window._imgSelectedFile = file;
+  const preview = document.getElementById('img-upload-preview');
+  const filename = document.getElementById('img-upload-filename');
+  const filesize = document.getElementById('img-upload-filesize');
+  const selectedWrap = document.getElementById('img-upload-selected');
+  const dropzone = document.getElementById('img-dropzone');
+  const submitBtn = document.getElementById('img-upload-submit-btn');
+  const altInput = document.getElementById('img-upload-alt');
+
+  if (preview) preview.src = URL.createObjectURL(file);
+  if (filename) filename.textContent = file.name;
+  if (filesize) filesize.textContent = (file.size / 1024).toFixed(1) + ' KB';
+  if (selectedWrap) selectedWrap.style.display = 'flex';
+  if (dropzone) dropzone.style.display = 'none';
+
+  if (altInput && !altInput.value) {
+    altInput.value = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+  }
+
+  if (submitBtn) submitBtn.disabled = false;
+  const statusEl = document.getElementById('img-upload-status');
+  if (statusEl) statusEl.style.display = 'none';
+}
+
+function resetUploadTab() {
+  window._imgSelectedFile = null;
+  const fileInput = document.getElementById('img-file-input');
+  const preview = document.getElementById('img-upload-preview');
+  const selectedWrap = document.getElementById('img-upload-selected');
+  const dropzone = document.getElementById('img-dropzone');
+  const submitBtn = document.getElementById('img-upload-submit-btn');
+  const statusEl = document.getElementById('img-upload-status');
+  const altInput = document.getElementById('img-upload-alt');
+
+  if (fileInput) fileInput.value = '';
+  if (preview) preview.src = '';
+  if (selectedWrap) selectedWrap.style.display = 'none';
+  if (dropzone) dropzone.style.display = 'block';
+  if (submitBtn) submitBtn.disabled = true;
+  if (statusEl) statusEl.style.display = 'none';
+  if (altInput) altInput.value = '';
+}
+
+async function submitUploadTab() {
+  if (!window._imgSelectedFile) return;
+  const statusEl = document.getElementById('img-upload-status');
+  const submitBtn = document.getElementById('img-upload-submit-btn');
+  const altInput = document.getElementById('img-upload-alt');
+
+  if (statusEl) {
+    statusEl.className = 'img-status-msg info';
+    statusEl.textContent = 'Subiendo imagen al servidor...';
+    statusEl.style.display = 'block';
+  }
+  if (submitBtn) submitBtn.disabled = true;
+
+  const fd = new FormData();
+  fd.append('upload', window._imgSelectedFile);
+  fd.append('csrf', <?= json_encode($csrf) ?>);
+
+  try {
+    const res = await fetch(<?= json_encode(base_url() . '/admin/upload_media.php') ?>, {
+      method: 'POST',
+      body: fd
+    });
+    const data = await res.json();
+    if (data.error) {
+      if (statusEl) {
+        statusEl.className = 'img-status-msg error';
+        statusEl.textContent = data.error;
+      }
+      if (submitBtn) submitBtn.disabled = false;
+      return;
+    }
+    if (data.url) {
+      if (statusEl) {
+        statusEl.className = 'img-status-msg info';
+        statusEl.textContent = '✓ Imagen subida con éxito';
+      }
+      const altText = (altInput && altInput.value.trim()) || window._imgSelectedFile.name.replace(/\.[^/.]+$/, '');
+      finishImageInsert(data.url, altText);
+      window._imgLibLoaded = false;
+    }
+  } catch (err) {
+    if (statusEl) {
+      statusEl.className = 'img-status-msg error';
+      statusEl.textContent = 'Error al subir la imagen: ' + err.message;
+    }
+    if (submitBtn) submitBtn.disabled = false;
+  }
+}
+
+async function loadMediaLibrary(force = false) {
+  const grid = document.getElementById('img-lib-grid');
+  if (!grid) return;
+  if (window._imgLibLoaded && !force) {
+    renderMediaLibraryGrid(window._imgLibFiles);
+    return;
+  }
+  grid.innerHTML = '<div class="img-lib-empty">Cargando biblioteca de medios...</div>';
+  try {
+    const res = await fetch(<?= json_encode(base_url() . '/admin/media.php?json=1&type=image') ?>);
+    const data = await res.json();
+    if (data && data.ok && Array.isArray(data.files)) {
+      window._imgLibFiles = data.files;
+      window._imgLibLoaded = true;
+      renderMediaLibraryGrid(window._imgLibFiles);
+    } else {
+      grid.innerHTML = '<div class="img-lib-empty">No se pudieron cargar las imágenes.</div>';
+    }
+  } catch (err) {
+    grid.innerHTML = '<div class="img-lib-empty">Error al cargar la biblioteca: ' + err.message + '</div>';
+  }
+}
+
+function renderMediaLibraryGrid(files) {
+  const grid = document.getElementById('img-lib-grid');
+  const submitBtn = document.getElementById('img-lib-submit-btn');
+  if (!grid) return;
+  grid.innerHTML = '';
+  window._imgSelectedLibUrl = null;
+  if (submitBtn) submitBtn.disabled = true;
+
+  if (!files || files.length === 0) {
+    grid.innerHTML = '<div class="img-lib-empty"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="margin-bottom:8px;opacity:0.6"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>No hay imágenes en la biblioteca.<br>Puedes subir una desde la pestaña "Cargar del ordenador".</div>';
+    return;
+  }
+
+  files.forEach(file => {
+    const item = document.createElement('div');
+    item.className = 'img-lib-item';
+    item.title = file.name;
+
+    const img = document.createElement('img');
+    img.src = file.url;
+    img.alt = (file.meta && file.meta.alt) ? file.meta.alt : file.name;
+    img.loading = 'lazy';
+
+    const label = document.createElement('div');
+    label.className = 'img-lib-item-name';
+    label.textContent = file.name;
+
+    item.appendChild(img);
+    item.appendChild(label);
+
+    item.addEventListener('click', () => {
+      document.querySelectorAll('.img-lib-item.selected').forEach(el => el.classList.remove('selected'));
+      item.classList.add('selected');
+      window._imgSelectedLibUrl = file.url;
+      const altInput = document.getElementById('img-lib-alt');
+      const metaAlt = (file.meta && file.meta.alt) ? file.meta.alt : file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+      if (altInput) altInput.value = metaAlt;
+      if (submitBtn) submitBtn.disabled = false;
+    });
+
+    item.addEventListener('dblclick', () => {
+      window._imgSelectedLibUrl = file.url;
+      const altInput = document.getElementById('img-lib-alt');
+      const metaAlt = (file.meta && file.meta.alt) ? file.meta.alt : file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+      finishImageInsert(window._imgSelectedLibUrl, (altInput && altInput.value.trim()) || metaAlt);
+    });
+
+    grid.appendChild(item);
+  });
+}
+
+function filterMediaLibrary(query) {
+  const q = (query || '').toLowerCase().trim();
+  if (!q) {
+    renderMediaLibraryGrid(window._imgLibFiles);
+    return;
+  }
+  const filtered = window._imgLibFiles.filter(f => (f.name || '').toLowerCase().includes(q) || ((f.meta && f.meta.alt) || '').toLowerCase().includes(q));
+  renderMediaLibraryGrid(filtered);
+}
+
+function submitLibraryTab() {
+  if (!window._imgSelectedLibUrl) return;
+  const altInput = document.getElementById('img-lib-alt');
+  const alt = altInput ? altInput.value.trim() : '';
+  finishImageInsert(window._imgSelectedLibUrl, alt);
+}
+
+function previewUrlImage(url) {
+  const wrap = document.getElementById('img-url-preview-wrap');
+  const img = document.getElementById('img-url-preview-el');
+  const clean = (url || '').trim();
+  if (clean.startsWith('http://') || clean.startsWith('https://') || clean.startsWith('/')) {
+    if (img) img.src = clean;
+  } else {
+    if (wrap) wrap.style.display = 'none';
+  }
+}
+
+function submitUrlTab() {
+  const urlInput = document.getElementById('img-url-input');
+  const altInput = document.getElementById('img-url-alt');
+  const url = (urlInput && urlInput.value.trim()) || '';
+  if (!url) {
+    if (urlInput) urlInput.focus();
+    return;
+  }
+  const alt = (altInput && altInput.value.trim()) || '';
+  finishImageInsert(url, alt);
+}
+
+function finishImageInsert(url, alt) {
+  if (window._imgModalCallback && typeof window._imgModalCallback === 'function') {
+    window._imgModalCallback(url, alt);
+  } else {
+    if (window.pmEditor) {
+      window.pmEditor.chain().focus().setImage({ src: url, alt: alt || '' }).run();
+    } else {
+      const editor = document.getElementById('editor');
+      if (editor) {
+        editor.focus();
+        document.execCommand('insertHTML', false, `<img src="${url}" alt="${alt || ''}" style="max-width:100%;">`);
+      }
+    }
+  }
+  closeImageInsertModal();
+}
+
+function openFeaturedImagePicker() {
+  openImageInsertModal(function(url) {
+    const featInput = document.getElementById('featured_image_input');
+    if (featInput) {
+      featInput.value = url;
+      updateFeaturedPreviewState(url);
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const dropzone = document.getElementById('img-dropzone');
+  const fileInput = document.getElementById('img-file-input');
+
+  if (dropzone && fileInput) {
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('dragover');
+    });
+    dropzone.addEventListener('dragleave', () => {
+      dropzone.classList.remove('dragover');
+    });
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('dragover');
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        handleImageFileSelected(e.dataTransfer.files[0]);
+      }
+    });
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files.length > 0) {
+        handleImageFileSelected(e.target.files[0]);
+      }
+    });
+  }
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      const modal = document.getElementById('image-insert-modal');
+      if (modal && modal.style.display !== 'none') {
+        closeImageInsertModal();
+      }
+    }
+  });
+});
+
 // Keyboard resize listener removed – no longer needed.
 
 // No longer needed – default touch behavior is now allowed.
 
 </script>
+
+<!-- Modal: Insertar Imagen (Cargar ordenador / Biblioteca / URL) -->
+<div id="image-insert-modal" class="image-modal-backdrop" style="display:none;" onclick="if(event.target===this)closeImageInsertModal()">
+  <div class="image-modal-card" role="dialog" aria-modal="true" aria-labelledby="image-modal-heading">
+    <div class="image-modal-header">
+      <div class="image-modal-title-wrap">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <circle cx="8.5" cy="8.5" r="1.5"></circle>
+          <polyline points="21 15 16 10 5 21"></polyline>
+        </svg>
+        <h3 id="image-modal-heading">Insertar imagen</h3>
+      </div>
+      <button type="button" class="image-modal-close" onclick="closeImageInsertModal()" aria-label="Cerrar">✕</button>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="image-modal-nav">
+      <button type="button" id="tab-btn-upload" class="img-tab-btn active" onclick="switchImageModalTab('upload')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span>Cargar del ordenador</span>
+      </button>
+      <button type="button" id="tab-btn-library" class="img-tab-btn" onclick="switchImageModalTab('library')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+        <span>Biblioteca</span>
+      </button>
+      <button type="button" id="tab-btn-url" class="img-tab-btn" onclick="switchImageModalTab('url')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        <span>Enlace URL</span>
+      </button>
+    </div>
+
+    <!-- TAB 1: Subir del ordenador -->
+    <div class="img-tab-panel" id="img-panel-upload">
+      <div id="img-dropzone" class="img-dropzone">
+        <input type="file" id="img-file-input" accept="image/*" style="display:none">
+        <div class="img-drop-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+        <div class="img-drop-title">Arrastra una imagen aquí o <span style="cursor:pointer;" onclick="document.getElementById('img-file-input').click()">haz clic para examinar</span></div>
+        <div class="img-drop-hint">Formatos: JPG, PNG, WebP, GIF, SVG, AVIF (hasta 10 MB)</div>
+      </div>
+
+      <div id="img-upload-selected" class="img-selected-preview" style="display:none;">
+        <div class="img-selected-thumb-wrap">
+          <img id="img-upload-preview" src="" alt="Vista previa">
+        </div>
+        <div class="img-selected-info">
+          <div id="img-upload-filename" class="img-selected-name"></div>
+          <div id="img-upload-filesize" class="img-selected-meta"></div>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="resetUploadTab()" style="margin-top:5px;font-size:0.78rem;padding:2px 8px;">Cambiar imagen</button>
+        </div>
+      </div>
+
+      <div class="img-form-group" style="margin-top: 1rem;">
+        <label for="img-upload-alt" class="img-form-label">Texto alternativo (alt)</label>
+        <input type="text" id="img-upload-alt" class="img-form-control" placeholder="Describe la imagen para accesibilidad y SEO">
+      </div>
+
+      <div id="img-upload-status" class="img-status-msg" style="display:none;"></div>
+
+      <div class="img-modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeImageInsertModal()">Cancelar</button>
+        <button type="button" id="img-upload-submit-btn" class="btn btn-primary" onclick="submitUploadTab()" disabled>
+          Subir e insertar
+        </button>
+      </div>
+    </div>
+
+    <!-- TAB 2: Biblioteca de medios -->
+    <div class="img-tab-panel" id="img-panel-library" style="display:none;">
+      <div class="img-lib-toolbar">
+        <input type="text" id="img-lib-search" class="img-form-control" placeholder="Buscar por nombre de archivo..." oninput="filterMediaLibrary(this.value)">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="loadMediaLibrary(true)" title="Recargar biblioteca">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </button>
+      </div>
+
+      <div id="img-lib-grid" class="img-lib-grid">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <div class="img-form-group" style="margin-top: 0.85rem;">
+        <label for="img-lib-alt" class="img-form-label">Texto alternativo (alt)</label>
+        <input type="text" id="img-lib-alt" class="img-form-control" placeholder="Descripción de la imagen seleccionada">
+      </div>
+
+      <div class="img-modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeImageInsertModal()">Cancelar</button>
+        <button type="button" id="img-lib-submit-btn" class="btn btn-primary" onclick="submitLibraryTab()" disabled>
+          Insertar imagen seleccionada
+        </button>
+      </div>
+    </div>
+
+    <!-- TAB 3: URL Directa -->
+    <div class="img-tab-panel" id="img-panel-url" style="display:none;">
+      <div class="img-form-group">
+        <label for="img-url-input" class="img-form-label">URL de la imagen *</label>
+        <input type="url" id="img-url-input" class="img-form-control" placeholder="https://ejemplo.com/imagen.jpg" oninput="previewUrlImage(this.value)">
+      </div>
+
+      <div class="img-form-group" style="margin-top: 0.85rem;">
+        <label for="img-url-alt" class="img-form-label">Texto alternativo (alt)</label>
+        <input type="text" id="img-url-alt" class="img-form-control" placeholder="Descripción de la imagen">
+      </div>
+
+      <div id="img-url-preview-wrap" class="img-url-preview-box" style="display:none;">
+        <img id="img-url-preview-el" src="" alt="Vista previa" onload="document.getElementById('img-url-preview-wrap').style.display='flex'" onerror="document.getElementById('img-url-preview-wrap').style.display='none'">
+      </div>
+
+      <div class="img-modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeImageInsertModal()">Cancelar</button>
+        <button type="button" id="img-url-submit-btn" class="btn btn-primary" onclick="submitUrlTab()">
+          Insertar imagen
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- focus hint -->
 <div class="focus-exit-hint">
   <button onclick="window.toggleFocus && window.toggleFocus()" class="focus-exit-btn"><?= __("focus_exit_hint") ?> (Salir)</button>
@@ -5352,6 +5788,340 @@ body.scheme-light .floating-preview-btn:hover {
 body.scheme-light .floating-publish-btn {
     background: var(--accent);
     color: #ffffff;
+}
+
+/* ── Modal Insertar Imagen ── */
+.image-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(4px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+}
+.image-modal-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  width: 660px;
+  max-width: 95vw;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  animation: imgModalFadeIn 0.16s ease-out;
+}
+@keyframes imgModalFadeIn {
+  from { opacity: 0; transform: scale(0.97) translateY(4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.image-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.1rem 1.4rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.image-modal-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--text);
+}
+.image-modal-title-wrap h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.image-modal-close {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  transition: all 0.15s;
+  line-height: 1;
+}
+.image-modal-close:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+.image-modal-nav {
+  display: flex;
+  gap: 6px;
+  padding: 0.6rem 1.4rem;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.img-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.img-tab-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+.img-tab-btn.active {
+  background: var(--surface);
+  color: var(--accent);
+  border-color: var(--border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.img-tab-panel {
+  padding: 1.4rem;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.img-dropzone {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 2.2rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  background: var(--bg);
+  transition: border-color 0.2s, background 0.2s;
+}
+.img-dropzone:hover, .img-dropzone.dragover {
+  border-color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.04);
+}
+.img-drop-icon {
+  color: var(--accent);
+  margin-bottom: 0.6rem;
+  display: flex;
+  justify-content: center;
+}
+.img-drop-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.img-drop-title span {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.img-drop-hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 0.35rem;
+}
+.img-selected-preview {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-top: 0.9rem;
+}
+.img-selected-thumb-wrap {
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.img-selected-thumb-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.img-selected-info {
+  flex: 1;
+  overflow: hidden;
+}
+.img-selected-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.img-selected-meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.img-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.img-form-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.img-form-control {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.img-form-control:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.15);
+}
+.img-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.4rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+.img-status-msg {
+  font-size: 0.84rem;
+  font-weight: 600;
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+}
+.img-status-msg.error {
+  background: rgba(244, 63, 94, 0.15);
+  color: #f43f5e;
+}
+.img-status-msg.info {
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--accent);
+}
+/* Library Grid */
+.img-lib-toolbar {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+.img-lib-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+  gap: 10px;
+  max-height: 250px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-height: 180px;
+}
+.img-lib-item {
+  position: relative;
+  aspect-ratio: 1/1;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  cursor: pointer;
+  background: var(--surface);
+  transition: all 0.15s;
+}
+.img-lib-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.img-lib-item:hover {
+  border-color: var(--accent);
+  transform: scale(1.02);
+}
+.img-lib-item.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.img-lib-item.selected::after {
+  content: '✓';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: bold;
+}
+.img-lib-item-name {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 2px 4px;
+  background: rgba(0,0,0,0.65);
+  color: #fff;
+  font-size: 0.68rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.img-lib-empty {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 0.88rem;
+  padding: 2rem;
+  text-align: center;
+}
+/* URL Preview */
+.img-url-preview-box {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  max-height: 180px;
+  overflow: hidden;
+}
+.img-url-preview-box img {
+  max-width: 100%;
+  max-height: 160px;
+  border-radius: 6px;
+  object-fit: contain;
 }
 </style>
 </body></html>
