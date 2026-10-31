@@ -66,8 +66,8 @@ if ($mastodon_url): ?>
         <img src="<?= htmlspecialchars($site_logo) ?>" alt="<?= htmlspecialchars($site_title) ?>" class="site-logo-img">
       <?php else: ?>
         <span class="brand-icon"><?= mb_strtoupper(mb_substr($site_title, 0, 1)) ?></span>
+        <span><?= htmlspecialchars($site_title) ?></span>
       <?php endif; ?>
-      <span><?= htmlspecialchars($site_title) ?></span>
     </a>
 
     <!-- Desktop Navigation -->

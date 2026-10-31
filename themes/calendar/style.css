@@ -572,7 +572,8 @@ button {
 }
 
 .widget-calendar-card {
-  width: 58px;
+  width: 64px;
+  min-width: 64px;
   background-color: var(--bg);
   border: 1px solid var(--border);
   overflow: hidden;
@@ -583,13 +584,15 @@ button {
 .cal-card-header {
   background-color: var(--accent);
   color: #ffffff;
-  padding: 0.2rem;
-  font-size: 0.6rem;
+  padding: 0.22rem 0.25rem;
+  font-size: 0.62rem;
   font-weight: 800;
   letter-spacing: 0.05em;
   display: flex;
   justify-content: center;
-  gap: 0.2rem;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
 }
 
 .cal-card-body {

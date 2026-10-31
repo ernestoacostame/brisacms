@@ -34,9 +34,9 @@ $words = str_word_count(strip_tags($post['content'] ?? ''));
 $read_time = max(1, (int)ceil($words / 200));
 
 $months_es = [
-    1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
-    5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto',
-    9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'
+    1 => 'Ene', 2 => 'Feb', 3 => 'Mar', 4 => 'Abr',
+    5 => 'May', 6 => 'Jun', 7 => 'Jul', 8 => 'Ago',
+    9 => 'Sep', 10 => 'Oct', 11 => 'Nov', 12 => 'Dic'
 ];
 $days_es = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
@@ -224,7 +224,7 @@ $recent_articles = function_exists('list_content') ? list_content('articles', tr
       <div class="calendar-active-widget">
         <div class="widget-calendar-card">
           <div class="cal-card-header">
-            <span class="cal-card-month"><?= mb_strtoupper($month_str) ?></span>
+            <span class="cal-card-month"><?= $month_str ?></span>
             <span class="cal-card-year"><?= $year ?></span>
           </div>
           <div class="cal-card-body">

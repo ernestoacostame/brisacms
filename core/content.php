@@ -114,6 +114,17 @@ function save_content(string $type, array $data): string {
         $ts = strtotime($data['created_at']);
         $data['created_at'] = $ts ? date('c', $ts) : date('c');
     }
+
+    // Sanitizar enlaces y recursos locales file:/// para prevenir Security Error en navegadores
+    if (!empty($data['content'])) {
+        $data['content'] = preg_replace_callback('/<a\s+[^>]*href=["\']file:\/\/[^"\']*["\'][^>]*>(.*?)<\/a>/is', function($m) {
+            return '<code>' . $m[1] . '</code>';
+        }, $data['content']);
+        $data['content'] = preg_replace('/<(?:img|audio|video|source)\s+[^>]*src=["\']file:\/\/[^"\']*["\'][^>]*>/is', '', $data['content']);
+    }
+    if (!empty($data['featured_image']) && str_starts_with($data['featured_image'], 'file://')) {
+        $data['featured_image'] = '';
+    }
     
     // Create a backup before saving
     save_content_backup($type, $data);
@@ -131,6 +142,18 @@ function get_content(string $type, string $slug): ?array {
     $file = content_path($type) . "/$slug.json";
     if (!file_exists($file)) return null;
     $data = json_decode(file_get_contents($file), true);
+
+    if ($data) {
+        if (!empty($data['content'])) {
+            $data['content'] = preg_replace_callback('/<a\s+[^>]*href=["\']file:\/\/[^"\']*["\'][^>]*>(.*?)<\/a>/is', function($m) {
+                return '<code>' . $m[1] . '</code>';
+            }, $data['content']);
+            $data['content'] = preg_replace('/<(?:img|audio|video|source)\s+[^>]*src=["\']file:\/\/[^"\']*["\'][^>]*>/is', '', $data['content']);
+        }
+        if (!empty($data['featured_image']) && str_starts_with($data['featured_image'], 'file://')) {
+            $data['featured_image'] = '';
+        }
+    }
 
     if ($data && $type === 'articles' && empty($data['mastodon_url'])) {
         if (cms_plugin_is_active('fediverse')) {

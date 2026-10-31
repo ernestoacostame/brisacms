@@ -175,8 +175,12 @@ function md_inline(string $text): string {
 
     // Images before links
     $text = preg_replace_callback('/!\[([^\]]*)\]\(([^)]+)\)/', function($m) {
+        $src_raw = trim($m[2]);
+        if (preg_match('/^file:\/\//i', $src_raw)) {
+            return '';
+        }
         $alt = htmlspecialchars($m[1]);
-        $src = htmlspecialchars($m[2]);
+        $src = htmlspecialchars($src_raw);
         $extra = '';
         if (function_exists('media_get_meta')) {
             $meta = media_get_meta($m[2]);

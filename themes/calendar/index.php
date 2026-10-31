@@ -6,9 +6,9 @@ $current_page = $posts['page'] ?? 1;
 $total_pages  = $posts['pages'] ?? 1;
 
 $months_es = [
-    1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
-    5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto',
-    9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'
+    1 => 'Ene', 2 => 'Feb', 3 => 'Mar', 4 => 'Abr',
+    5 => 'May', 6 => 'Jun', 7 => 'Jul', 8 => 'Ago',
+    9 => 'Sep', 10 => 'Oct', 11 => 'Nov', 12 => 'Dic'
 ];
 $days_es = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 ?>
@@ -61,7 +61,7 @@ $days_es = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'S�
       if ($idx === 0) {
         $first_post_info = [
             'day' => $day,
-            'month' => mb_strtoupper($month_str),
+            'month' => $month_str,
             'year' => $year,
             'weekday' => $weekday,
             'title' => $post['title'] ?? 'Sin título'
@@ -73,7 +73,7 @@ $days_es = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'S�
       id="post-<?= htmlspecialchars($post['slug']) ?>"
       data-post-slug="<?= htmlspecialchars($post['slug']) ?>"
       data-day="<?= $day ?>"
-      data-month="<?= mb_strtoupper($month_str) ?>"
+      data-month="<?= $month_str ?>"
       data-year="<?= $year ?>"
       data-weekday="<?= $weekday ?>"
       data-title="<?= htmlspecialchars($post['title'] ?? 'Sin título') ?>"
