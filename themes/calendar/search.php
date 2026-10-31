@@ -1,0 +1,113 @@
+<?php
+$query = htmlspecialchars($query ?? '');
+$count = count($results ?? []);
+
+$months_es = [
+    1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
+    5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto',
+    9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'
+];
+$days_es = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+?>
+
+<div class="calendar-filter-bar">
+  <div class="filter-badge">Búsqueda</div>
+  <h1 class="filter-title">Resultados para: «<?= $query ?>»</h1>
+  <p class="filter-subtitle"><?= $count === 1 ? '1 resultado encontrado' : $count . ' resultados encontrados' ?></p>
+  <a href="<?= $base ?>/" class="filter-clear-link">✕ Ver todas las publicaciones</a>
+</div>
+
+<?php if (empty($results)): ?>
+<div class="calendar-empty">
+  <div class="empty-icon">🔍</div>
+  <h2>Sin coincidencias</h2>
+  <p>No se encontraron publicaciones que coincidan con tu búsqueda. Intenta con otras palabras clave.</p>
+  <a href="<?= $base ?>/" class="calendar-btn">← Volver al inicio</a>
+</div>
+<?php else: ?>
+
+<div class="calendar-two-columns">
+  <section class="calendar-posts-stream">
+    <?php foreach ($results as $idx => $post):
+      $post_url = $base . '/article/' . htmlspecialchars($post['slug']);
+      $ts = !empty($post['created_at']) ? strtotime($post['created_at']) : time();
+      $day = date('d', $ts);
+      $month_num = (int)date('n', $ts);
+      $month_str = $months_es[$month_num] ?? date('M', $ts);
+      $month_short = mb_substr($month_str, 0, 3);
+      $year = date('Y', $ts);
+      $first_cat = !empty($post['categories'][0]) ? $post['categories'][0] : 'General';
+      $words = str_word_count(strip_tags($post['content'] ?? ''));
+      $read_time = max(1, (int)ceil($words / 200));
+
+      $excerpt = $post['excerpt'] ?? '';
+      if (!$excerpt && !empty($post['content'])) {
+        $excerpt = mb_substr(strip_tags($post['content']), 0, 160) . '…';
+      }
+    ?>
+    <article class="calendar-card" id="post-<?= htmlspecialchars($post['slug']) ?>">
+      <div class="card-meta">
+        <div class="card-date-badge">
+          <span class="badge-day"><?= $day ?></span>
+          <span class="badge-month"><?= $month_short ?></span>
+        </div>
+        <div class="card-meta-details">
+          <a href="<?= $base ?>/category/<?= urlencode($first_cat) ?>" class="card-cat-link">
+            <?= htmlspecialchars($first_cat) ?>
+          </a>
+          <span class="meta-dot">·</span>
+          <span class="card-readtime"><?= $read_time ?> min de lectura</span>
+          <span class="meta-dot">·</span>
+          <time datetime="<?= $post['created_at'] ?? '' ?>"><?= $year ?></time>
+        </div>
+      </div>
+
+      <h2 class="card-title">
+        <a href="<?= $post_url ?>">
+          <?= htmlspecialchars($post['title'] ?? 'Sin título') ?>
+        </a>
+      </h2>
+
+      <?php if (!empty($excerpt)): ?>
+      <p class="card-excerpt">
+        <?= htmlspecialchars($excerpt) ?>
+      </p>
+      <?php endif; ?>
+
+      <div class="card-actions">
+        <a href="<?= $post_url ?>" class="card-read-more">
+          <span>Leer artículo</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </a>
+      </div>
+    </article>
+    <?php endforeach; ?>
+  </section>
+
+  <!-- Columna lateral informativa -->
+  <aside class="calendar-timeline-aside">
+    <div class="timeline-sticky-box">
+      <div class="calendar-active-widget">
+        <div class="widget-calendar-card">
+          <div class="cal-card-header">
+            <span class="cal-card-month">BÚSQUEDA</span>
+            <span class="cal-card-year">RESULTADOS</span>
+          </div>
+          <div class="cal-card-body">
+            <span class="cal-card-day"><?= $count ?></span>
+            <span class="cal-card-weekday">Encontrados</span>
+          </div>
+        </div>
+        <div class="widget-post-info">
+          <div class="widget-label">Término buscado</div>
+          <div class="widget-active-title">«<?= $query ?>»</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<?php endif; ?>

@@ -133,6 +133,20 @@ admin_header(__("themes_title", "Temas y Apariencia"), 'themes');
               <div style="height:5px;background:#2a2a35;border-radius:4px;width:80%;margin-bottom:4px"></div>
               <div style="height:5px;background:#2a2a35;border-radius:4px;width:70%"></div>
             </div>
+            <?php elseif ($key === 'calendar'): ?>
+            <div style="width:85%;background:var(--surface,#fff);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.08);padding:10px;display:grid;grid-template-columns:1fr 50px;gap:8px;border:1px solid var(--border)">
+              <div style="display:flex;flex-direction:column;gap:5px">
+                <div style="height:6px;background:var(--accent);border-radius:3px;width:40%"></div>
+                <div style="height:8px;background:var(--text);border-radius:3px;width:80%"></div>
+                <div style="height:4px;background:var(--muted);border-radius:2px;width:95%"></div>
+                <div style="height:4px;background:var(--muted);border-radius:2px;width:70%"></div>
+              </div>
+              <div style="border-left:1px dashed var(--border);padding-left:6px;display:flex;flex-direction:column;gap:5px;align-items:center;justify-content:center">
+                <div style="width:10px;height:10px;border-radius:50%;background:var(--accent)"></div>
+                <div style="height:3px;background:var(--muted);width:100%;border-radius:2px"></div>
+                <div style="width:6px;height:6px;border-radius:50%;background:var(--border)"></div>
+              </div>
+            </div>
             <?php elseif ($key === 'minimal' || str_contains($key, 'minimal')): ?>
             <div style="width:85%;background:var(--surface,#fff);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.08);padding:8px;display:flex;flex-direction:column;gap:6px;border:1px solid var(--border)">
               <div style="height:48px;background:linear-gradient(135deg,rgba(99,102,241,0.25),rgba(15,23,42,0.1));border-radius:6px;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center">
