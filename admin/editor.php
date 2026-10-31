@@ -232,8 +232,9 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
                 <button type="button" class="bubble-btn" data-cmd="link" title="Enlace">🔗</button>
               </div>
 
-              <!-- Writing Desk: Floating Image Alignment Menu -->
-              <div id="image-bubble-menu" class="writing-bubble-menu image-align-toolbar" style="display:none;" role="toolbar" aria-label="Alineación de imagen">
+              <!-- Writing Desk: Floating Image Alignment & Size Menu -->
+              <div id="image-bubble-menu" class="writing-bubble-menu image-align-toolbar" style="display:none;" role="toolbar" aria-label="Alineación y tamaño de imagen">
+                <!-- Alignment -->
                 <button type="button" class="bubble-btn" data-align="left" title="Alinear a la izquierda (flotar con texto)">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="3" y="4" width="8" height="8" rx="1"></rect>
@@ -266,9 +267,43 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
                     <polyline points="23 12 21 10 21 14"></polyline>
                   </svg>
                 </button>
+
                 <div class="bubble-sep"></div>
+
+                <!-- Size Presets -->
+                <button type="button" class="bubble-btn" data-size="25%" title="Tamaño: 25%">
+                  <span style="font-size:0.75rem;font-weight:600;">25%</span>
+                </button>
+                <button type="button" class="bubble-btn" data-size="50%" title="Tamaño: 50%">
+                  <span style="font-size:0.75rem;font-weight:600;">50%</span>
+                </button>
+                <button type="button" class="bubble-btn" data-size="75%" title="Tamaño: 75%">
+                  <span style="font-size:0.75rem;font-weight:600;">75%</span>
+                </button>
+                <button type="button" class="bubble-btn" data-size="100%" title="Tamaño: 100% (Original)">
+                  <span style="font-size:0.75rem;font-weight:600;">100%</span>
+                </button>
+                <button type="button" class="bubble-btn" id="img-btn-custom-size" title="Personalizar tamaño (px o %)" style="font-size:0.78rem;">
+                  📐
+                </button>
+
+                <div class="bubble-sep"></div>
+
+                <!-- Edit Alt Text -->
                 <button type="button" class="bubble-btn" id="img-btn-alt" title="Editar texto alternativo (alt)" style="font-size:0.75rem;font-weight:700;padding:0 6px;">
                   ALT
+                </button>
+
+                <div class="bubble-sep"></div>
+
+                <!-- Delete Image -->
+                <button type="button" class="bubble-btn bubble-btn-danger" id="img-btn-delete" title="Eliminar imagen" style="color:#f43f5e;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    <line x1="10" y1="11" x2="10" y2="17"></line>
+                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                  </svg>
                 </button>
               </div>
 
@@ -755,6 +790,10 @@ admin_header(($is_new ? __raw('editor_new_article') : __raw('editor_edit_article
 }
 .bubble-btn.active svg {
   stroke: #fff;
+}
+.bubble-btn-danger:hover {
+  background: rgba(244, 63, 94, 0.18) !important;
+  color: #f43f5e !important;
 }
 .bubble-sep {
   width: 1px;
@@ -3231,6 +3270,17 @@ const htmlToolbar  = document.getElementById('html-toolbar');
       addAttributes() {
         return {
           ...this.parent?.(),
+          width: {
+            default: null,
+            parseHTML: element => element.getAttribute('width') || element.style.width || null,
+            renderHTML: attributes => {
+              if (!attributes.width) return {};
+              return {
+                width: attributes.width,
+                style: `width: ${attributes.width};`
+              };
+            }
+          },
           align: {
             default: 'center',
             parseHTML: element => {
@@ -3346,8 +3396,14 @@ const htmlToolbar  = document.getElementById('html-toolbar');
       if (imageBubbleMenu) {
         const attrs = editor.getAttributes('image');
         const align = attrs.align || 'center';
+        const width = attrs.width || '100%';
+
         imageBubbleMenu.querySelectorAll('[data-align]').forEach(btn => {
           btn.classList.toggle('active', btn.getAttribute('data-align') === align);
+        });
+
+        imageBubbleMenu.querySelectorAll('[data-size]').forEach(btn => {
+          btn.classList.toggle('active', btn.getAttribute('data-size') === width || (width === '100%' && btn.getAttribute('data-size') === '100%'));
         });
 
         const view = editor.view;
@@ -3414,6 +3470,33 @@ const htmlToolbar  = document.getElementById('html-toolbar');
     });
   });
 
+  // Handle image size presets
+  imageBubbleMenu?.querySelectorAll('[data-size]').forEach(btn => {
+    btn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const width = btn.getAttribute('data-size');
+      if (window.pmEditor) {
+        window.pmEditor.chain().focus().updateAttributes('image', { width }).run();
+        updateBubblePosition(window.pmEditor);
+      }
+    });
+  });
+
+  // Handle custom size prompt
+  imageBubbleMenu?.querySelector('#img-btn-custom-size')?.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    if (window.pmEditor) {
+      const currentWidth = window.pmEditor.getAttributes('image').width || '100%';
+      const newWidth = prompt('Introduce el ancho deseado para la imagen (ej: 400px, 60%, 350px):', currentWidth);
+      if (newWidth !== null && newWidth.trim()) {
+        const val = newWidth.trim();
+        const formatted = /^\d+$/.test(val) ? val + 'px' : val;
+        window.pmEditor.chain().focus().updateAttributes('image', { width: formatted }).run();
+        updateBubblePosition(window.pmEditor);
+      }
+    }
+  });
+
   imageBubbleMenu?.querySelector('#img-btn-alt')?.addEventListener('mousedown', (e) => {
     e.preventDefault();
     if (window.pmEditor) {
@@ -3425,6 +3508,15 @@ const htmlToolbar  = document.getElementById('html-toolbar');
     }
   });
 
+  // Handle delete image button
+  imageBubbleMenu?.querySelector('#img-btn-delete')?.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    if (window.pmEditor) {
+      window.pmEditor.chain().focus().deleteSelection().run();
+      if (imageBubbleMenu) imageBubbleMenu.style.display = 'none';
+    }
+  });
+
   // Clicking an image in the editor directly selects it
   pmMount?.addEventListener('click', (e) => {
     const img = e.target.closest('img');
@@ -3433,6 +3525,15 @@ const htmlToolbar  = document.getElementById('html-toolbar');
       if (typeof pos === 'number' && pos >= 0) {
         window.pmEditor.chain().focus().setNodeSelection(pos).run();
       }
+    }
+  });
+
+  // Backspace or Delete key removes selected image
+  pmMount?.addEventListener('keydown', (e) => {
+    if ((e.key === 'Backspace' || e.key === 'Delete') && window.pmEditor && window.pmEditor.isActive('image')) {
+      e.preventDefault();
+      window.pmEditor.chain().focus().deleteSelection().run();
+      if (imageBubbleMenu) imageBubbleMenu.style.display = 'none';
     }
   });
 
