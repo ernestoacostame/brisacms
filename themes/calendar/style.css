@@ -36,7 +36,9 @@
 }
 
 /* ── Reset & Bases ───────────────────────────────────────────────────────── */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -317,7 +319,6 @@ button {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 290px;
   gap: 2.25rem;
-  align-items: start;
 }
 
 /* ── Columna Izquierda: Artículos Compactos (Estilo SystemInside) ────────── */
@@ -538,26 +539,31 @@ button {
   border-color: var(--accent);
 }
 
-/* ── Columna Derecha: Barra Lateral Fija (Sticky) ────────────────────────── */
+/* ── Columna Derecha: Barra Lateral Fija (Sticky en pantalla) ──────────── */
 .calendar-timeline-aside {
-  position: relative;
-}
-
-.timeline-sticky-box {
+  position: -webkit-sticky;
   position: sticky;
   top: 4.5rem;
+  align-self: start;
   height: fit-content;
   max-height: calc(100vh - 5.5rem);
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 0.75rem;
+  z-index: 30;
 }
 
-/* ── Widget Visual de Calendario Activo (Simple, sin bordes redondeados) ─── */
+.timeline-sticky-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* ── Widget Visual de Calendario Activo (Simple, sin bordes) ─────────────── */
 .calendar-active-widget {
-  background-color: var(--surface);
-  border: 1px solid var(--border);
-  padding: 0.85rem 1rem;
+  background: transparent;
+  border: none;
+  padding: 0.5rem 0.25rem;
   display: flex;
   align-items: center;
   gap: 0.85rem;
@@ -642,9 +648,9 @@ button {
 
 /* ── Timeline Track (Simple, recto, sin curvas) ──────────────────────────── */
 .timeline-scroll-container {
-  background-color: var(--surface);
-  border: 1px solid var(--border);
-  padding: 0.85rem 1rem;
+  background: transparent;
+  border: none;
+  padding: 0.5rem 0.25rem;
   overflow-y: auto;
   overflow-x: hidden;
   max-height: calc(100vh - 16rem);
@@ -655,6 +661,7 @@ button {
 .timeline-scroll-container::-webkit-scrollbar {
   width: 3px;
 }
+
 .timeline-scroll-container::-webkit-scrollbar-thumb {
   background-color: var(--border);
 }
@@ -802,7 +809,8 @@ button {
   padding: 1.75rem;
 }
 
-.single-top-bar, .single-bottom-bar {
+.single-top-bar,
+.single-bottom-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -947,7 +955,8 @@ button {
   margin: 1.65rem 0 0.7rem;
 }
 
-.calendar-prose ul, .calendar-prose ol {
+.calendar-prose ul,
+.calendar-prose ol {
   margin-bottom: 1.35rem;
   padding-left: 1.35rem;
 }
@@ -1021,7 +1030,7 @@ button {
 /* Progreso de Lectura */
 .reading-progress-card {
   background-color: var(--surface);
-  border: 1px solid var(--border);
+  border: 0px;
   padding: 0.85rem 1rem;
 }
 
@@ -1131,7 +1140,8 @@ button {
   margin-bottom: 0.35rem;
 }
 
-.fedi-handle, .fedi-date {
+.fedi-handle,
+.fedi-date {
   color: var(--text-faint);
 }
 
@@ -1141,7 +1151,8 @@ button {
   color: var(--text);
 }
 
-.comments-loading, .comments-empty {
+.comments-loading,
+.comments-empty {
   font-size: 0.85rem;
   color: var(--text-muted);
   text-align: center;
@@ -1228,8 +1239,15 @@ button {
 
 /* ── Animaciones ─────────────────────────────────────────────────────────── */
 @keyframes slideDown {
-  from { opacity: 0; transform: translateY(-6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ==========================================================================
@@ -1247,6 +1265,7 @@ button {
   .nav-links {
     display: none;
   }
+
   .mobile-menu-btn {
     display: flex;
   }
@@ -1293,14 +1312,16 @@ button {
   .calendar-timeline-aside {
     display: block;
     width: 56px;
+    position: -webkit-sticky;
     position: sticky;
     top: 3.5rem;
+    align-self: start;
+    height: fit-content;
+    max-height: calc(100vh - 4.5rem);
+    z-index: 30;
   }
 
   .timeline-sticky-box {
-    position: sticky;
-    top: 3.5rem;
-    max-height: calc(100vh - 4.5rem);
     gap: 0.4rem;
   }
 
@@ -1396,11 +1417,13 @@ button {
   .reading-progress-card {
     padding: 0.5rem 0.2rem;
   }
+
   .progress-info {
     flex-direction: column;
     gap: 2px;
     align-items: center;
   }
+
   .progress-label {
     display: none;
   }
